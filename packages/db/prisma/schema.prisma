@@ -1,0 +1,114 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  CLIENT
+  EXPERT
+  ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  role      Role     @default(CLIENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile       Profile?
+  expertProfile ExpertProfile?
+  bookings      Booking[]      @relation("ClientBookings")
+  reviews       Review[]       @relation("ClientReviews")
+
+  @@map("users")
+}
+
+model Profile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName  String?
+  avatarUrl String?
+  phone     String?
+  bio       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+model Category {
+  id          String          @id @default(uuid())
+  name        String          @unique
+  slug        String          @unique
+  description String?
+  icon        String?
+  experts     ExpertProfile[]
+
+  @@map("categories")
+}
+
+model ExpertProfile {
+  id              String    @id @default(uuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId      String
+  category        Category  @relation(fields: [categoryId], references: [id])
+  title           String
+  bio             String
+  hourlyRate      Float
+  experienceYears Int       @default(0)
+  rating          Float     @default(0.0)
+  reviewCount     Int       @default(0)
+  skills          String[]
+  isAvailable     Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bookings Booking[] @relation("ExpertBookings")
+  reviews  Review[]  @relation("ExpertReviews")
+
+  @@map("expert_profiles")
+}
+
+model Booking {
+  id          String        @id @default(uuid())
+  clientId    String
+  client      User          @relation("ClientBookings", fields: [clientId], references: [id], onDelete: Cascade)
+  expertId    String
+  expert      ExpertProfile @relation("ExpertBookings", fields: [expertId], references: [id], onDelete: Cascade)
+  status      BookingStatus @default(PENDING)
+  scheduledAt DateTime
+  durationMin Int           @default(60)
+  totalAmount Float
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("bookings")
+}
+
+model Review {
+  id        String        @id @default(uuid())
+  clientId  String
+  client    User          @relation("ClientReviews", fields: [clientId], references: [id], onDelete: Cascade)
+  expertId  String
+  expert    ExpertProfile @relation("ExpertReviews", fields: [expertId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?
+  createdAt DateTime      @default(now())
+
+  @@map("reviews")
+}
