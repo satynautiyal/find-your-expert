@@ -44,7 +44,7 @@ export const ESelect = React.forwardRef<HTMLSelectElement, ESelectProps>(
             value={value}
             onChange={onChange}
             className={cn(
-              'appearance-none py-1.5 pr-7 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-[#F15A24] cursor-pointer hover:bg-gray-50 transition-colors',
+              'appearance-none py-1.5 pr-7 text-xs font-medium text-gray-700 bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer hover:bg-gray-50 transition-colors',
               icon ? 'pl-7' : 'px-3',
               className
             )}
@@ -72,7 +72,7 @@ export const ESelect = React.forwardRef<HTMLSelectElement, ESelectProps>(
           className
         )}
       >
-        {icon && <div className="text-[#F15A24] shrink-0">{icon}</div>}
+        {icon && <div className="text-primary shrink-0">{icon}</div>}
         <div className="flex-1 min-w-0">
           {label && (
             <div className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">

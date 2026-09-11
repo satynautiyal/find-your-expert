@@ -70,7 +70,7 @@ export default function ProviderCard({
             {/* Title */}
             <h2
               onClick={() => onOpenQuoteModal(provider)}
-              className="text-base sm:text-[17px] font-bold text-gray-950 hover:text-[#F15A24] transition-colors leading-snug cursor-pointer"
+              className="text-base sm:text-[17px] font-bold text-gray-950 hover:text-primary-dark transition-colors leading-snug cursor-pointer"
             >
               {fullTitle}
             </h2>
@@ -131,7 +131,7 @@ export default function ProviderCard({
             >
               <Heart
                 className={`w-4 h-4 ${
-                  isCompared ? 'fill-[#F15A24] text-[#F15A24]' : 'text-gray-400'
+                  isCompared ? 'fill-primary text-primary' : 'text-gray-400'
                 }`}
               />
             </button>
@@ -193,7 +193,7 @@ export default function ProviderCard({
                     className="text-[10px] font-medium text-gray-500 hover:text-gray-900 inline-flex items-center gap-0.5 cursor-pointer"
                   >
                     <span>View exact quotes</span>
-                    <ArrowRight className="w-2.5 h-2.5 text-[#F15A24]" />
+                    <ArrowRight className="w-2.5 h-2.5 text-primary" />
                   </button>
                 </div>
 
@@ -212,8 +212,8 @@ export default function ProviderCard({
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
             {/* Financing Box */}
             <ECard variant="financing" className="flex-1 min-w-0">
-              <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
-                <CreditCard className="w-3.5 h-3.5 text-[#F15A24]" />
+              <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                <CreditCard className="w-3.5 h-3.5 text-primary-dark" />
               </div>
               <div className="min-w-0">
                 <div className="text-[11px] font-bold text-gray-900 leading-tight">

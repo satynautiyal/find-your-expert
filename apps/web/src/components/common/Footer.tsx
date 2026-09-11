@@ -8,13 +8,13 @@ export default function Footer() {
           {/* Brand info */}
           <div className="lg:col-span-2 space-y-3">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-[#F15A24] text-white flex items-center justify-center shadow-2xs">
+              <div className="w-7 h-7 rounded-lg bg-primary text-white flex items-center justify-center shadow-2xs">
                 <svg className="w-3.5 h-3.5 fill-white" viewBox="0 0 24 24">
                   <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
                 </svg>
               </div>
               <span className="text-base font-black text-gray-950 tracking-tight">
-                FindYour<span className="text-[#F15A24]">Experts</span>
+                FindYour<span className="text-primary-dark">Experts</span>
               </span>
             </div>
             <p className="text-xs text-gray-500 max-w-sm leading-relaxed">

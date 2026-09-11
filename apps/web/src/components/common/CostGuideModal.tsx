@@ -17,7 +17,7 @@ export default function CostGuideModal({ isOpen, onClose }: CostGuideModalProps)
         {/* Header */}
         <div className="p-6 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
           <div className="space-y-1">
-            <span className="text-[11px] font-bold text-[#F15A24] uppercase tracking-wider">
+            <span className="text-[11px] font-bold text-primary-dark uppercase tracking-wider">
               2026 NYC PRICE BENCHMARK
             </span>
             <h3 className="text-xl font-black text-gray-950">

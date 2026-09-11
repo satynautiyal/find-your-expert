@@ -21,7 +21,7 @@ export const EInput = React.forwardRef<HTMLInputElement, EInputProps>(
         <input
           ref={ref}
           className={cn(
-            'w-full py-2 text-xs bg-white border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-[#F15A24] focus:border-[#F15A24] font-medium transition-all',
+            'w-full py-2 text-xs bg-white border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary font-medium transition-all',
             iconLeft ? 'pl-8' : 'pl-3',
             iconRight ? 'pr-8' : 'pr-3',
             className

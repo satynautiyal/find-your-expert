@@ -25,7 +25,7 @@ export default function CompareModal({
         {/* Modal Header */}
         <div className="p-5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-mono uppercase tracking-wider text-[#F15A24] font-bold">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-primary-dark font-bold">
               SIDE-BY-SIDE EVALUATION
             </span>
             <h3 className="text-lg font-black text-gray-950">
@@ -65,7 +65,7 @@ export default function CompareModal({
                 {providers.map((p) => (
                   <td key={p.id} className="p-3 font-bold text-gray-950">
                     <div className="flex items-center gap-1">
-                      <Star className="w-3.5 h-3.5 fill-[#F15A24] text-[#F15A24]" />
+                      <Star className="w-3.5 h-3.5 fill-primary text-primary" />
                       <span>{p.compositeRating}</span>
                       <span className="text-gray-400 text-[10px]">({p.totalReviews} reviews)</span>
                     </div>

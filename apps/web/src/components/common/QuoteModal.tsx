@@ -68,7 +68,7 @@ export default function QuoteModal({
             </div>
 
             <div className="space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#F15A24]">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-primary-dark">
                 REQUEST DISPATCHED
               </span>
               <h3 className="text-xl font-bold text-gray-950">
@@ -92,7 +92,7 @@ export default function QuoteModal({
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Typical Range:</span>
-                <span className="font-bold text-[#F15A24]">
+                <span className="font-bold text-primary-dark">
                   {selectedProvider?.typicalPriceRange || '$4,500 – $15,000'}
                 </span>
               </div>
@@ -111,8 +111,8 @@ export default function QuoteModal({
           <div>
             {/* Header */}
             <div className="p-6 bg-gray-50 border-b border-gray-200">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#F15A24] flex items-center gap-1.5 mb-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-[#F15A24]" />
+              <span className="text-[11px] font-bold uppercase tracking-wider text-primary-dark flex items-center gap-1.5 mb-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-primary" />
                 <span>100% Free &bull; No Obligation &bull; Verified NYC Contractors</span>
               </span>
               <h3 className="text-lg font-black text-gray-950">
@@ -137,7 +137,7 @@ export default function QuoteModal({
                     <select
                       value={formData.serviceType}
                       onChange={(e) => setFormData({ ...formData, serviceType: e.target.value })}
-                      className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#F15A24] font-medium text-gray-900"
+                      className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-gray-900"
                     >
                       <option>Emergency Leak Repair</option>
                       <option>Flat Roof Replacement</option>
@@ -155,7 +155,7 @@ export default function QuoteModal({
                       <select
                         value={formData.borough}
                         onChange={(e) => setFormData({ ...formData, borough: e.target.value as any })}
-                        className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#F15A24] font-medium text-gray-900"
+                        className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-gray-900"
                       >
                         {NYC_BOROUGHS.filter((b) => b !== 'All').map((b) => (
                           <option key={b} value={b}>
@@ -191,7 +191,7 @@ export default function QuoteModal({
                           onClick={() => setFormData({ ...formData, propertyType: type })}
                           className={`py-2 px-3 rounded-lg border text-center font-bold text-xs transition-all cursor-pointer ${
                             formData.propertyType === type
-                              ? 'bg-[#F15A24] text-white border-[#F15A24] shadow-2xs'
+                              ? 'bg-primary text-white border-primary shadow-2xs'
                               : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                           }`}
                         >
@@ -264,7 +264,7 @@ export default function QuoteModal({
                       placeholder="e.g. Active ceiling drip in bedroom, 3-story flat roof brownstone..."
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#F15A24] focus:border-[#F15A24] text-gray-900"
+                      className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary text-gray-900"
                     />
                   </div>
 

@@ -7,6 +7,14 @@
   :root {
     --background: #F9FAFB;
     --foreground: #111827;
+
+    /* Theme Primary Color Variables - Change here to re-theme the entire website */
+    --primary: #F15A24;
+    --primary-hover: #DE4714;
+    --primary-dark: #DE4714;
+    --primary-light: #FFF5F0;
+    --primary-border: #FED7AA;
+    --primary-subtle: #FFF8F5;
   }
 
   body {
@@ -22,13 +30,16 @@
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: #F3F4F6;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #D1D5DB;
   border-radius: 3px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: #9CA3AF;
 }

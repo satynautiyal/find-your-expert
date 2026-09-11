@@ -56,7 +56,7 @@ export function EStarRating({
           {rating.toFixed(1)}
         </span>
       )}
-      <div className="flex gap-0.5 text-[#F15A24]">
+      <div className="flex gap-0.5 text-primary">
         {[...Array(5)].map((_, i) => (
           <Star key={i} className={cn('fill-current', starSizes[size])} />
         ))}

@@ -102,7 +102,7 @@ export default function Home() {
   }, [comparedIds]);
 
   return (
-    <div className="min-h-screen bg-[#F9FAFB] text-gray-950 flex flex-col font-sans selection:bg-[#F15A24] selection:text-white">
+    <div className="min-h-screen bg-[#F9FAFB] text-gray-950 flex flex-col font-sans selection:bg-primary selection:text-white">
       {/* 1. Universal Header */}
       <Header
         onOpenQuoteModal={() => handleOpenQuote()}
@@ -167,7 +167,7 @@ export default function Home() {
           {/* View Switcher */}
           <div className="flex items-center gap-1.5">
             <button
-              className="p-1.5 rounded-md border border-orange-300 text-[#F15A24] bg-orange-50/50 hover:bg-orange-50 transition-colors cursor-pointer"
+              className="p-1.5 rounded-md border border-primary text-primary-dark bg-primary-light hover:bg-primary-subtle transition-colors cursor-pointer"
               title="List View"
             >
               <List className="w-3.5 h-3.5 stroke-[2.5]" />

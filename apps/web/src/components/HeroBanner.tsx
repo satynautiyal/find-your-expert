@@ -78,32 +78,32 @@ export default function HeroBanner({
 
   const trustCards = [
     {
-      icon: <Star className="w-4 h-4 text-[#F15A24]" />,
+      icon: <Star className="w-4 h-4 text-primary" />,
       title: '5.0',
       subtitle: 'Avg. Rating Across 2,800+ Reviews',
     },
     {
-      icon: <ShieldCheck className="w-4 h-4 text-[#F15A24]" />,
+      icon: <ShieldCheck className="w-4 h-4 text-primary" />,
       title: '1,840+',
       subtitle: 'Verified Roofers in NYC',
     },
     {
-      icon: <Tag className="w-4 h-4 text-[#F15A24]" />,
+      icon: <Tag className="w-4 h-4 text-primary" />,
       title: '$4.5k – $15k',
       subtitle: 'Typical Project Cost Range',
     },
     {
-      icon: <FileText className="w-4 h-4 text-[#F15A24]" />,
+      icon: <FileText className="w-4 h-4 text-primary" />,
       title: 'Updated 2026',
       subtitle: 'Latest Reviews & Pricing',
     },
     {
-      icon: <Shield className="w-4 h-4 text-[#F15A24]" />,
+      icon: <Shield className="w-4 h-4 text-primary" />,
       title: 'Independent',
       subtitle: 'Verified & Unbiased Reviews',
     },
     {
-      icon: <Zap className="w-4 h-4 text-[#F15A24]" />,
+      icon: <Zap className="w-4 h-4 text-primary" />,
       title: 'Fast & Easy',
       subtitle: 'Get Free Quotes in Minutes',
     },
@@ -112,8 +112,8 @@ export default function HeroBanner({
   return (
     <section className="relative bg-gradient-to-b from-[#FFFBF9] via-[#FAF7F5] to-[#F9FAFB] border-b border-gray-200 overflow-hidden py-6 sm:py-8">
       {/* Subtle organic background glow */}
-      <div className="absolute top-12 right-1/4 w-[500px] h-[500px] bg-orange-200/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/3 -left-20 w-[400px] h-[400px] bg-orange-100/30 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-12 right-1/4 w-[500px] h-[500px] bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-1/3 -left-20 w-[400px] h-[400px] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         {/* Top 2-Column Hero Grid: Left Content + Right Image */}
@@ -121,9 +121,9 @@ export default function HeroBanner({
           {/* Left Column: Headlines, Trust Pill & Social Proof */}
           <div className="lg:col-span-6 space-y-4">
             {/* Pill Badge */}
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FFF5F0] border border-orange-200 text-[11px] font-bold shadow-2xs">
-              <div className="flex items-center gap-1.5 text-[#F15A24]">
-                <ShieldCheck className="w-3.5 h-3.5 fill-[#F15A24] text-white" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary-light border border-primary-border text-[11px] font-bold shadow-2xs">
+              <div className="flex items-center gap-1.5 text-primary-dark">
+                <ShieldCheck className="w-3.5 h-3.5 fill-primary text-white" />
                 <span>TOP RATED &amp; VERIFIED</span>
               </div>
               <span className="text-gray-300">|</span>
@@ -135,7 +135,7 @@ export default function HeroBanner({
             {/* H1 Heading */}
             <h1 className="text-3xl sm:text-4xl lg:text-[46px] font-black text-gray-950 tracking-tight leading-[1.12]">
               Top Roofing Contractors in{' '}
-              <span className="text-[#F15A24] block sm:inline">New York, NY</span>
+              <span className="text-primary-dark block sm:inline">New York, NY</span>
             </h1>
 
             {/* Subtitle */}
@@ -170,7 +170,7 @@ export default function HeroBanner({
               </div>
 
               {/* Stars */}
-              <div className="flex text-[#F15A24] gap-0.5">
+              <div className="flex text-primary gap-0.5">
                 {[...Array(5)].map((_, i) => (
                   <Star key={i} className="w-3.5 h-3.5 fill-current" />
                 ))}
@@ -187,7 +187,7 @@ export default function HeroBanner({
           {/* Right Column: Hero Graphic (NYC Rooftop + Skyline + Floating Badges) */}
           <div className="lg:col-span-6 relative flex items-center justify-center lg:justify-end">
             {/* Fluid warm backdrop shapes */}
-            <div className="absolute -top-4 -left-4 sm:left-4 w-72 sm:w-96 h-64 sm:h-80 bg-gradient-to-tr from-[#F15A24]/30 via-orange-300/30 to-amber-200/20 rounded-tl-[100px] rounded-3xl -z-10 blur-xs" />
+            <div className="absolute -top-4 -left-4 sm:left-4 w-72 sm:w-96 h-64 sm:h-80 bg-gradient-to-tr from-primary/30 via-primary/15 to-primary-light/20 rounded-tl-[100px] rounded-3xl -z-10 blur-xs" />
 
             {/* Main Asymmetrical Framed Image */}
             <div className="relative w-full max-w-lg h-[260px] sm:h-[320px] rounded-tl-[90px] rounded-tr-3xl rounded-br-3xl rounded-bl-3xl overflow-hidden shadow-2xl border-4 border-white">
@@ -202,8 +202,8 @@ export default function HeroBanner({
             {/* Floating Top-Right Badge: Verified Contractors */}
             <div className="absolute -top-3 right-2 sm:right-4">
               <ECard variant="floatingBadge">
-                <div className="w-9 h-9 rounded-xl bg-[#F15A24] flex items-center justify-center text-white shadow-xs">
-                  <ShieldCheck className="w-5 h-5 fill-white text-[#F15A24]" />
+                <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-white shadow-xs">
+                  <ShieldCheck className="w-5 h-5 fill-white text-primary" />
                 </div>
                 <div>
                   <div className="text-xs font-bold text-gray-950 leading-tight">
@@ -217,7 +217,7 @@ export default function HeroBanner({
             </div>
 
             {/* Decorative Handwritten Script text on the right side */}
-            <div className="absolute -bottom-2 sm:bottom-4 right-0 sm:-right-4 font-['Caveat'] text-2xl sm:text-3xl text-[#E05320] rotate-[-6deg] select-none pointer-events-none drop-shadow-xs font-bold hidden sm:block">
+            <div className="absolute -bottom-2 sm:bottom-4 right-0 sm:-right-4 font-['Caveat'] text-2xl sm:text-3xl text-primary-dark rotate-[-6deg] select-none pointer-events-none drop-shadow-xs font-bold hidden sm:block">
               Better Roofs<br />Bigger Peace<br />of Mind
             </div>
           </div>
@@ -265,7 +265,7 @@ export default function HeroBanner({
                 onClick={onSearchSubmit}
                 variant="primary"
                 size="lg"
-                className="w-full py-3 rounded-xl shadow-md shadow-orange-600/20"
+                className="w-full py-3 rounded-xl shadow-md shadow-primary/20"
                 iconLeft={<Search className="w-4 h-4 stroke-[2.4]" />}
                 iconRight={<span>&rarr;</span>}
               >
@@ -323,7 +323,7 @@ export default function HeroBanner({
           {trustCards.map((card) => (
             <ECard key={card.title} variant="stat">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-[#FFF5F0] border border-orange-100 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-full bg-primary-light border border-primary-border flex items-center justify-center shrink-0">
                   {card.icon}
                 </div>
                 <div className="min-w-0">
@@ -345,7 +345,7 @@ export default function HeroBanner({
             onClick={onSearchSubmit}
             variant="pill"
             size="sm"
-            iconRight={<ArrowRight className="w-3.5 h-3.5 text-[#F15A24]" />}
+            iconRight={<ArrowRight className="w-3.5 h-3.5 text-primary" />}
           >
             Explore {companiesCount} Verified Contractors in NYC
           </EButton>

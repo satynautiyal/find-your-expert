@@ -12,9 +12,9 @@ export const cardVariants = cva('transition-all', {
       elevated:
         'bg-white rounded-2xl shadow-xl shadow-gray-200/50 border border-gray-200/80 p-3 sm:p-4',
       stat:
-        'bg-white border border-gray-200/80 rounded-xl p-3 shadow-2xs hover:border-orange-200 hover:shadow-xs flex items-center justify-between gap-2',
+        'bg-white border border-gray-200/80 rounded-xl p-3 shadow-2xs hover:border-primary/50 hover:shadow-xs flex items-center justify-between gap-2',
       financing:
-        'bg-[#FFF8F5] border border-orange-100 rounded-lg p-2.5 flex items-center gap-2.5',
+        'bg-primary-light border border-primary-border rounded-lg p-2.5 flex items-center gap-2.5',
       floatingBadge:
         'bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-gray-100 p-2.5 sm:p-3 flex items-center gap-3',
     },

@@ -6,22 +6,22 @@ import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 
 export const buttonVariants = cva(
-  'inline-flex items-center justify-center font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F15A24] disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer',
+  'inline-flex items-center justify-center font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer',
   {
     variants: {
       variant: {
         primary:
-          'bg-[#F15A24] hover:bg-[#DE4714] text-white shadow-xs active:scale-[0.98]',
+          'bg-primary hover:bg-primary-hover text-white shadow-xs active:scale-[0.98]',
         outline:
           'bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-800 shadow-2xs',
         secondary:
           'bg-gray-100 hover:bg-gray-200 text-gray-800',
         pill:
-          'bg-white hover:bg-orange-50/60 border border-gray-200 text-gray-700 hover:text-[#F15A24] rounded-full shadow-2xs font-semibold',
+          'bg-white hover:bg-primary-light border border-gray-200 text-gray-700 hover:text-primary-dark rounded-full shadow-2xs font-semibold',
         ghost:
           'bg-transparent hover:bg-gray-100 text-gray-700',
         link:
-          'text-[#F15A24] hover:underline p-0 font-semibold inline-flex items-center gap-1',
+          'text-primary-dark hover:underline p-0 font-semibold inline-flex items-center gap-1',
         dark:
           'bg-gray-900 hover:bg-gray-800 text-white shadow-xs',
       },
