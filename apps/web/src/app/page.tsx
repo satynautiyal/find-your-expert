@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Header,
   Footer,
@@ -13,16 +13,27 @@ import { EButton } from '@/components/EComponents';
 import HeroBanner from '@/components/HeroBanner';
 import ProviderCard from '@/components/ProviderCard';
 import type { RooferProvider } from '@/data/mockRoofers';
-import { MOCK_NYC_ROOFERS } from '@/data/mockRoofers';
-import { List, LayoutGrid, ChevronDown } from 'lucide-react';
+import {
+  fetchProviders,
+  fetchProviderFilters,
+  type ProviderFiltersResponse,
+} from '@/lib/api';
+import { List, LayoutGrid, ChevronDown, RefreshCw, AlertCircle } from 'lucide-react';
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedBorough, setSelectedBorough] = useState('All');
   const [selectedService, setSelectedService] = useState('All Services');
   const [selectedSpace, setSelectedSpace] = useState('All');
-  const [selectedPick, setSelectedPick] = useState('All Picks');
   const [sortBy, setSortBy] = useState<'rating' | 'reviews' | 'experience'>('rating');
+
+  // Dynamic Data State (100% Live Database)
+  const [providers, setProviders] = useState<RooferProvider[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [filterMeta, setFilterMeta] = useState<ProviderFiltersResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Compare State
   const [comparedIds, setComparedIds] = useState<string[]>([]);
@@ -34,6 +45,53 @@ export default function Home() {
   // Quote Modal State
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [selectedRooferForQuote, setSelectedRooferForQuote] = useState<RooferProvider | null>(null);
+
+  // 1. Debounce search query input (300ms)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // 2. Load dynamic filters and stats once on mount
+  useEffect(() => {
+    async function loadFilters() {
+      try {
+        const meta = await fetchProviderFilters();
+        setFilterMeta(meta);
+      } catch (err: any) {
+        console.error('Failed to load dynamic filters:', err);
+      }
+    }
+    loadFilters();
+  }, []);
+
+  // 3. Fetch real providers whenever filters change
+  const loadProviders = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await fetchProviders({
+        search: debouncedSearch,
+        borough: selectedBorough,
+        service: selectedService,
+        sortBy,
+        limit: 50,
+      });
+      setProviders(data.items);
+      setTotalCount(data.total);
+    } catch (err: any) {
+      console.error('Error fetching providers:', err);
+      setError(err.message || 'Failed to connect to API server.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [debouncedSearch, selectedBorough, selectedService, sortBy]);
+
+  useEffect(() => {
+    loadProviders();
+  }, [loadProviders]);
 
   // Toggle Compare
   const handleToggleCompare = (id: string) => {
@@ -59,47 +117,9 @@ export default function Home() {
     }
   };
 
-  // Filtered List
-  const filteredRoofers = useMemo(() => {
-    return MOCK_NYC_ROOFERS.filter((roofer) => {
-      // Borough filter
-      if (selectedBorough !== 'All' && roofer.borough !== selectedBorough) {
-        return false;
-      }
-      // Service filter
-      if (
-        selectedService !== 'All Services' &&
-        !roofer.services.includes(selectedService)
-      ) {
-        return false;
-      }
-      // Top Pick chip filter
-      if (selectedPick !== 'All Picks' && roofer.topPickCategory !== selectedPick) {
-        return false;
-      }
-      // Search query
-      if (searchQuery.trim() !== '') {
-        const q = searchQuery.toLowerCase();
-        const matchesName = roofer.name.toLowerCase().includes(q);
-        const matchesAddress = roofer.address.toLowerCase().includes(q);
-        const matchesBorough = roofer.borough.toLowerCase().includes(q);
-        const matchesService = roofer.services.some((s) => s.toLowerCase().includes(q));
-        if (!matchesName && !matchesAddress && !matchesBorough && !matchesService) {
-          return false;
-        }
-      }
-      return true;
-    }).sort((a, b) => {
-      if (sortBy === 'rating') return b.compositeRating - a.compositeRating;
-      if (sortBy === 'reviews') return b.totalReviews - a.totalReviews;
-      if (sortBy === 'experience') return b.yearsInBusiness - a.yearsInBusiness;
-      return 0;
-    });
-  }, [selectedBorough, selectedService, selectedPick, searchQuery, sortBy]);
-
   const comparedProviders = useMemo(() => {
-    return MOCK_NYC_ROOFERS.filter((r) => comparedIds.includes(r.id));
-  }, [comparedIds]);
+    return providers.filter((r) => comparedIds.includes(r.id));
+  }, [providers, comparedIds]);
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] text-gray-950 flex flex-col font-sans selection:bg-primary selection:text-white">
@@ -109,7 +129,7 @@ export default function Home() {
         savedCount={comparedIds.length}
       />
 
-      {/* 2. Hero Banner with search & location filters */}
+      {/* 2. Dynamic Hero Banner with real database numbers */}
       <HeroBanner
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -120,7 +140,10 @@ export default function Home() {
         selectedSpace={selectedSpace}
         onSelectSpace={setSelectedSpace}
         onSearchSubmit={handleScrollToListings}
-        companiesCount={filteredRoofers.length}
+        companiesCount={totalCount}
+        dynamicBoroughs={filterMeta?.boroughs}
+        dynamicServices={filterMeta?.services}
+        stats={filterMeta?.stats}
       />
 
       {/* 3. Main Content Area */}
@@ -129,37 +152,31 @@ export default function Home() {
         <div className="flex flex-wrap items-center justify-between gap-3 py-1 text-xs">
           <div className="flex items-center gap-4">
             <span className="font-extrabold text-sm text-gray-950">
-              {filteredRoofers.length} companies found
+              {isLoading ? 'Searching verified contractors...' : `${totalCount} companies found`}
             </span>
 
+            {/* Live Database Sorting */}
             <div className="hidden sm:flex items-center gap-2">
               <EButton
-                variant="outline"
+                variant={sortBy === 'rating' ? 'primary' : 'outline'}
                 size="sm"
-                iconRight={<ChevronDown className="w-3 h-3 text-gray-400" />}
+                onClick={() => setSortBy('rating')}
               >
-                Rating
+                Top Rated
               </EButton>
               <EButton
-                variant="outline"
+                variant={sortBy === 'reviews' ? 'primary' : 'outline'}
                 size="sm"
-                iconRight={<ChevronDown className="w-3 h-3 text-gray-400" />}
+                onClick={() => setSortBy('reviews')}
               >
-                Budget
+                Most Reviews
               </EButton>
               <EButton
-                variant="outline"
+                variant={sortBy === 'experience' ? 'primary' : 'outline'}
                 size="sm"
-                iconRight={<ChevronDown className="w-3 h-3 text-gray-400" />}
+                onClick={() => setSortBy('experience')}
               >
-                Material
-              </EButton>
-              <EButton
-                variant="outline"
-                size="sm"
-                iconRight={<ChevronDown className="w-3 h-3 text-gray-400" />}
-              >
-                Services
+                Years in Business
               </EButton>
             </div>
           </div>
@@ -181,9 +198,53 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Provider Cards List */}
+        {/* Dynamic Provider Cards List */}
         <div className="space-y-4">
-          {filteredRoofers.length === 0 ? (
+          {/* Loading Skeletons */}
+          {isLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="bg-white rounded-2xl border border-gray-200 p-6 animate-pulse space-y-4"
+                >
+                  <div className="flex flex-col md:flex-row gap-5">
+                    <div className="w-full md:w-60 h-44 bg-gray-200 rounded-xl shrink-0" />
+                    <div className="flex-1 space-y-3">
+                      <div className="h-6 bg-gray-200 rounded w-1/3" />
+                      <div className="h-4 bg-gray-100 rounded w-1/2" />
+                      <div className="h-4 bg-gray-100 rounded w-2/3" />
+                      <div className="h-12 bg-gray-100 rounded w-full mt-4" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            /* Error State with live Retry button */
+            <div className="bg-red-50/60 rounded-2xl border border-red-200 p-10 text-center space-y-3">
+              <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-red-900">
+                Error Connecting to Database API
+              </h3>
+              <p className="text-xs text-red-600 max-w-md mx-auto">
+                {error}
+              </p>
+              <div className="pt-2">
+                <EButton
+                  onClick={() => loadProviders()}
+                  variant="primary"
+                  size="md"
+                  iconLeft={<RefreshCw className="w-3.5 h-3.5" />}
+                >
+                  Retry Loading
+                </EButton>
+              </div>
+            </div>
+          ) : providers.length === 0 ? (
+            /* Zero Matching Records State */
             <div className="bg-white rounded-2xl border border-gray-200 p-12 text-center space-y-3">
               <h3 className="text-base font-bold text-gray-900">
                 No roofing companies found for this selection
@@ -195,8 +256,8 @@ export default function Home() {
                 onClick={() => {
                   setSelectedBorough('All');
                   setSelectedService('All Services');
-                  setSelectedPick('All Picks');
                   setSearchQuery('');
+                  setSortBy('rating');
                 }}
                 variant="primary"
                 size="md"
@@ -205,7 +266,8 @@ export default function Home() {
               </EButton>
             </div>
           ) : (
-            filteredRoofers.map((roofer, index) => (
+            /* Real Database Providers */
+            providers.map((roofer, index) => (
               <ProviderCard
                 key={roofer.id}
                 provider={roofer}
@@ -223,7 +285,7 @@ export default function Home() {
       {/* 4. Universal Footer */}
       <Footer />
 
-      {/* 5. Floating Compare Drawer (when contractors are checked) */}
+      {/* 5. Floating Compare Drawer */}
       <CompareDrawer
         comparedProviders={comparedProviders}
         onRemove={handleToggleCompare}
@@ -248,7 +310,7 @@ export default function Home() {
         onClose={() => setCostGuideOpen(false)}
       />
 
-      {/* 8. Universal "Get Quote / Contact" Modal */}
+      {/* 8. Universal Quote Modal */}
       <QuoteModal
         isOpen={quoteModalOpen}
         onClose={handleCloseQuote}

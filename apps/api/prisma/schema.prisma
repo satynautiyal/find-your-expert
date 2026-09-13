@@ -1,0 +1,513 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ═══════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════
+
+enum UserRole {
+  ADMIN
+  PROVIDER
+  CUSTOMER
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  FACEBOOK
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+  PENDING_VERIFICATION
+}
+
+enum ContactMethod {
+  EMAIL
+  PHONE
+  BOTH
+}
+
+enum ListingStatus {
+  DRAFT
+  PENDING_REVIEW
+  ACTIVE
+  PAUSED
+  REJECTED
+  ARCHIVED
+}
+
+enum PricingType {
+  FIXED
+  RANGE
+  HOURLY
+  QUOTE_ONLY
+}
+
+enum AreaType {
+  BOROUGH
+  NEIGHBORHOOD
+  ZIP_CODE
+  CITY
+}
+
+enum ReviewPlatform {
+  GOOGLE
+  YELP
+  FACEBOOK
+  HOMEADVISOR
+  BBB
+}
+
+enum PhotoCategory {
+  HERO
+  PORTFOLIO
+  BEFORE_AFTER
+  CREW
+}
+
+enum PropertyType {
+  RESIDENTIAL
+  COMMERCIAL
+}
+
+enum ProjectUrgency {
+  EMERGENCY_24H
+  WITHIN_48H
+  WITHIN_A_WEEK
+  FLEXIBLE
+  PLANNING
+}
+
+enum QuoteStatus {
+  PENDING
+  ASSIGNED
+  CONTACTED
+  COMPLETED
+  CANCELLED
+}
+
+enum TopPickCategory {
+  BEST_OVERALL
+  BEST_VALUE
+  BEST_FLAT_ROOFS
+  BEST_HISTORIC_BROWNSTONES
+  FASTEST_EMERGENCY_RESPONSE
+}
+
+// ═══════════════════════════════════════════════════════
+// USER SYSTEM (Single auth table + Role-specific profiles)
+// ═══════════════════════════════════════════════════════
+
+model User {
+  id             String        @id @default(uuid())
+  email          String        @unique
+  passwordHash   String?
+  role           UserRole      @default(CUSTOMER)
+  authProvider   AuthProvider  @default(EMAIL)
+  authProviderId String?
+  emailVerified  Boolean       @default(false)
+  status         AccountStatus @default(ACTIVE)
+  lastLoginAt    DateTime?
+
+  // Role-specific profiles (1:1)
+  providerProfile ProviderProfile?
+  customerProfile CustomerProfile?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model ProviderProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Business Identity
+  businessName  String
+  slug          String  @unique
+  tagline       String?
+  description   String  @db.Text
+  logoUrl       String?
+  logoText      String?
+  coverImageUrl String?
+
+  // Contact
+  phone      String
+  email      String?
+  websiteUrl String?
+
+  // Geography
+  address       String
+  city          String?
+  state         String?
+  zipCode       String?
+  borough       String?
+  latitude      Decimal? @db.Decimal(10, 7)
+  longitude     Decimal? @db.Decimal(10, 7)
+  serviceRadius Int?     @default(25)
+
+  // Credentials & Verification
+  licenseNumber      String?
+  sinceYear          Int
+  isLicensed         Boolean @default(false)
+  isInsured          Boolean @default(false)
+  isBonded           Boolean @default(false)
+  hasWarranty        Boolean @default(false)
+  financingAvailable Boolean @default(false)
+  emergencyService   Boolean @default(false)
+  bbbRating          String?
+  verifiedYear       Int?
+
+  // Aggregated Scores (denormalized for fast reads)
+  compositeRating Decimal @default(0.0) @db.Decimal(2, 1)
+  totalReviews    Int     @default(0)
+
+  // Status & Administration
+  isVerified      Boolean          @default(false)
+  isFeatured      Boolean          @default(false)
+  isActive        Boolean          @default(true)
+  badge           String?
+  topPickCategory TopPickCategory?
+  featuredQuote   String?          @db.Text
+
+  // Relations
+  listings         Listing[]
+  platformReviews  PlatformReview[]
+  reviewsReceived  Review[]         @relation("ProviderReviews")
+  quoteRequests    QuoteRequest[]
+  savedByCustomers SavedProvider[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([borough])
+  @@index([compositeRating(sort: Desc)])
+  @@index([totalReviews(sort: Desc)])
+  @@index([sinceYear])
+  @@map("provider_profiles")
+}
+
+model CustomerProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fullName  String?
+  phone     String?
+  avatarUrl String?
+
+  // Geography
+  address   String?
+  city      String?
+  state     String?
+  zipCode   String?
+  borough   String?
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+
+  // Preferences
+  preferredContactMethod ContactMethod @default(EMAIL)
+  propertyType           PropertyType?
+
+  // Relations
+  quoteRequests  QuoteRequest[]
+  reviewsWritten Review[]        @relation("CustomerReviews")
+  savedProviders SavedProvider[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("customer_profiles")
+}
+
+// ═══════════════════════════════════════════════════════
+// GEOGRAPHIC TAXONOMY
+// ═══════════════════════════════════════════════════════
+
+model Country {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String   @unique
+  slug      String   @unique
+  states    State[]
+  createdAt DateTime @default(now())
+
+  @@map("countries")
+}
+
+model State {
+  id        String   @id @default(uuid())
+  countryId String
+  country   Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  name      String
+  code      String
+  slug      String
+  cities    City[]
+  createdAt DateTime @default(now())
+
+  @@unique([countryId, slug])
+  @@map("states")
+}
+
+model City {
+  id             String          @id @default(uuid())
+  stateId        String
+  state          State           @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  name           String
+  slug           String
+  boroughs       String[]        @default([])
+  zipCodes       String[]        @default([])
+  latitude       Decimal?        @db.Decimal(10, 7)
+  longitude      Decimal?        @db.Decimal(10, 7)
+  heroTitle      String?
+  heroSubtitle   String?         @db.Text
+  listings       Listing[]
+  costBenchmarks CostBenchmark[]
+  createdAt      DateTime        @default(now())
+
+  @@unique([stateId, slug])
+  @@map("cities")
+}
+
+// ═══════════════════════════════════════════════════════
+// SERVICE TAXONOMY
+// ═══════════════════════════════════════════════════════
+
+model ServiceCategory {
+  id              String          @id @default(uuid())
+  name            String          @unique
+  slug            String          @unique
+  description     String?         @db.Text
+  icon            String?
+  metaTitle       String?
+  metaDescription String?         @db.Text
+  subServices     SubService[]
+  listings        Listing[]
+  costBenchmarks  CostBenchmark[]
+  createdAt       DateTime        @default(now())
+
+  @@map("service_categories")
+}
+
+model SubService {
+  id              String              @id @default(uuid())
+  categoryId      String
+  category        ServiceCategory     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name            String
+  slug            String
+  description     String?             @db.Text
+  isPopular       Boolean             @default(false)
+  listingServices ListingSubService[]
+  createdAt       DateTime            @default(now())
+
+  @@unique([categoryId, slug])
+  @@map("sub_services")
+}
+
+// ═══════════════════════════════════════════════════════
+// LISTINGS (Provider's Service Offerings)
+// ═══════════════════════════════════════════════════════
+
+model Listing {
+  id                String          @id @default(uuid())
+  providerProfileId String
+  providerProfile   ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  categoryId        String
+  category          ServiceCategory @relation(fields: [categoryId], references: [id])
+  cityId            String
+  city              City            @relation(fields: [cityId], references: [id])
+
+  title       String
+  slug        String        @unique
+  description String        @db.Text
+  status      ListingStatus @default(DRAFT)
+
+  // Pricing
+  pricingType PricingType @default(RANGE)
+  minPrice    Decimal?    @db.Decimal(10, 2)
+  maxPrice    Decimal?    @db.Decimal(10, 2)
+
+  // Metadata
+  isFeatured Boolean @default(false)
+  viewCount  Int     @default(0)
+
+  // Relations
+  subServices   ListingSubService[]
+  photos        ListingPhoto[]
+  serviceAreas  ListingServiceArea[]
+  quoteRequests QuoteRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerProfileId])
+  @@index([categoryId, cityId])
+  @@index([status])
+  @@map("listings")
+}
+
+model ListingSubService {
+  id           String     @id @default(uuid())
+  listingId    String
+  listing      Listing    @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  subServiceId String
+  subService   SubService @relation(fields: [subServiceId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([listingId, subServiceId])
+  @@map("listing_sub_services")
+}
+
+model ListingPhoto {
+  id         String        @id @default(uuid())
+  listingId  String
+  listing    Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  imageUrl   String
+  caption    String?
+  category   PhotoCategory @default(PORTFOLIO)
+  orderIndex Int           @default(0)
+  createdAt  DateTime      @default(now())
+
+  @@index([listingId, orderIndex])
+  @@map("listing_photos")
+}
+
+model ListingServiceArea {
+  id        String   @id @default(uuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  areaName  String
+  areaType  AreaType @default(BOROUGH)
+  zipCode   String?
+  createdAt DateTime @default(now())
+
+  @@unique([listingId, areaName])
+  @@map("listing_service_areas")
+}
+
+// ═══════════════════════════════════════════════════════
+// REVIEWS (External platform + In-platform)
+// ═══════════════════════════════════════════════════════
+
+model PlatformReview {
+  id                String          @id @default(uuid())
+  providerProfileId String
+  providerProfile   ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  platform          ReviewPlatform
+  rating            Decimal         @db.Decimal(2, 1)
+  reviewCount       Int
+  profileUrl        String
+  lastScrapedAt     DateTime?
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([providerProfileId, platform])
+  @@map("platform_reviews")
+}
+
+model Review {
+  id                String          @id @default(uuid())
+  customerProfileId String
+  customerProfile   CustomerProfile @relation("CustomerReviews", fields: [customerProfileId], references: [id], onDelete: Cascade)
+  providerProfileId String
+  providerProfile   ProviderProfile @relation("ProviderReviews", fields: [providerProfileId], references: [id], onDelete: Cascade)
+  listingId         String?
+  rating            Int
+  title             String?
+  comment           String?         @db.Text
+  isVerified        Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+
+  @@unique([customerProfileId, providerProfileId])
+  @@map("reviews")
+}
+
+// ═══════════════════════════════════════════════════════
+// LEAD GENERATION & QUOTE ENGINE
+// ═══════════════════════════════════════════════════════
+
+model QuoteRequest {
+  id                String           @id @default(uuid())
+  trackingNumber    String           @unique
+  listingId         String?
+  listing           Listing?         @relation(fields: [listingId], references: [id], onDelete: SetNull)
+  providerProfileId String?
+  providerProfile   ProviderProfile? @relation(fields: [providerProfileId], references: [id], onDelete: SetNull)
+  customerProfileId String?
+  customerProfile   CustomerProfile? @relation(fields: [customerProfileId], references: [id], onDelete: SetNull)
+
+  // Customer Contact
+  customerName  String
+  customerEmail String
+  customerPhone String
+
+  // Location
+  borough   String?
+  zipCode   String
+  address   String?
+  latitude  Decimal? @db.Decimal(10, 7)
+  longitude Decimal? @db.Decimal(10, 7)
+
+  // Project Details
+  serviceType  String
+  propertyType PropertyType   @default(RESIDENTIAL)
+  urgency      ProjectUrgency @default(WITHIN_A_WEEK)
+  projectNotes String?        @db.Text
+
+  // Lifecycle
+  status    QuoteStatus @default(PENDING)
+  sourceUrl String?
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([providerProfileId, status])
+  @@index([customerEmail])
+  @@index([createdAt(sort: Desc)])
+  @@map("quote_requests")
+}
+
+// ═══════════════════════════════════════════════════════
+// COST BENCHMARKS & SAVED PROVIDERS
+// ═══════════════════════════════════════════════════════
+
+model CostBenchmark {
+  id          String          @id @default(uuid())
+  categoryId  String
+  category    ServiceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  cityId      String
+  city        City            @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  roofType    String
+  footprint   String?
+  description String?         @db.Text
+  minCost     Decimal         @db.Decimal(10, 2)
+  maxCost     Decimal         @db.Decimal(10, 2)
+  orderIndex  Int             @default(0)
+  createdAt   DateTime        @default(now())
+
+  @@index([categoryId, cityId])
+  @@map("cost_benchmarks")
+}
+
+model SavedProvider {
+  id                String          @id @default(uuid())
+  customerProfileId String
+  customerProfile   CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+  providerProfileId String
+  providerProfile   ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+
+  @@unique([customerProfileId, providerProfileId])
+  @@map("saved_providers")
+}

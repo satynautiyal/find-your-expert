@@ -35,6 +35,13 @@ export interface HeroBannerProps {
   onSelectSpace: (sp: string) => void;
   onSearchSubmit: () => void;
   companiesCount: number;
+  dynamicBoroughs?: string[];
+  dynamicServices?: string[];
+  stats?: {
+    totalProviders: number;
+    avgRating: number;
+    totalReviews: number;
+  };
 }
 
 export default function HeroBanner({
@@ -48,27 +55,33 @@ export default function HeroBanner({
   onSelectSpace,
   onSearchSubmit,
   companiesCount,
+  dynamicBoroughs,
+  dynamicServices,
+  stats,
 }: HeroBannerProps) {
   const handleTagClick = (serviceName: string) => {
     onSelectService(serviceName);
     onSearchSubmit();
   };
 
+  const rawBoroughs = dynamicBoroughs && dynamicBoroughs.length > 0 ? dynamicBoroughs : NYC_BOROUGHS;
+  const rawServices = dynamicServices && dynamicServices.length > 0 ? dynamicServices : ROOFING_SUB_SERVICES;
+
   const boroughOptions = useMemo(() => [
     { label: 'All NYC (5 Boroughs)', value: 'All' },
-    ...NYC_BOROUGHS.filter((b) => b !== 'All').map((b) => ({
+    ...rawBoroughs.filter((b) => b !== 'All').map((b) => ({
       label: `${b}, NY`,
       value: b,
     })),
-  ], []);
+  ], [rawBoroughs]);
 
   const serviceOptions = useMemo(() => [
     { label: 'All Roofing Services', value: 'All Services' },
-    ...ROOFING_SUB_SERVICES.filter((s) => s !== 'All Services').map((s) => ({
+    ...rawServices.filter((s) => s !== 'All Services').map((s) => ({
       label: s,
       value: s,
     })),
-  ], []);
+  ], [rawServices]);
 
   const propertyOptions = useMemo(() => [
     { label: 'All Properties', value: 'All' },
@@ -79,13 +92,13 @@ export default function HeroBanner({
   const trustCards = [
     {
       icon: <Star className="w-4 h-4 text-primary" />,
-      title: '5.0',
-      subtitle: 'Avg. Rating Across 2,800+ Reviews',
+      title: stats?.avgRating ? `${stats.avgRating}` : '4.8',
+      subtitle: `Avg. Rating Across ${stats?.totalReviews ? stats.totalReviews.toLocaleString() : '2,800'}+ Reviews`,
     },
     {
       icon: <ShieldCheck className="w-4 h-4 text-primary" />,
-      title: '1,840+',
-      subtitle: 'Verified Roofers in NYC',
+      title: stats?.totalProviders ? `${stats.totalProviders}+` : `${companiesCount}+`,
+      subtitle: 'Verified Contractors in NYC',
     },
     {
       icon: <Tag className="w-4 h-4 text-primary" />,

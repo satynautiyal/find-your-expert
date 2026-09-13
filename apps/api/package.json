@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "nest build",
+    "scrape": "ts-node scripts/scrape-providers.ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "dev": "nest start --watch",
     "start": "nest start",
@@ -11,26 +12,36 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "db:seed": "ts-node prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.758.0",
+    "@aws-sdk/s3-request-presigner": "^3.1131.0",
     "@nestjs/common": "^11.0.11",
     "@nestjs/config": "^4.0.1",
     "@nestjs/core": "^11.0.11",
     "@nestjs/platform-express": "^11.0.11",
-    "@repo/db": "workspace:*",
-    "@repo/types": "workspace:*",
+    "@prisma/client": "^6.4.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
+    "dotenv": "^17.4.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.5",
     "@nestjs/schematics": "^11.0.2",
-    "@repo/typescript-config": "workspace:*",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.9",
+    "prisma": "^6.4.1",
     "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
