@@ -16,7 +16,11 @@ import {
   EStarRating,
 } from '@/components/EComponents';
 import type { RooferProvider } from '@/data/mockRoofers';
-import { fetchProviderBySlug } from '@/lib/api';
+import {
+  fetchProviderBySlug,
+  syncProviderReviews,
+  type ScrapedReviewItemDto,
+} from '@/lib/api';
 import {
   MapPin,
   Phone,
@@ -37,6 +41,9 @@ import {
   RefreshCw,
   Home,
   Check,
+  DownloadCloud,
+  MessageSquare,
+  Star,
 } from 'lucide-react';
 
 export default function ContractorProfilePage() {
@@ -48,6 +55,12 @@ export default function ContractorProfilePage() {
   const [provider, setProvider] = useState<RooferProvider | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [imgError, setImgError] = useState(false);
+
+  // Live Reviews Sync State
+  const [isSyncingReviews, setIsSyncingReviews] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [scrapedReviews, setScrapedReviews] = useState<ScrapedReviewItemDto[]>([]);
 
   // Modals
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
@@ -81,6 +94,34 @@ export default function ContractorProfilePage() {
       navigator.clipboard.writeText(window.location.href);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
+  const handleSyncReviews = async () => {
+    if (!slug || isSyncingReviews) return;
+    setIsSyncingReviews(true);
+    setSyncStatus(null);
+    try {
+      const res = await syncProviderReviews(slug);
+      if (res.provider) {
+        setProvider(res.provider);
+      }
+      if (res.scrapedSummary?.allReviews) {
+        setScrapedReviews(res.scrapedSummary.allReviews);
+      }
+      setSyncStatus({
+        message: `Reviews updated live! Rating: ${res.provider.compositeRating} ★ across ${res.provider.totalReviews} verified reviews.`,
+        type: 'success',
+      });
+      setTimeout(() => setSyncStatus(null), 8000);
+    } catch (err: any) {
+      console.error('Failed to sync reviews:', err);
+      setSyncStatus({
+        message: err.message || 'Could not fetch live reviews at this moment. Please try again.',
+        type: 'error',
+      });
+    } finally {
+      setIsSyncingReviews(false);
     }
   };
 
@@ -177,10 +218,11 @@ export default function ContractorProfilePage() {
                 <div className="flex flex-col sm:flex-row gap-5 sm:gap-6 items-start">
                   {/* Provider Logo / Presigned R2 Image */}
                   <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl overflow-hidden bg-gray-50 border border-gray-200 shadow-sm shrink-0 flex items-center justify-center">
-                    {provider.imageUrl ? (
+                    {provider.imageUrl && !imgError ? (
                       <img
                         src={provider.imageUrl}
                         alt={provider.name}
+                        onError={() => setImgError(true)}
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -227,8 +269,8 @@ export default function ContractorProfilePage() {
                       </span>
                     </div>
 
-                    {/* Star Rating Overview */}
-                    <div className="flex items-center gap-3 pt-2">
+                    {/* Star Rating Overview & Quick Sync */}
+                    <div className="flex flex-wrap items-center gap-3 pt-2">
                       <EStarRating
                         rating={provider.compositeRating}
                         totalReviews={provider.totalReviews}
@@ -237,6 +279,15 @@ export default function ContractorProfilePage() {
                       <span className="text-xs text-gray-500">
                         Across Google, Yelp &amp; Facebook
                       </span>
+                      <button
+                        onClick={handleSyncReviews}
+                        disabled={isSyncingReviews}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border border-primary/30 text-primary-dark hover:bg-primary/5 active:scale-95 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                        title="Fetch latest reviews and ratings from Google, Yelp & Facebook"
+                      >
+                        <RefreshCw className={`w-3 h-3 text-primary ${isSyncingReviews ? 'animate-spin' : ''}`} />
+                        <span>{isSyncingReviews ? 'Fetching...' : 'Fetch Reviews'}</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -453,19 +504,64 @@ export default function ContractorProfilePage() {
 
                 {activeTab === 'reviews' && (
                   <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-6">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
+                    {/* Header with Title, Rating & Action Button */}
+                    <div className="flex items-center justify-between flex-wrap gap-4 border-b border-gray-100 pb-4">
                       <div>
                         <h2 className="text-lg font-bold text-gray-950">Verified Platform Reviews</h2>
                         <p className="text-xs text-gray-500">
                           Independent review metrics directly verified across Google, Yelp, and Facebook.
                         </p>
                       </div>
-                      <div className="text-2xl font-black text-primary-dark">
-                        {provider.compositeRating} <span className="text-sm font-normal text-gray-400">/ 5.0</span>
+
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="text-2xl font-black text-primary-dark">
+                            {provider.compositeRating} <span className="text-sm font-normal text-gray-400">/ 5.0</span>
+                          </div>
+                          <div className="text-[10px] text-gray-400 font-medium">
+                            {provider.totalReviews} total ratings
+                          </div>
+                        </div>
+
+                        {/* Fetch Reviews Button */}
+                        <EButton
+                          variant="primary"
+                          size="sm"
+                          onClick={handleSyncReviews}
+                          disabled={isSyncingReviews}
+                          iconLeft={
+                            isSyncingReviews ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <DownloadCloud className="w-3.5 h-3.5" />
+                            )
+                          }
+                          className="font-bold text-xs"
+                        >
+                          {isSyncingReviews ? 'Syncing Live...' : 'Fetch Live Reviews'}
+                        </EButton>
                       </div>
                     </div>
 
-                    {/* 3 Platform Cards */}
+                    {/* Live Sync Status Banner */}
+                    {syncStatus && (
+                      <div
+                        className={`p-3.5 rounded-xl text-xs flex items-center gap-2.5 transition-all ${
+                          syncStatus.type === 'success'
+                            ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                            : 'bg-amber-50 border border-amber-200 text-amber-800'
+                        }`}
+                      >
+                        {syncStatus.type === 'success' ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        )}
+                        <span className="font-medium">{syncStatus.message}</span>
+                      </div>
+                    )}
+
+                    {/* 3 Platform Summary Cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {/* Google */}
                       <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/30 space-y-2">
@@ -505,10 +601,117 @@ export default function ContractorProfilePage() {
                           Featured Customer Feedback
                         </div>
                         <blockquote className="text-xs sm:text-sm text-gray-700 italic">
-                          {provider.featuredQuote}
+                          "{provider.featuredQuote}"
                         </blockquote>
                       </div>
                     )}
+
+                    {/* Scraped Live Reviews Feed */}
+                    <div className="space-y-4 pt-2">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                          <MessageSquare className="w-4 h-4 text-primary" />
+                          <span>Latest Customer Reviews &amp; Testimonials</span>
+                        </h3>
+                        {scrapedReviews.length > 0 && (
+                          <span className="text-xs font-semibold text-primary-dark bg-primary-light px-2.5 py-0.5 rounded-full border border-primary-border">
+                            {scrapedReviews.length} Reviews Fetched
+                          </span>
+                        )}
+                      </div>
+
+                      {scrapedReviews.length > 0 ? (
+                        <div className="space-y-3">
+                          {scrapedReviews.map((rev, idx) => (
+                            <div
+                              key={idx}
+                              className="p-4 rounded-xl border border-gray-100 bg-gray-50/60 hover:bg-gray-50 transition-colors space-y-2.5"
+                            >
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div className="flex items-center gap-2.5">
+                                  {rev.authorAvatarUrl ? (
+                                    <img
+                                      src={rev.authorAvatarUrl}
+                                      alt={rev.authorName}
+                                      className="w-8 h-8 rounded-full object-cover border border-gray-200"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-primary/10 text-primary-dark font-bold text-xs flex items-center justify-center">
+                                      {rev.authorName.substring(0, 2).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <div>
+                                    <div className="text-xs font-bold text-gray-900">{rev.authorName}</div>
+                                    {rev.reviewDate && (
+                                      <div className="text-[10px] text-gray-400">{rev.reviewDate}</div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center text-amber-500 text-xs">
+                                    {Array.from({ length: 5 }).map((_, s) => (
+                                      <Star
+                                        key={s}
+                                        className={`w-3.5 h-3.5 ${
+                                          s < Math.floor(rev.rating)
+                                            ? 'fill-amber-400 text-amber-400'
+                                            : 'text-gray-200'
+                                        }`}
+                                      />
+                                    ))}
+                                    <span className="ml-1 font-bold text-gray-700">{rev.rating}</span>
+                                  </div>
+
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                      rev.platform === 'GOOGLE'
+                                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                        : rev.platform === 'YELP'
+                                        ? 'bg-red-50 text-red-700 border border-red-200'
+                                        : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                    }`}
+                                  >
+                                    {rev.platform}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <p className="text-xs text-gray-600 leading-relaxed">{rev.comment}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-8 rounded-xl border border-dashed border-gray-200 text-center space-y-3 bg-gray-50/40">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 text-primary mx-auto flex items-center justify-center">
+                            <DownloadCloud className="w-5 h-5" />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-xs font-bold text-gray-800">
+                              No live review comments cached yet
+                            </div>
+                            <div className="text-[11px] text-gray-500 max-w-sm mx-auto">
+                              Click the <strong>"Fetch Live Reviews"</strong> button above to scrape and display the latest individual customer comments from Google, Yelp &amp; Facebook.
+                            </div>
+                          </div>
+                          <div className="pt-1">
+                            <EButton
+                              variant="outline"
+                              size="sm"
+                              onClick={handleSyncReviews}
+                              disabled={isSyncingReviews}
+                              iconLeft={<RefreshCw className={`w-3.5 h-3.5 ${isSyncingReviews ? 'animate-spin' : ''}`} />}
+                              className="text-xs"
+                            >
+                              {isSyncingReviews ? 'Fetching Reviews...' : 'Fetch Live Reviews Now'}
+                            </EButton>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 

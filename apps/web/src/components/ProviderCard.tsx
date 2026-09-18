@@ -37,6 +37,7 @@ export default function ProviderCard({
   onOpenCostGuide,
 }: ProviderCardProps) {
   const [readMore, setReadMore] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   // Full title string
   const fullTitle = provider.tagline
@@ -51,10 +52,11 @@ export default function ProviderCard({
           href={`/contractors/${provider.slug}`}
           className="relative w-full xl:w-[250px] h-48 xl:h-[220px] rounded-lg overflow-hidden shrink-0 bg-gray-100 block group"
         >
-          {provider.imageUrl ? (
+          {provider.imageUrl && !imgError ? (
             <img
               src={provider.imageUrl}
               alt={provider.name}
+              onError={() => setImgError(true)}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
           ) : (

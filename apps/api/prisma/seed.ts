@@ -43,7 +43,7 @@ if (isR2Ready) {
 
 /**
  * Downloads image from remote URL and uploads directly to Cloudflare R2 bucket,
- * returning a 12-hour presigned URL.
+ * returning the R2 destination key to store in the database.
  */
 async function uploadImageToR2(remoteUrl: string, destinationKey: string): Promise<string> {
   if (!isR2Ready || !r2Client || !remoteUrl || !remoteUrl.startsWith('http')) {
@@ -65,12 +65,7 @@ async function uploadImageToR2(remoteUrl: string, destinationKey: string): Promi
       })
     );
 
-    // Generate 12-hour presigned URL (43,200 seconds)
-    const getCommand = new GetObjectCommand({
-      Bucket: r2BucketName,
-      Key: destinationKey,
-    });
-    return await getSignedUrl(r2Client, getCommand, { expiresIn: 12 * 60 * 60 });
+    return destinationKey;
   } catch (e: any) {
     console.warn(`   ⚠️ R2 upload skipped for ${destinationKey}: ${e.message}`);
     return remoteUrl;

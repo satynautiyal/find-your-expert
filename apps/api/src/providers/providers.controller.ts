@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Param } from '@nestjs/common';
+import { Controller, Get, Post, Query, Param } from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { GetProvidersQueryDto } from './dto/get-providers.dto';
 
@@ -44,6 +44,21 @@ export class ProvidersController {
     return {
       success: true,
       data: provider,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/:slug/sync-reviews
+   * Scrape and update live ratings/reviews from Google, Yelp and Facebook
+   */
+  @Post(':slug/sync-reviews')
+  async syncProviderReviews(@Param('slug') slug: string) {
+    const result = await this.providersService.syncReviews(slug);
+    return {
+      success: true,
+      data: result,
+      message: 'Reviews synchronized successfully across Google, Yelp and Facebook.',
       timestamp: new Date().toISOString(),
     };
   }

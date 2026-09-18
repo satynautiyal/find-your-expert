@@ -168,3 +168,54 @@ export async function fetchProviderBySlug(slug: string): Promise<RooferProvider>
 
   return json.data;
 }
+
+export interface ScrapedReviewItemDto {
+  authorName: string;
+  authorAvatarUrl?: string;
+  rating: number;
+  comment: string;
+  reviewDate?: string;
+  platform: 'GOOGLE' | 'YELP' | 'FACEBOOK';
+  sourceUrl?: string;
+}
+
+export interface SyncReviewsResult {
+  provider: RooferProvider;
+  scrapedSummary: {
+    businessName: string;
+    scrapedAt: string;
+    compositeRating: number;
+    totalReviews: number;
+    platforms: {
+      google?: { rating: number; totalReviews: number; reviews: ScrapedReviewItemDto[] };
+      yelp?: { rating: number; totalReviews: number; reviews: ScrapedReviewItemDto[] };
+      facebook?: { rating: number; totalReviews: number; reviews: ScrapedReviewItemDto[] };
+    };
+    allReviews: ScrapedReviewItemDto[];
+  };
+}
+
+/**
+ * Trigger live reviews scrape & sync from Google, Yelp and Facebook
+ */
+export async function syncProviderReviews(slug: string): Promise<SyncReviewsResult> {
+  const url = buildApiUrl(`providers/${encodeURIComponent(slug)}/sync-reviews`);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to sync reviews: HTTP ${response.status}`);
+  }
+
+  const json: ApiResponse<SyncReviewsResult> = await response.json();
+  if (!json.success || !json.data) {
+    throw new Error(json.error || 'Failed to sync reviews from platforms');
+  }
+
+  return json.data;
+}

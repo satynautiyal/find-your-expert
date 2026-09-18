@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { ReviewsScraperService, MultiPlatformScrapeResult } from '../scrapers';
 import { GetProvidersQueryDto } from './dto/get-providers.dto';
 import { Prisma } from '@prisma/client';
 
@@ -47,7 +48,8 @@ export interface FormattedProvider {
 export class ProvidersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly storageService: StorageService
+    private readonly storageService: StorageService,
+    private readonly reviewsScraperService: ReviewsScraperService
   ) {}
 
   /**
@@ -76,6 +78,8 @@ export class ProvidersService {
       presignedImageUrl = await this.storageService.getPresignedUrl(p.logoUrl);
     } else if (p.coverImageUrl) {
       presignedImageUrl = await this.storageService.getPresignedUrl(p.coverImageUrl);
+    } else if (p.listings?.[0]?.photos?.[0]?.imageUrl) {
+      presignedImageUrl = await this.storageService.getPresignedUrl(p.listings[0].photos[0].imageUrl);
     }
 
     // Extract subServices from listings
@@ -343,5 +347,147 @@ export class ProvidersService {
     }
 
     return this.formatProvider(provider);
+  }
+
+  /**
+   * Sync and scrape latest live reviews from Google, Yelp & Facebook for a provider
+   */
+  async syncReviews(slug: string): Promise<{
+    provider: FormattedProvider;
+    scrapedSummary: MultiPlatformScrapeResult;
+  }> {
+    const profile = await this.prisma.providerProfile.findUnique({
+      where: { slug },
+      include: {
+        platformReviews: true,
+      },
+    });
+
+    if (!profile) {
+      throw new NotFoundException(`Provider with slug "${slug}" not found`);
+    }
+
+    // Extract any existing platform review URLs
+    const googleUrl = profile.platformReviews.find((p) => p.platform === 'GOOGLE')?.profileUrl;
+    const yelpUrl = profile.platformReviews.find((p) => p.platform === 'YELP')?.profileUrl;
+    const facebookUrl = profile.platformReviews.find((p) => p.platform === 'FACEBOOK')?.profileUrl;
+
+    // Scrape live across platforms
+    const scrapedResult = await this.reviewsScraperService.scrapeAllPlatforms(
+      {
+        businessName: profile.businessName,
+        borough: profile.borough || undefined,
+        city: profile.city || undefined,
+        googleUrl,
+        yelpUrl,
+        facebookUrl,
+      },
+      50
+    );
+
+    // Update database records if scraping yielded results
+    const updates: Promise<any>[] = [];
+
+    if (scrapedResult.platforms.google && scrapedResult.platforms.google.totalReviews > 0) {
+      updates.push(
+        this.prisma.platformReview.upsert({
+          where: {
+            providerProfileId_platform: {
+              providerProfileId: profile.id,
+              platform: 'GOOGLE',
+            },
+          },
+          update: {
+            rating: scrapedResult.platforms.google.rating,
+            reviewCount: scrapedResult.platforms.google.totalReviews,
+            profileUrl: scrapedResult.platforms.google.profileUrl,
+            lastScrapedAt: new Date(),
+          },
+          create: {
+            providerProfileId: profile.id,
+            platform: 'GOOGLE',
+            rating: scrapedResult.platforms.google.rating,
+            reviewCount: scrapedResult.platforms.google.totalReviews,
+            profileUrl: scrapedResult.platforms.google.profileUrl,
+            lastScrapedAt: new Date(),
+          },
+        })
+      );
+    }
+
+    if (scrapedResult.platforms.yelp && scrapedResult.platforms.yelp.totalReviews > 0) {
+      updates.push(
+        this.prisma.platformReview.upsert({
+          where: {
+            providerProfileId_platform: {
+              providerProfileId: profile.id,
+              platform: 'YELP',
+            },
+          },
+          update: {
+            rating: scrapedResult.platforms.yelp.rating,
+            reviewCount: scrapedResult.platforms.yelp.totalReviews,
+            profileUrl: scrapedResult.platforms.yelp.profileUrl,
+            lastScrapedAt: new Date(),
+          },
+          create: {
+            providerProfileId: profile.id,
+            platform: 'YELP',
+            rating: scrapedResult.platforms.yelp.rating,
+            reviewCount: scrapedResult.platforms.yelp.totalReviews,
+            profileUrl: scrapedResult.platforms.yelp.profileUrl,
+            lastScrapedAt: new Date(),
+          },
+        })
+      );
+    }
+
+    if (scrapedResult.platforms.facebook && scrapedResult.platforms.facebook.totalReviews > 0) {
+      updates.push(
+        this.prisma.platformReview.upsert({
+          where: {
+            providerProfileId_platform: {
+              providerProfileId: profile.id,
+              platform: 'FACEBOOK',
+            },
+          },
+          update: {
+            rating: scrapedResult.platforms.facebook.rating,
+            reviewCount: scrapedResult.platforms.facebook.totalReviews,
+            profileUrl: scrapedResult.platforms.facebook.profileUrl,
+            lastScrapedAt: new Date(),
+          },
+          create: {
+            providerProfileId: profile.id,
+            platform: 'FACEBOOK',
+            rating: scrapedResult.platforms.facebook.rating,
+            reviewCount: scrapedResult.platforms.facebook.totalReviews,
+            profileUrl: scrapedResult.platforms.facebook.profileUrl,
+            lastScrapedAt: new Date(),
+          },
+        })
+      );
+    }
+
+    // Update aggregate ratings on ProviderProfile
+    if (scrapedResult.totalReviews > 0) {
+      updates.push(
+        this.prisma.providerProfile.update({
+          where: { id: profile.id },
+          data: {
+            compositeRating: scrapedResult.compositeRating,
+            totalReviews: scrapedResult.totalReviews,
+          },
+        })
+      );
+    }
+
+    await Promise.all(updates);
+
+    const updatedProvider = await this.findBySlug(slug);
+    return {
+      provider: updatedProvider,
+      scrapedSummary: scrapedResult,
+    };
   }
 }
