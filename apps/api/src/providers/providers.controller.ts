@@ -62,4 +62,19 @@ export class ProvidersController {
       timestamp: new Date().toISOString(),
     };
   }
+
+  /**
+   * POST /api/providers/:slug/generate-ai-summary
+   * Trigger progressive AI chunked review analysis (20 reviews per batch via OpenRouter Mistral)
+   */
+  @Post(':slug/generate-ai-summary')
+  async generateAiSummary(@Param('slug') slug: string) {
+    const result = await this.providersService.generateAiSummary(slug);
+    return {
+      success: true,
+      data: result,
+      message: 'AI Review summary generated and saved successfully.',
+      timestamp: new Date().toISOString(),
+    };
+  }
 }

@@ -219,3 +219,33 @@ export async function syncProviderReviews(slug: string): Promise<SyncReviewsResu
 
   return json.data;
 }
+
+export interface AiSummaryResult {
+  provider: RooferProvider;
+  summary: string;
+}
+
+/**
+ * Trigger progressive AI review analysis chunked by 20 reviews via OpenRouter Mistral
+ */
+export async function generateAiSummary(slug: string): Promise<AiSummaryResult> {
+  const url = buildApiUrl(`providers/${encodeURIComponent(slug)}/generate-ai-summary`);
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to generate AI summary: HTTP ${response.status}`);
+  }
+
+  const json: ApiResponse<AiSummaryResult> = await response.json();
+  if (!json.success || !json.data) {
+    throw new Error(json.error || 'Failed to generate AI review summary');
+  }
+
+  return json.data;
+}

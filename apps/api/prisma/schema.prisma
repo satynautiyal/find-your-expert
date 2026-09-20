@@ -181,9 +181,14 @@ model ProviderProfile {
   topPickCategory TopPickCategory?
   featuredQuote   String?          @db.Text
 
+  // AI Review Summary
+  aiReviewSummary    String?   @db.Text
+  aiSummaryUpdatedAt DateTime?
+
   // Relations
   listings         Listing[]
   platformReviews  PlatformReview[]
+  scrapedReviews   ScrapedReview[]   @relation("ScrapedReviews")
   reviewsReceived  Review[]         @relation("ProviderReviews")
   quoteRequests    QuoteRequest[]
   savedByCustomers SavedProvider[]
@@ -413,6 +418,26 @@ model PlatformReview {
 
   @@unique([providerProfileId, platform])
   @@map("platform_reviews")
+}
+
+model ScrapedReview {
+  id                String          @id @default(uuid())
+  providerProfileId String
+  providerProfile   ProviderProfile @relation("ScrapedReviews", fields: [providerProfileId], references: [id], onDelete: Cascade)
+  platform          ReviewPlatform
+  authorName        String
+  authorAvatarUrl   String?
+  rating            Int             @default(5)
+  comment           String          @db.Text
+  reviewDate        String?
+  isVerified        Boolean         @default(true)
+  sourceUrl         String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([providerProfileId, platform, authorName, rating])
+  @@index([providerProfileId])
+  @@map("scraped_reviews")
 }
 
 model Review {

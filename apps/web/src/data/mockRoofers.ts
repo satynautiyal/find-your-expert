@@ -41,6 +41,17 @@ export interface RooferProvider {
   totalReviews: number;
   featuredQuote: string;
   verifiedYear: number;
+  aiReviewSummary?: string;
+  aiSummaryUpdatedAt?: string;
+  scrapedReviews?: Array<{
+    authorName: string;
+    authorAvatarUrl?: string;
+    rating: number;
+    comment: string;
+    reviewDate?: string;
+    platform: 'GOOGLE' | 'YELP' | 'FACEBOOK' | string;
+    sourceUrl?: string;
+  }>;
 }
 
 export const NYC_BOROUGHS = [

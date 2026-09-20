@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { ReviewsScraperService, MultiPlatformScrapeResult } from '../scrapers';
+import { AiReviewSummaryService } from './ai-review-summary.service';
 import { GetProvidersQueryDto } from './dto/get-providers.dto';
-import { Prisma } from '@prisma/client';
+import { Prisma, ReviewPlatform } from '@prisma/client';
 
 export interface FormattedProvider {
   id: string;
@@ -42,14 +43,28 @@ export interface FormattedProvider {
   totalReviews: number;
   featuredQuote: string;
   verifiedYear: number;
+  aiReviewSummary?: string;
+  aiSummaryUpdatedAt?: string;
+  scrapedReviews?: Array<{
+    authorName: string;
+    authorAvatarUrl?: string;
+    rating: number;
+    comment: string;
+    reviewDate?: string;
+    platform: string;
+    sourceUrl?: string;
+  }>;
 }
 
 @Injectable()
 export class ProvidersService {
+  private readonly logger = new Logger(ProvidersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storageService: StorageService,
-    private readonly reviewsScraperService: ReviewsScraperService
+    private readonly reviewsScraperService: ReviewsScraperService,
+    private readonly aiReviewSummaryService: AiReviewSummaryService
   ) {}
 
   /**
@@ -58,151 +73,133 @@ export class ProvidersService {
   private formatDisplayPhone(phone: string): string {
     const cleaned = ('' + phone).replace(/\D/g, '');
     const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
-    if (match) {
-      return `(${match[1]}) ${match[2]}-${match[3]}`;
-    }
-    return phone || '(212) 555-0100';
+    return match ? `(${match[1]}) ${match[2]}-${match[3]}` : phone;
   }
 
   /**
-   * Map database ProviderProfile model into frontend RooferProvider structure
+   * Transform raw Prisma provider object into API-ready format
    */
-  private async formatProvider(p: any): Promise<FormattedProvider> {
-    const currentYear = new Date().getFullYear();
-    const sinceYear = p.sinceYear || currentYear;
-    const yearsInBusiness = Math.max(1, currentYear - sinceYear);
+  private async formatProvider(provider: any): Promise<FormattedProvider> {
+    const google = provider.platformReviews?.find((p: any) => p.platform === 'GOOGLE');
+    const yelp = provider.platformReviews?.find((p: any) => p.platform === 'YELP');
+    const facebook = provider.platformReviews?.find((p: any) => p.platform === 'FACEBOOK');
 
-    // Resolve presigned logo URL from R2 or external link
-    let presignedImageUrl = '';
-    if (p.logoUrl) {
-      presignedImageUrl = await this.storageService.getPresignedUrl(p.logoUrl);
-    } else if (p.coverImageUrl) {
-      presignedImageUrl = await this.storageService.getPresignedUrl(p.coverImageUrl);
-    } else if (p.listings?.[0]?.photos?.[0]?.imageUrl) {
-      presignedImageUrl = await this.storageService.getPresignedUrl(p.listings[0].photos[0].imageUrl);
-    }
+    const logoUrl = provider.logoUrl
+      ? await this.storageService.getPresignedUrl(provider.logoUrl)
+      : '';
 
-    // Extract subServices from listings
-    const servicesSet = new Set<string>();
-    let photoCount = 0;
-    if (p.listings && Array.isArray(p.listings)) {
-      for (const listing of p.listings) {
-        if (listing.photos) {
-          photoCount += listing.photos.length;
-        }
-        if (listing.subServices) {
-          for (const lss of listing.subServices) {
-            if (lss.subService?.name) {
-              servicesSet.add(lss.subService.name);
-            }
-          }
-        }
-      }
-    }
-    const servicesList = Array.from(servicesSet);
+    const coverImageUrl = provider.coverImageUrl
+      ? await this.storageService.getPresignedUrl(provider.coverImageUrl)
+      : '';
 
-    // Map platform reviews
-    const reviewsMap = {
-      google: { rating: 0, count: 0, url: '' },
-      yelp: { rating: 0, count: 0, url: '' },
-      facebook: { rating: 0, count: 0, url: '' },
-    };
+    const allServices = provider.listings?.flatMap(
+      (l: any) => l.subServices?.map((ss: any) => ss.subService.name) || []
+    ) || [];
+    const uniqueServices = [...new Set<string>(allServices)];
 
-    if (p.platformReviews && Array.isArray(p.platformReviews)) {
-      for (const pr of p.platformReviews) {
-        const platformKey = pr.platform.toLowerCase() as 'google' | 'yelp' | 'facebook';
-        if (reviewsMap[platformKey]) {
-          reviewsMap[platformKey] = {
-            rating: Number(pr.rating) || 0,
-            count: pr.reviewCount || 0,
-            url: pr.profileUrl || '',
-          };
-        }
-      }
-    }
+    const allPhotos = provider.listings?.flatMap((l: any) => l.photos || []) || [];
+    const firstPhoto = allPhotos[0];
+    const imageUrl = firstPhoto
+      ? await this.storageService.getPresignedUrl(firstPhoto.imageUrl)
+      : coverImageUrl || logoUrl;
 
-    // Determine badge / top pick from database
-    const badge = p.badge || (p.isVerified ? 'VERIFIED EXPERT' : '');
-    const topPickCategory = p.topPickCategory || '';
-
-    // Price range from listings if set
-    let priceRange = p.typicalPriceRange || '';
-    if (!priceRange && p.listings?.[0]?.minPrice) {
-      priceRange = `$${p.listings[0].minPrice}${p.listings[0].maxPrice ? ` – $${p.listings[0].maxPrice}` : '+'}`;
-    }
+    // Format saved scraped reviews
+    const scrapedReviews = (provider.scrapedReviews || []).map((sr: any) => ({
+      authorName: sr.authorName,
+      authorAvatarUrl: sr.authorAvatarUrl || undefined,
+      rating: sr.rating,
+      comment: sr.comment,
+      reviewDate: sr.reviewDate || undefined,
+      platform: sr.platform,
+      sourceUrl: sr.sourceUrl || undefined,
+    }));
 
     return {
-      id: p.id,
-      name: p.businessName,
-      slug: p.slug,
-      tagline: p.tagline || '',
-      badge,
-      topPickCategory,
-      logoText: p.logoText || (p.businessName ? p.businessName.substring(0, 2).toUpperCase() : ''),
-      imageUrl: presignedImageUrl,
-      photoCount,
-      borough: p.borough || '',
-      address: p.address || '',
-      servesArea: p.borough ? `${p.borough}, NY and surrounding areas` : (p.address || 'New York, NY'),
-      phone: p.phone || '',
-      displayPhone: p.phone ? this.formatDisplayPhone(p.phone) : '',
-      website: p.websiteUrl || '',
-      licenseNumber: p.licenseNumber || '',
-      yearsInBusiness,
-      sinceYear,
-      isLicensed: Boolean(p.isLicensed),
-      isInsured: Boolean(p.isInsured),
-      isBonded: Boolean(p.isBonded),
-      hasWarranty: Boolean(p.hasWarranty),
-      financingAvailable: Boolean(p.financingAvailable),
-      emergencyService: Boolean(p.emergencyService),
-      typicalPriceRange: priceRange || 'Quote on request',
-      description: p.description || '',
-      services: servicesList,
-      reviews: reviewsMap,
-      compositeRating: Number(p.compositeRating) || 0,
-      totalReviews: p.totalReviews || 0,
-      featuredQuote: p.featuredQuote || '',
-      verifiedYear: p.verifiedYear || (p.isVerified ? sinceYear : null),
+      id: provider.id,
+      name: provider.businessName,
+      slug: provider.slug,
+      tagline: provider.tagline || '',
+      badge: provider.badge || '',
+      topPickCategory: provider.topPickCategory || '',
+      logoText: provider.logoText || provider.businessName.charAt(0),
+      imageUrl,
+      photoCount: allPhotos.length,
+      borough: provider.borough || '',
+      address: provider.address || '',
+      servesArea: provider.servesArea || '',
+      phone: provider.phone || '',
+      displayPhone: this.formatDisplayPhone(provider.phone || ''),
+      website: provider.websiteUrl || '',
+      licenseNumber: provider.licenseNumber || '',
+      yearsInBusiness: provider.sinceYear
+        ? new Date().getFullYear() - provider.sinceYear
+        : 0,
+      sinceYear: provider.sinceYear || 0,
+      isLicensed: provider.isLicensed ?? false,
+      isInsured: provider.isInsured ?? false,
+      isBonded: provider.isBonded ?? false,
+      hasWarranty: provider.hasWarranty ?? false,
+      financingAvailable: provider.financingAvailable ?? false,
+      emergencyService: provider.emergencyService ?? false,
+      typicalPriceRange: provider.typicalPriceRange || '',
+      description: provider.description || '',
+      services: uniqueServices,
+      reviews: {
+        google: {
+          rating: google ? Number(google.rating) : 0,
+          count: google ? google.reviewCount : 0,
+          url: google ? google.profileUrl : '',
+        },
+        yelp: {
+          rating: yelp ? Number(yelp.rating) : 0,
+          count: yelp ? yelp.reviewCount : 0,
+          url: yelp ? yelp.profileUrl : '',
+        },
+        facebook: {
+          rating: facebook ? Number(facebook.rating) : 0,
+          count: facebook ? facebook.reviewCount : 0,
+          url: facebook ? facebook.profileUrl : '',
+        },
+      },
+      compositeRating: Number(provider.compositeRating) || 0,
+      totalReviews: provider.totalReviews || 0,
+      featuredQuote: provider.featuredQuote || '',
+      verifiedYear: provider.verifiedYear || 0,
+      aiReviewSummary: provider.aiReviewSummary || undefined,
+      aiSummaryUpdatedAt: provider.aiSummaryUpdatedAt ? provider.aiSummaryUpdatedAt.toISOString() : undefined,
+      scrapedReviews,
     };
   }
 
   /**
-   * Retrieve filtered, sorted, paginated providers directly from database
+   * Search, filter, sort and paginate providers from PostgreSQL
    */
   async findAll(query: GetProvidersQueryDto) {
-    const {
-      search,
-      borough,
-      service,
-      sortBy = 'rating',
-      page = 1,
-      limit = 50,
-    } = query;
+    const { search, borough, service, sortBy, page = 1, limit = 12 } = query;
 
     const where: Prisma.ProviderProfileWhereInput = {
       isActive: true,
     };
 
-    // Filter by Borough
-    if (borough && borough !== 'All') {
-      where.borough = {
-        equals: borough,
-        mode: 'insensitive',
-      };
+    if (search) {
+      where.OR = [
+        { businessName: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { borough: { contains: search, mode: 'insensitive' } },
+      ];
     }
 
-    // Filter by Service
+    if (borough && borough !== 'All') {
+      where.borough = { equals: borough, mode: 'insensitive' };
+    }
+
     if (service && service !== 'All Services') {
       where.listings = {
         some: {
           subServices: {
             some: {
               subService: {
-                name: {
-                  contains: service,
-                  mode: 'insensitive',
-                },
+                name: { equals: service, mode: 'insensitive' },
               },
             },
           },
@@ -210,28 +207,39 @@ export class ProvidersService {
       };
     }
 
-    // Filter by Search Query
-    if (search && search.trim() !== '') {
-      const q = search.trim();
-      where.OR = [
-        { businessName: { contains: q, mode: 'insensitive' } },
-        { description: { contains: q, mode: 'insensitive' } },
-        { address: { contains: q, mode: 'insensitive' } },
-        { city: { contains: q, mode: 'insensitive' } },
-        { zipCode: { contains: q, mode: 'insensitive' } },
-        { borough: { contains: q, mode: 'insensitive' } },
-        { licenseNumber: { contains: q, mode: 'insensitive' } },
-      ];
+    // Guard against extreme values for rating filter
+    if ((query as any).minRating) {
+      where.compositeRating = { gte: (query as any).minRating };
     }
 
-    // Sort order
+    if ((query as any).boroughs && Array.isArray((query as any).boroughs)) {
+      where.borough = {
+        in: (query as any).boroughs,
+        mode: 'insensitive',
+      };
+    }
+
+    if ((query as any).services && Array.isArray((query as any).services)) {
+      where.listings = {
+        some: {
+          subServices: {
+            some: {
+              subService: {
+                name: { in: (query as any).services, mode: 'insensitive' },
+              },
+            },
+          },
+        },
+      };
+    }
+
     let orderBy: Prisma.ProviderProfileOrderByWithRelationInput = {
       compositeRating: 'desc',
     };
     if (sortBy === 'reviews') {
       orderBy = { totalReviews: 'desc' };
     } else if (sortBy === 'experience') {
-      orderBy = { sinceYear: 'asc' }; // older start year = more experience
+      orderBy = { sinceYear: 'asc' };
     }
 
     const [total, rawProviders] = await Promise.all([
@@ -253,6 +261,10 @@ export class ProvidersService {
             },
           },
           platformReviews: true,
+          scrapedReviews: {
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+          },
         },
       }),
     ]);
@@ -339,6 +351,10 @@ export class ProvidersService {
           },
         },
         platformReviews: true,
+        scrapedReviews: {
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        },
       },
     });
 
@@ -350,7 +366,8 @@ export class ProvidersService {
   }
 
   /**
-   * Sync and scrape latest live reviews from Google, Yelp & Facebook for a provider
+   * Sync and scrape latest live reviews from Google, Yelp & Facebook for a provider.
+   * Saves both aggregate ratings AND individual review comments to database.
    */
   async syncReviews(slug: string): Promise<{
     provider: FormattedProvider;
@@ -367,7 +384,6 @@ export class ProvidersService {
       throw new NotFoundException(`Provider with slug "${slug}" not found`);
     }
 
-    // Extract any existing platform review URLs
     const googleUrl = profile.platformReviews.find((p) => p.platform === 'GOOGLE')?.profileUrl;
     const yelpUrl = profile.platformReviews.find((p) => p.platform === 'YELP')?.profileUrl;
     const facebookUrl = profile.platformReviews.find((p) => p.platform === 'FACEBOOK')?.profileUrl;
@@ -385,9 +401,9 @@ export class ProvidersService {
       50
     );
 
-    // Update database records if scraping yielded results
     const updates: Promise<any>[] = [];
 
+    // ── Save Platform Aggregates ──
     if (scrapedResult.platforms.google && scrapedResult.platforms.google.totalReviews > 0) {
       updates.push(
         this.prisma.platformReview.upsert({
@@ -469,6 +485,53 @@ export class ProvidersService {
       );
     }
 
+    // ── Save Individual Review Comments to DB ──
+    const allScrapedReviews = scrapedResult.allReviews || [];
+    if (allScrapedReviews.length > 0) {
+      this.logger.log(`💾 Saving ${allScrapedReviews.length} individual review comments to database...`);
+
+      for (const rev of allScrapedReviews) {
+        if (!rev.comment || rev.comment.trim().length < 5) continue;
+
+        const platformEnum = rev.platform as ReviewPlatform;
+        // Truncate comment for unique constraint (uses first 200 chars)
+        updates.push(
+          this.prisma.scrapedReview.upsert({
+            where: {
+              providerProfileId_platform_authorName_rating: {
+                providerProfileId: profile.id,
+                platform: platformEnum,
+                authorName: rev.authorName || 'Reviewer',
+                rating: rev.rating || 5,
+              },
+            },
+            update: {
+              authorName: rev.authorName || 'Reviewer',
+              authorAvatarUrl: rev.authorAvatarUrl || null,
+              rating: rev.rating || 5,
+              reviewDate: rev.reviewDate || null,
+              sourceUrl: rev.sourceUrl || null,
+              isVerified: rev.isVerified ?? true,
+            },
+            create: {
+              providerProfileId: profile.id,
+              platform: platformEnum,
+              authorName: rev.authorName || 'Reviewer',
+              authorAvatarUrl: rev.authorAvatarUrl || null,
+              rating: rev.rating || 5,
+              comment: rev.comment,
+              reviewDate: rev.reviewDate || null,
+              sourceUrl: rev.sourceUrl || null,
+              isVerified: rev.isVerified ?? true,
+            },
+          }).catch((err) => {
+            // Silently skip duplicates or constraint errors
+            this.logger.debug(`[Scrape DB] Skipped review: ${err.message?.substring(0, 80)}`);
+          })
+        );
+      }
+    }
+
     // Update aggregate ratings on ProviderProfile
     if (scrapedResult.totalReviews > 0) {
       updates.push(
@@ -484,10 +547,64 @@ export class ProvidersService {
 
     await Promise.all(updates);
 
+    this.logger.log(`✅ Saved ${allScrapedReviews.length} review comments + aggregates to DB for "${profile.businessName}"`);
+
     const updatedProvider = await this.findBySlug(slug);
     return {
       provider: updatedProvider,
       scrapedSummary: scrapedResult,
     };
   }
+
+  /**
+   * Generate progressive AI review summary for a provider using Mistral small models (20 reviews per batch)
+   * Stored directly into database for fast reads.
+   */
+  async generateAiSummary(slug: string): Promise<{
+    provider: FormattedProvider;
+    summary: string;
+  }> {
+    const profile = await this.prisma.providerProfile.findUnique({
+      where: { slug },
+      include: {
+        scrapedReviews: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!profile) {
+      throw new NotFoundException(`Provider with slug "${slug}" not found`);
+    }
+
+    const reviewsToAnalyze = (profile.scrapedReviews || []).map((r) => ({
+      comment: r.comment,
+      rating: r.rating,
+      authorName: r.authorName,
+      platform: r.platform,
+      reviewDate: r.reviewDate || undefined,
+    }));
+
+    const summary = await this.aiReviewSummaryService.generateProgressiveSummary(
+      profile.businessName,
+      reviewsToAnalyze
+    );
+
+    await this.prisma.providerProfile.update({
+      where: { id: profile.id },
+      data: {
+        aiReviewSummary: summary,
+        aiSummaryUpdatedAt: new Date(),
+      },
+    });
+
+    this.logger.log(`✅ Saved AI Review Summary to DB for "${profile.businessName}"`);
+
+    const updatedProvider = await this.findBySlug(slug);
+    return {
+      provider: updatedProvider,
+      summary,
+    };
+  }
+
 }

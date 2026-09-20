@@ -19,6 +19,7 @@ import type { RooferProvider } from '@/data/mockRoofers';
 import {
   fetchProviderBySlug,
   syncProviderReviews,
+  generateAiSummary,
   type ScrapedReviewItemDto,
 } from '@/lib/api';
 import {
@@ -46,6 +47,72 @@ import {
   Star,
 } from 'lucide-react';
 
+// Helper to render AI summary markdown neatly
+function renderFormattedAiSummary(text: string) {
+  if (!text) return null;
+
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+
+  let key = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    if (line.startsWith('### ') || line.startsWith('#### ')) {
+      const cleanHeader = line.replace(/^#{3,4}\s+/, '').replace(/\*\*/g, '');
+      elements.push(
+        <h4 key={key++} className="text-sm font-bold text-amber-950 pt-2 flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+          <span>{cleanHeader}</span>
+        </h4>
+      );
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      const bulletContent = line.replace(/^[-*]\s+/, '');
+      elements.push(
+        <div key={key++} className="flex items-start gap-2 pl-2 text-xs sm:text-sm text-gray-700">
+          <span className="text-orange-500 font-bold mt-0.5">•</span>
+          <span dangerouslySetInnerHTML={{
+            __html: bulletContent
+              .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-gray-950">$1</strong>')
+              .replace(/\*(.*?)\*/g, '<em class="italic text-gray-800">$1</em>')
+          }} />
+        </div>
+      );
+    } else if (/^\d+\.\s+/.test(line)) {
+      const numContent = line.replace(/^\d+\.\s+/, '');
+      elements.push(
+        <div key={key++} className="flex items-start gap-2 pl-2 text-xs sm:text-sm text-gray-700">
+          <span className="text-orange-600 font-bold mt-0.5 shrink-0">
+            {line.match(/^\d+\./)?.[0]}
+          </span>
+          <span dangerouslySetInnerHTML={{
+            __html: numContent
+              .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-gray-950">$1</strong>')
+              .replace(/\*(.*?)\*/g, '<em class="italic text-gray-800">$1</em>')
+          }} />
+        </div>
+      );
+    } else if (line.startsWith('---') || line.startsWith('===')) {
+      elements.push(<hr key={key++} className="border-amber-200/50 my-2" />);
+    } else {
+      elements.push(
+        <p
+          key={key++}
+          className="text-xs sm:text-sm text-gray-700 leading-relaxed"
+          dangerouslySetInnerHTML={{
+            __html: line
+              .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-gray-950">$1</strong>')
+              .replace(/\*(.*?)\*/g, '<em class="italic text-gray-800">$1</em>')
+          }}
+        />
+      );
+    }
+  }
+
+  return <div className="space-y-2">{elements}</div>;
+}
+
 export default function ContractorProfilePage() {
   const params = useParams();
   const router = useRouter();
@@ -61,6 +128,12 @@ export default function ContractorProfilePage() {
   const [isSyncingReviews, setIsSyncingReviews] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [scrapedReviews, setScrapedReviews] = useState<ScrapedReviewItemDto[]>([]);
+
+  // AI Review Summary State
+  const [isGeneratingAiSummary, setIsGeneratingAiSummary] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [aiSummaryUpdatedAt, setAiSummaryUpdatedAt] = useState<string | null>(null);
+  const [aiSummaryStatus, setAiSummaryStatus] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Modals
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
@@ -79,6 +152,10 @@ export default function ContractorProfilePage() {
     fetchProviderBySlug(slug)
       .then((data) => {
         setProvider(data);
+        // Load any previously saved review comments from DB
+        if (data.scrapedReviews && data.scrapedReviews.length > 0) {
+          setScrapedReviews(data.scrapedReviews as ScrapedReviewItemDto[]);
+        }
       })
       .catch((err) => {
         console.error('Failed to fetch provider profile:', err);
@@ -94,6 +171,33 @@ export default function ContractorProfilePage() {
       navigator.clipboard.writeText(window.location.href);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
+    }
+  };
+
+
+  // Trigger AI Review Analysis via Mistral (chunked 20 reviews at a time)
+  const handleGenerateAiSummary = async () => {
+    if (!slug) return;
+    try {
+      setIsGeneratingAiSummary(true);
+      setAiSummaryStatus(null);
+
+      const result = await generateAiSummary(slug);
+      setAiSummary(result.summary);
+      if (result.provider?.aiSummaryUpdatedAt) {
+        setAiSummaryUpdatedAt(result.provider.aiSummaryUpdatedAt);
+      }
+      setAiSummaryStatus({
+        message: 'AI Review Analysis generated and saved successfully!',
+        type: 'success',
+      });
+    } catch (err: any) {
+      setAiSummaryStatus({
+        message: err.message || 'Failed to generate AI analysis',
+        type: 'error',
+      });
+    } finally {
+      setIsGeneratingAiSummary(false);
     }
   };
 
@@ -562,6 +666,100 @@ export default function ContractorProfilePage() {
                     )}
 
                     {/* 3 Platform Summary Cards */}
+                    {/* AI Review Analysis Box (Light Orange Box with Refresh Button) */}
+                    <div className="rounded-2xl border border-orange-200/90 bg-gradient-to-br from-amber-50/90 via-orange-50/60 to-amber-100/40 p-5 sm:p-6 shadow-sm space-y-4">
+                      {/* Header */}
+                      <div className="flex items-center justify-between flex-wrap gap-3 pb-3 border-b border-amber-200/60">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-orange-500/15 border border-orange-500/25 flex items-center justify-center text-orange-600 shrink-0 shadow-sm">
+                            <Sparkles className="w-5 h-5 text-orange-600" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-base sm:text-lg font-black text-gray-950 tracking-tight">
+                                AI Review Analysis
+                              </h3>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-500/15 text-orange-700 border border-orange-300/60">
+                                Mistral AI
+                              </span>
+                            </div>
+                            <p className="text-xs text-amber-900/70 font-medium">
+                              Progressive multi-batch analysis synthesized from verified customer feedback
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Refresh Button */}
+                        <div className="flex items-center gap-2">
+                          {aiSummaryUpdatedAt && (
+                            <span className="text-[11px] text-amber-800/70 font-medium hidden sm:inline">
+                              Last updated: {new Date(aiSummaryUpdatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleGenerateAiSummary}
+                            disabled={isGeneratingAiSummary}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-orange-700 bg-white/90 hover:bg-white border border-orange-300 hover:border-orange-400 shadow-xs hover:shadow transition-all disabled:opacity-50 cursor-pointer"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingAiSummary ? 'animate-spin text-orange-600' : 'text-orange-600'}`} />
+                            <span>{isGeneratingAiSummary ? 'Analyzing...' : 'Refresh'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Status / Feedback Banner */}
+                      {aiSummaryStatus && (
+                        <div className={`p-2.5 rounded-xl text-xs font-medium flex items-center gap-2 ${
+                          aiSummaryStatus.type === 'success'
+                            ? 'bg-emerald-100/70 text-emerald-800 border border-emerald-300/60'
+                            : 'bg-red-100/70 text-red-800 border border-red-300/60'
+                        }`}>
+                          {aiSummaryStatus.type === 'success' ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          ) : (
+                            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                          )}
+                          <span>{aiSummaryStatus.message}</span>
+                        </div>
+                      )}
+
+                      {/* Body Content */}
+                      {isGeneratingAiSummary ? (
+                        <div className="py-8 text-center space-y-3">
+                          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-orange-500/10 text-orange-600 animate-bounce">
+                            <Sparkles className="w-6 h-6" />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="text-sm font-bold text-gray-900">
+                              Analyzing customer comments in chunks of 20...
+                            </div>
+                            <p className="text-xs text-amber-800/80 max-w-md mx-auto">
+                              Mistral AI is evaluating craftsmanship, pricing fairness, punctuality, and overall customer satisfaction.
+                            </p>
+                          </div>
+                        </div>
+                      ) : aiSummary ? (
+                        <div className="bg-white/75 rounded-xl border border-amber-200/60 p-4 sm:p-5 text-gray-800 space-y-3">
+                          {renderFormattedAiSummary(aiSummary)}
+                        </div>
+                      ) : (
+                        <div className="py-5 px-4 rounded-xl bg-white/60 border border-amber-200/60 text-center space-y-2.5">
+                          <p className="text-xs sm:text-sm text-gray-700 font-medium">
+                            No AI review summary has been generated for this contractor yet.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleGenerateAiSummary}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold text-white bg-orange-600 hover:bg-orange-700 shadow-sm transition-colors cursor-pointer"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                            <span>Generate AI Review Analysis</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {/* Google */}
                       <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/30 space-y-2">
