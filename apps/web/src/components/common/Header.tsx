@@ -47,13 +47,12 @@ export default function Header({ onOpenQuoteModal, savedCount }: HeaderProps) {
                 How It Works
               </a>
 
-              <div className="flex items-center gap-1 hover:text-primary-dark cursor-pointer py-2 transition-colors">
-                <span>Cost Guides</span>
-                <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-              </div>
+              <a href="/blog" className="hover:text-primary-dark transition-colors py-2">
+                Guides & Blog
+              </a>
 
-              <a href="#for-contractors" className="hover:text-primary-dark transition-colors py-2">
-                For Contractors
+              <a href="/admin/blogs" className="text-gray-400 hover:text-primary transition-colors py-2 text-[11px]">
+                Admin CMS
               </a>
             </nav>
           </div>
@@ -99,11 +98,11 @@ export default function Header({ onOpenQuoteModal, savedCount }: HeaderProps) {
           <a href="#" className="block py-1.5">
             How It Works
           </a>
-          <a href="#" className="block py-1.5">
-            Cost Guides
+          <a href="/blog" className="block py-1.5">
+            Guides & Blog
           </a>
-          <a href="#" className="block py-1.5">
-            For Contractors
+          <a href="/admin/blogs" className="block py-1.5 text-gray-400">
+            Admin CMS
           </a>
           <EButton
             onClick={() => {

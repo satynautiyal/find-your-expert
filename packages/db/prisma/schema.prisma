@@ -1,6 +1,6 @@
 datasource db {
   provider = "postgresql"
-  url      = process.env("DATABASE_URL")
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -103,6 +103,12 @@ enum TopPickCategory {
   FASTEST_EMERGENCY_RESPONSE
 }
 
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 // ═══════════════════════════════════════════════════════
 // USER SYSTEM (Single auth table + Role-specific profiles)
 // ═══════════════════════════════════════════════════════
@@ -183,9 +189,14 @@ model ProviderProfile {
   topPickCategory TopPickCategory?
   featuredQuote   String?          @db.Text
 
+  // AI Review Summary
+  aiReviewSummary    String?   @db.Text
+  aiSummaryUpdatedAt DateTime?
+
   // Relations
   listings         Listing[]
   platformReviews  PlatformReview[]
+  scrapedReviews   ScrapedReview[]   @relation("ScrapedReviews")
   reviewsReceived  Review[]         @relation("ProviderReviews")
   quoteRequests    QuoteRequest[]
   savedByCustomers SavedProvider[]
@@ -419,6 +430,26 @@ model PlatformReview {
   @@map("platform_reviews")
 }
 
+model ScrapedReview {
+  id                String          @id @default(uuid())
+  providerProfileId String
+  providerProfile   ProviderProfile @relation("ScrapedReviews", fields: [providerProfileId], references: [id], onDelete: Cascade)
+  platform          ReviewPlatform
+  authorName        String
+  authorAvatarUrl   String?
+  rating            Int             @default(5)
+  comment           String          @db.Text
+  reviewDate        String?
+  isVerified        Boolean         @default(true)
+  sourceUrl         String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([providerProfileId, platform, authorName, rating])
+  @@index([providerProfileId])
+  @@map("scraped_reviews")
+}
+
 model Review {
   id                String          @id @default(uuid())
   customerProfileId String
@@ -515,3 +546,44 @@ model SavedProvider {
   @@unique([customerProfileId, providerProfileId])
   @@map("saved_providers")
 }
+
+// ═══════════════════════════════════════════════════════
+// BLOG & CONTENT MANAGEMENT
+// ═══════════════════════════════════════════════════════
+
+model BlogPost {
+  id              String      @id @default(uuid())
+  title           String
+  slug            String      @unique
+  excerpt         String?     @db.Text
+  content         String      @db.Text
+  coverImageUrl   String?
+  coverImageAlt   String?
+  authorName      String      @default("FindYourExperts Editorial")
+  authorAvatar    String?
+  authorRole      String?     @default("Content Editor")
+  category        String      @default("General")
+  tags            String[]    @default([])
+  readingTimeMin  Int         @default(3)
+  wordCount       Int         @default(0)
+  status          PostStatus  @default(DRAFT)
+  isFeatured      Boolean     @default(false)
+  viewCount       Int         @default(0)
+  publishedAt     DateTime?
+
+  // SEO & Social Meta
+  metaTitle       String?
+  metaDescription String?     @db.Text
+  canonicalUrl    String?
+  ogImageUrl      String?
+  focusKeyword    String?
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([category])
+  @@index([slug])
+  @@map("blog_posts")
+}
+
