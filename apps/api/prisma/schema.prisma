@@ -103,6 +103,12 @@ enum TopPickCategory {
   FASTEST_EMERGENCY_RESPONSE
 }
 
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 // ═══════════════════════════════════════════════════════
 // USER SYSTEM (Single auth table + Role-specific profiles)
 // ═══════════════════════════════════════════════════════
@@ -535,4 +541,42 @@ model SavedProvider {
 
   @@unique([customerProfileId, providerProfileId])
   @@map("saved_providers")
+}
+
+// ═══════════════════════════════════════════════════════
+// BLOG SYSTEM
+// ═══════════════════════════════════════════════════════
+
+model BlogPost {
+  id              String      @id @default(uuid())
+  title           String
+  slug            String      @unique
+  excerpt         String?     @db.Text
+  content         String      @db.Text
+  coverImageUrl   String?
+  coverImageAlt   String?
+  authorName      String      @default("FindYourExperts Editorial")
+  authorAvatar    String?
+  authorRole      String      @default("Content Editor")
+  category        String      @default("General")
+  tags            String[]    @default([])
+  readingTimeMin  Int         @default(1)
+  wordCount       Int         @default(0)
+  viewCount       Int         @default(0)
+  status          PostStatus  @default(DRAFT)
+  isFeatured      Boolean     @default(false)
+  publishedAt     DateTime?
+  metaTitle       String?
+  metaDescription String?     @db.Text
+  canonicalUrl    String?
+  ogImageUrl      String?
+  focusKeyword    String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([category, status])
+  @@index([isFeatured, status])
+  @@index([slug])
+  @@map("blog_posts")
 }

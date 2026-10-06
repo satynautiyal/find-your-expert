@@ -139,20 +139,6 @@ export class BlogsController {
     };
   }
 
-  /**
-   * POST /api/blogs/admin/seed
-   * Seed sample blogs if empty
-   */
-  @Post('admin/seed')
-  async seedBlogs() {
-    const result = await this.blogsService.seedSampleBlogs();
-    return {
-      success: true,
-      data: result,
-      timestamp: new Date().toISOString(),
-    };
-  }
-
   // ═══════════════════════════════════════════════════════
   // DYNAMIC SLUG ENDPOINT (Must be last to avoid route conflicts)
   // ═══════════════════════════════════════════════════════

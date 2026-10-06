@@ -23,6 +23,21 @@ interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
+function formatDate(dateString?: string | Date | null): string {
+  if (!dateString) return '';
+  try {
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  } catch {
+    return '';
+  }
+}
+
 /**
  * Dynamic Next.js 15 SEO Metadata generator
  */
@@ -53,7 +68,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         description,
         type: 'article',
         publishedTime: blog.publishedAt ? new Date(blog.publishedAt).toISOString() : undefined,
-        authors: [blog.authorName],
+        authors: [blog.authorName || 'FindYourExperts'],
         images: [
           {
             url: ogImage,
@@ -87,21 +102,27 @@ export default async function BlogDetailPage({ params }: PageProps) {
     notFound();
   }
 
-  const { blog, relatedPosts } = blogData;
+  const { blog, relatedPosts = [] } = blogData;
+  const authorInitial = (blog.authorName || 'F').charAt(0).toUpperCase();
+  const formattedDate = formatDate(blog.publishedAt || blog.createdAt);
 
   // Schema.org JSON-LD Article structured data for Google Rich Snippets
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
     headline: blog.title,
-    description: blog.excerpt || blog.metaDescription,
+    description: blog.excerpt || blog.metaDescription || '',
     image: blog.coverImageUrl ? [blog.coverImageUrl] : [],
-    datePublished: blog.publishedAt || blog.createdAt,
-    dateModified: blog.updatedAt || blog.publishedAt,
+    datePublished: blog.publishedAt
+      ? new Date(blog.publishedAt).toISOString()
+      : blog.createdAt
+      ? new Date(blog.createdAt).toISOString()
+      : new Date().toISOString(),
+    dateModified: blog.updatedAt ? new Date(blog.updatedAt).toISOString() : undefined,
     author: {
       '@type': 'Person',
-      name: blog.authorName,
-      jobTitle: blog.authorRole,
+      name: blog.authorName || 'FindYourExperts Editorial',
+      jobTitle: blog.authorRole || 'Content Editor',
     },
     publisher: {
       '@type': 'Organization',
@@ -126,7 +147,7 @@ export default async function BlogDetailPage({ params }: PageProps) {
       />
 
       {/* Header */}
-      <Header onOpenQuoteModal={() => {}} savedCount={0} />
+      <Header />
 
       {/* Main Article Container */}
       <main className="flex-1 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
@@ -144,24 +165,22 @@ export default async function BlogDetailPage({ params }: PageProps) {
         {/* Category & Reading Metrics */}
         <div className="flex flex-wrap items-center gap-2.5 mb-4 text-xs">
           <span className="bg-primary/10 text-primary font-bold px-3 py-1 rounded-full uppercase tracking-wider text-[11px]">
-            {blog.category}
+            {blog.category || 'General'}
           </span>
           <span className="text-gray-300">•</span>
           <div className="flex items-center gap-1 text-gray-500 font-medium">
             <Clock className="w-3.5 h-3.5" />
-            <span>{blog.readingTimeMin} min read</span>
+            <span>{blog.readingTimeMin || 1} min read</span>
           </div>
-          <span className="text-gray-300">•</span>
-          <div className="flex items-center gap-1 text-gray-500 font-medium">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>
-              {new Date(blog.publishedAt || blog.createdAt).toLocaleDateString('en-US', {
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </span>
-          </div>
+          {formattedDate && (
+            <>
+              <span className="text-gray-300">•</span>
+              <div className="flex items-center gap-1 text-gray-500 font-medium">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>{formattedDate}</span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Main Title */}
@@ -173,17 +192,17 @@ export default async function BlogDetailPage({ params }: PageProps) {
         <div className="flex items-center justify-between py-4 border-y border-gray-100 mb-8">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm border border-primary/20">
-              {blog.authorName[0]}
+              {authorInitial}
             </div>
             <div>
               <div className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                <span>{blog.authorName}</span>
+                <span>{blog.authorName || 'FindYourExperts Editorial'}</span>
                 <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
                   <ShieldCheck className="w-3 h-3" />
                   Verified Author
                 </span>
               </div>
-              <div className="text-[11px] text-gray-500">{blog.authorRole}</div>
+              <div className="text-[11px] text-gray-500">{blog.authorRole || 'Content Editor'}</div>
             </div>
           </div>
 
@@ -275,12 +294,12 @@ export default async function BlogDetailPage({ params }: PageProps) {
         {/* Author Bio Box */}
         <div className="bg-slate-50 rounded-2xl p-6 border border-gray-200 flex flex-col sm:flex-row items-center sm:items-start gap-4 mb-12">
           <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-lg shrink-0 border border-primary/20">
-            {blog.authorName[0]}
+            {authorInitial}
           </div>
           <div className="space-y-1.5 text-center sm:text-left">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <h4 className="font-bold text-gray-950 text-sm">{blog.authorName}</h4>
-              <span className="text-xs text-primary font-semibold">{blog.authorRole}</span>
+              <h4 className="font-bold text-gray-950 text-sm">{blog.authorName || 'FindYourExperts Editorial'}</h4>
+              <span className="text-xs text-primary font-semibold">{blog.authorRole || 'Content Editor'}</span>
             </div>
             <p className="text-xs text-gray-600 leading-relaxed">
               Published by the editorial team at FindYourExperts. All cost analyses and contractor guidelines are reviewed against current New York City Department of Buildings codes and market standards.

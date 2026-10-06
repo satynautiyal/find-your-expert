@@ -5,12 +5,20 @@ import { ChevronDown, Heart, Menu, X } from 'lucide-react';
 import { EButton } from '@/components/EComponents';
 
 export interface HeaderProps {
-  onOpenQuoteModal: () => void;
-  savedCount: number;
+  onOpenQuoteModal?: () => void;
+  savedCount?: number;
 }
 
-export default function Header({ onOpenQuoteModal, savedCount }: HeaderProps) {
+export default function Header({ onOpenQuoteModal, savedCount = 0 }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleQuoteClick = () => {
+    if (onOpenQuoteModal) {
+      onOpenQuoteModal();
+    } else if (typeof window !== 'undefined') {
+      window.location.href = '/#how-it-works';
+    }
+  };
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
@@ -65,7 +73,7 @@ export default function Header({ onOpenQuoteModal, savedCount }: HeaderProps) {
             </button>
 
             <EButton
-              onClick={onOpenQuoteModal}
+              onClick={handleQuoteClick}
               variant="primary"
               size="md"
               iconRight={<span>&rarr;</span>}
@@ -107,7 +115,7 @@ export default function Header({ onOpenQuoteModal, savedCount }: HeaderProps) {
           <EButton
             onClick={() => {
               setMobileMenuOpen(false);
-              onOpenQuoteModal();
+              handleQuoteClick();
             }}
             variant="primary"
             size="lg"

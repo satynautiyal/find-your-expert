@@ -55,7 +55,7 @@ export default async function BlogIndexPage({
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Header */}
-      <Header onOpenQuoteModal={() => {}} savedCount={0} />
+      <Header />
 
       {/* Hero Section */}
       <section className="bg-gradient-to-b from-slate-900 via-gray-900 to-slate-900 text-white py-14 sm:py-20 relative overflow-hidden">

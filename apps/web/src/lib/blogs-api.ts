@@ -277,44 +277,36 @@ export async function deleteAdminBlog(id: string): Promise<boolean> {
 }
 
 /**
- * Upload image directly to Cloudflare R2 via presigned URL
+ * Upload an image to Cloudflare R2 (via the API) and return a stable URL.
+ *
+ * The API streams the file to R2 server-side, so no bucket CORS config is needed.
+ * The returned URL (`/api/storage/file?key=...`) never expires — it redirects to a
+ * fresh presigned R2 URL on each request, so it's safe to store inside blog content.
  */
 export async function uploadImageToStorage(file: File, folder = 'blog-images'): Promise<string> {
-  const timestamp = Date.now();
-  const cleanName = file.name.toLowerCase().replace(/[^a-z0-9.]/g, '-');
-  const key = `${folder}/${timestamp}-${cleanName}`;
+  const MAX_BYTES = 10 * 1024 * 1024;
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Only image files can be uploaded');
+  }
+  if (file.size > MAX_BYTES) {
+    throw new Error(`Image is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max is 10 MB.`);
+  }
 
-  // 1. Get Presigned Upload URL from backend
-  const presignUrl = buildApiUrl('storage/presigned-upload');
-  const presignRes = await fetch(presignUrl, {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('folder', folder);
+
+  // NOTE: don't set Content-Type manually — the browser adds the multipart boundary
+  const response = await fetch(buildApiUrl('storage/upload'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      key,
-      contentType: file.type || 'image/jpeg',
-      expiresIn: 3600,
-    }),
+    body: form,
   });
 
-  if (!presignRes.ok) {
-    throw new Error('Failed to get presigned upload URL from storage');
+  const json = await response.json().catch(() => null);
+  if (!response.ok || !json?.success || !json?.data?.url) {
+    const msg = Array.isArray(json?.message) ? json.message.join(', ') : json?.message;
+    throw new Error(msg || `Image upload failed (HTTP ${response.status})`);
   }
 
-  const presignJson = await presignRes.json();
-  const { uploadUrl, publicUrl } = presignJson.data;
-
-  // 2. Upload file directly via PUT
-  const uploadRes = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': file.type || 'image/jpeg',
-    },
-    body: file,
-  });
-
-  if (!uploadRes.ok) {
-    throw new Error(`Direct image upload failed: HTTP ${uploadRes.status}`);
-  }
-
-  return publicUrl;
+  return json.data.url as string;
 }

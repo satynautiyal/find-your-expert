@@ -5,8 +5,6 @@ import {
   IsIn,
   IsBoolean,
   IsArray,
-  IsInt,
-  Min,
 } from 'class-validator';
 
 export class CreateBlogDto {
@@ -64,7 +62,7 @@ export class CreateBlogDto {
   isFeatured?: boolean;
 
   @IsOptional()
-  publishedAt?: string | Date;
+  publishedAt?: string | Date | null;
 
   @IsOptional()
   @IsString()

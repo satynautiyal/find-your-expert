@@ -198,6 +198,43 @@ export class StorageService {
   }
 
   /**
+   * Store a raw buffer under `key` (R2 when configured, otherwise local public/uploads).
+   */
+  async putObject(buffer: Buffer, key: string, contentType = 'image/jpeg'): Promise<void> {
+    const cleanKey = key.replace(/^\/+/, '');
+
+    if (this.isReady && this.s3Client) {
+      await this.s3Client.send(
+        new PutObjectCommand({
+          Bucket: this.bucketName,
+          Key: cleanKey,
+          Body: buffer,
+          ContentType: contentType,
+          CacheControl: 'public, max-age=31536000, immutable',
+        })
+      );
+      this.logger.log(`⬆️ Uploaded to R2: ${cleanKey} (${buffer.length} bytes)`);
+      return;
+    }
+
+    const localFilePath = path.resolve(process.cwd(), 'public/uploads', cleanKey);
+    fs.mkdirSync(path.dirname(localFilePath), { recursive: true });
+    fs.writeFileSync(localFilePath, buffer);
+    this.logger.debug(`Saved image locally to: ${localFilePath}`);
+  }
+
+  /**
+   * Resolve a key to a local fallback file path (only when R2 is not configured).
+   * Returns null if the file doesn't exist or the key escapes the uploads dir.
+   */
+  getLocalFilePath(key: string): string | null {
+    const root = path.resolve(process.cwd(), 'public/uploads');
+    const filePath = path.resolve(root, key.replace(/^\/+/, ''));
+    if (!filePath.startsWith(root + path.sep)) return null;
+    return fs.existsSync(filePath) ? filePath : null;
+  }
+
+  /**
    * Upload raw buffer to Cloudflare R2 and return a 12-hour presigned URL.
    */
   async uploadBuffer(
