@@ -693,12 +693,12 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
           </div>
         </main>
 
-        {/* Right Collapsible Inspector Sidebar (WordPress Gutenberg Style) */}
+        {/* Right Collapsible Inspector Sidebar (WordPress Gutenberg Style - Slideover on Mobile) */}
         {isSidebarOpen && (
-          <aside className="w-80 sm:w-96 border-l border-gray-200 bg-white flex flex-col flex-shrink-0 h-[calc(100vh-56px)] sticky top-14 overflow-hidden select-none animate-in slide-in-from-right-10 duration-150">
+          <aside className="fixed sm:sticky inset-y-0 right-0 top-14 z-50 w-full sm:w-96 border-l border-gray-200 bg-white flex flex-col flex-shrink-0 h-[calc(100vh-56px)] overflow-hidden select-none animate-in slide-in-from-right-10 duration-150 shadow-2xl sm:shadow-none">
             
             {/* Sidebar Tabs: Post | SEO Score | Block */}
-            <div className="flex items-center justify-between border-b border-gray-200 px-2 pt-2 bg-gray-50/60">
+            <div className="flex items-center justify-between border-b border-gray-200 px-3 pt-2 bg-gray-50/80">
               <div className="flex gap-1">
                 <button
                   type="button"
@@ -740,7 +740,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
               <button
                 type="button"
                 onClick={() => setIsSidebarOpen(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded cursor-pointer"
+                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-lg cursor-pointer"
                 title="Close settings"
               >
                 <X className="w-4 h-4" />
@@ -771,7 +771,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                           <select
                             value={status}
                             onChange={(e) => setStatus(e.target.value as any)}
-                            className="px-2 py-1 bg-gray-50 border border-gray-200 rounded font-semibold text-gray-800 outline-none"
+                            className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg font-semibold text-gray-800 outline-none text-base sm:text-xs"
                           >
                             <option value="DRAFT">Draft</option>
                             <option value="PUBLISHED">Published</option>
@@ -801,14 +801,14 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                             value={authorName}
                             onChange={(e) => setAuthorName(e.target.value)}
                             placeholder="Author name (default: FindYourExperts Editorial)"
-                            className="w-full px-2.5 py-1.5 text-xs text-gray-800 border border-gray-200 rounded outline-none focus:border-[#007cba]"
+                            className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-200 rounded-lg outline-none focus:border-[#007cba]"
                           />
                           <input
                             type="text"
                             value={authorRole}
                             onChange={(e) => setAuthorRole(e.target.value)}
                             placeholder="Author role (e.g. Roofing Specialist)"
-                            className="w-full px-2.5 py-1.5 text-xs text-gray-800 border border-gray-200 rounded outline-none focus:border-[#007cba]"
+                            className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-200 rounded-lg outline-none focus:border-[#007cba]"
                           />
                         </div>
                       </div>
@@ -837,7 +837,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                             setSlug(e.target.value);
                           }}
                           placeholder="article-url-slug"
-                          className="w-full px-2.5 py-1.5 text-xs text-gray-800 border border-gray-200 rounded outline-none focus:border-[#007cba]"
+                          className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-200 rounded-lg outline-none focus:border-[#007cba]"
                         />
                         <div className="text-[11px] text-gray-400 break-all">
                           Preview: <span className="text-[#007cba]">/blog/{slug || 'url-slug'}</span>
@@ -886,7 +886,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                           value={customCategory}
                           onChange={(e) => setCustomCategory(e.target.value)}
                           placeholder="+ Add new category"
-                          className="w-full px-2.5 py-1.5 text-xs text-gray-800 border border-gray-200 rounded outline-none focus:border-[#007cba] mt-2"
+                          className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-200 rounded-lg outline-none focus:border-[#007cba] mt-2"
                         />
                       </div>
                     )}
@@ -911,7 +911,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                           onChange={(e) => setTagInput(e.target.value)}
                           onKeyDown={handleAddTag}
                           placeholder="Add new tag (press Enter)..."
-                          className="w-full px-2.5 py-1.5 text-xs text-gray-800 border border-gray-200 rounded outline-none focus:border-[#007cba]"
+                          className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-200 rounded-lg outline-none focus:border-[#007cba]"
                         />
                         <div className="flex flex-wrap gap-1 pt-1">
                           {tags.map((t) => (
@@ -1007,7 +1007,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                             value={coverImageAlt}
                             onChange={(e) => setCoverImageAlt(e.target.value)}
                             placeholder="Alt text (alternative description)"
-                            className="w-full px-2.5 py-1.5 text-xs text-gray-800 border border-gray-200 rounded outline-none focus:border-[#007cba]"
+                            className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-200 rounded-lg outline-none focus:border-[#007cba]"
                           />
                         )}
                       </div>
@@ -1032,7 +1032,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                           onChange={(e) => setExcerpt(e.target.value)}
                           rows={3}
                           placeholder="Write an excerpt (optional summary)..."
-                          className="w-full px-2.5 py-1.5 text-xs text-gray-800 border border-gray-200 rounded outline-none focus:border-[#007cba] resize-none"
+                          className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-200 rounded-lg outline-none focus:border-[#007cba] resize-none"
                         />
                       </div>
                     )}
@@ -1110,9 +1110,9 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                         value={focusKeyword}
                         onChange={(e) => setFocusKeyword(e.target.value)}
                         placeholder="e.g. NYC flat roof repair"
-                        className="w-full pl-8 pr-3 py-2 text-xs text-gray-800 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#007cba]/20 focus:border-[#007cba]"
+                        className="w-full pl-8 pr-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#007cba]/20 focus:border-[#007cba]"
                       />
-                      <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" />
+                      <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5 sm:top-2" />
                     </div>
                     <p className="text-[10px] text-gray-400">
                       The primary search term you want this article to rank for on Google.
@@ -1252,7 +1252,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                         value={metaTitle}
                         onChange={(e) => setMetaTitle(e.target.value)}
                         placeholder={title || 'Leave blank to use article title'}
-                        className="w-full px-2.5 py-1.5 text-xs text-gray-800 border border-gray-300 rounded outline-none focus:border-[#007cba]"
+                        className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-300 rounded-lg outline-none focus:border-[#007cba]"
                       />
                       <div className="w-full bg-gray-100 h-1 rounded-full mt-1 overflow-hidden">
                         <div
@@ -1274,7 +1274,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                         onChange={(e) => setMetaDescription(e.target.value)}
                         rows={3}
                         placeholder={excerpt || 'Meta description for Google...'}
-                        className="w-full px-2.5 py-1.5 text-xs text-gray-800 border border-gray-300 rounded outline-none focus:border-[#007cba] resize-none"
+                        className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-300 rounded-lg outline-none focus:border-[#007cba] resize-none"
                       />
                       <div className="w-full bg-gray-100 h-1 rounded-full mt-1 overflow-hidden">
                         <div
@@ -1361,7 +1361,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                         value={canonicalUrl}
                         onChange={(e) => setCanonicalUrl(e.target.value)}
                         placeholder={`https://findyourexperts.com/blog/${slug || 'slug'}`}
-                        className="w-full px-2.5 py-1.5 text-xs text-gray-800 border border-gray-300 rounded outline-none focus:border-[#007cba]"
+                        className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-300 rounded-lg outline-none focus:border-[#007cba]"
                       />
                     </div>
 
@@ -1373,17 +1373,17 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                           value={ogImageUrl}
                           onChange={(e) => setOgImageUrl(e.target.value)}
                           placeholder="Leave blank to use Featured Image"
-                          className="flex-1 min-w-0 px-2.5 py-1.5 text-xs text-gray-800 border border-gray-300 rounded outline-none focus:border-[#007cba]"
+                          className="flex-1 min-w-0 px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-300 rounded-lg outline-none focus:border-[#007cba]"
                         />
                         <button
                           type="button"
                           onClick={() => ogInputRef.current?.click()}
                           disabled={isUploadingOg}
-                          className="px-2.5 py-1.5 text-xs font-semibold text-[#007cba] border border-[#007cba]/40 hover:bg-blue-50 rounded flex items-center gap-1 disabled:opacity-50 cursor-pointer"
+                          className="px-3 py-2 text-xs font-semibold text-[#007cba] border border-[#007cba]/40 hover:bg-blue-50 rounded-lg flex items-center gap-1 disabled:opacity-50 cursor-pointer shrink-0"
                           title="Upload social image (1200×630 recommended)"
                         >
                           <Upload className={`w-3.5 h-3.5 ${isUploadingOg ? 'animate-bounce' : ''}`} />
-                          {isUploadingOg ? '...' : 'Upload'}
+                          <span className="hidden sm:inline">{isUploadingOg ? '...' : 'Upload'}</span>
                         </button>
                         <input
                           ref={ogInputRef}

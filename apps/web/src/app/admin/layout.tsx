@@ -112,8 +112,8 @@ export default function AdminLayout({
           </div>
 
           {/* Login Card */}
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 p-6 sm:p-8">
-            <form onSubmit={handleLogin} className="space-y-5">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 p-5 sm:p-8">
+            <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5">
               {error && (
                 <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold p-3.5 rounded-xl flex items-start gap-2.5 animate-in fade-in duration-200">
                   <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -134,7 +134,7 @@ export default function AdminLayout({
                   placeholder="Enter admin username"
                   autoComplete="username"
                   required
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                  className="w-full px-3.5 py-3 sm:py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-base sm:text-xs font-medium text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                 />
               </div>
 
@@ -152,12 +152,12 @@ export default function AdminLayout({
                     placeholder="Enter password"
                     autoComplete="current-password"
                     required
-                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all pr-10"
+                    className="w-full px-3.5 py-3 sm:py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-base sm:text-xs font-medium text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all pr-11"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors p-1.5"
                     title={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -169,7 +169,7 @@ export default function AdminLayout({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-3 px-4 bg-primary hover:bg-primary-dark active:scale-[0.99] text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full py-3.5 sm:py-3 px-4 bg-primary hover:bg-primary-dark active:scale-[0.99] text-white font-bold text-sm sm:text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-2"
               >
                 {isSubmitting ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -202,12 +202,12 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen relative">
       {/* Top Floating Admin Status Bar for Quick Logout */}
-      <div className="bg-slate-900 text-slate-300 text-[11px] font-semibold py-1 px-4 border-b border-slate-800 flex items-center justify-between">
+      <div className="bg-slate-900 text-slate-300 text-[11px] font-semibold py-1.5 px-3 sm:px-4 border-b border-slate-800 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-white">Admin Session Active</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+          <span className="text-white font-bold">Admin Active</span>
           <span className="text-slate-500">•</span>
-          <span className="text-slate-400">Logged in as {ADMIN_USERNAME}</span>
+          <span className="text-slate-400 truncate">{ADMIN_USERNAME}</span>
         </div>
         <button
           onClick={handleLogout}
