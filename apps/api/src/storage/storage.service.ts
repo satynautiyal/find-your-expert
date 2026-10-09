@@ -83,46 +83,11 @@ export class StorageService {
   }
 
   /**
-   * Helper to extract clean object key from potential full R2 URL or presigned URL.
-   */
-  private extractObjectKey(keyOrUrl: string): string | null {
-    if (!keyOrUrl) return null;
-
-    // If it is not an absolute HTTP URL, it is already an object key
-    if (!keyOrUrl.startsWith('http://') && !keyOrUrl.startsWith('https://')) {
-      return keyOrUrl.replace(/^\/+/, '');
-    }
-
-    try {
-      const parsed = new URL(keyOrUrl);
-      // Check if it is an R2 or S3 presigned / stored URL
-      if (
-        parsed.hostname.includes('r2.cloudflarestorage.com') ||
-        parsed.hostname.includes('amazonaws.com') ||
-        parsed.searchParams.has('X-Amz-Signature') ||
-        parsed.searchParams.has('X-Amz-Algorithm')
-      ) {
-        let pathname = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''));
-        if (pathname.startsWith(`${this.bucketName}/`)) {
-          pathname = pathname.substring(this.bucketName.length + 1);
-        }
-        return pathname;
-      }
-    } catch {
-      // Invalid URL format
-    }
-
-    // External permanent URL (e.g. Cloudinary, Unsplash)
-    return null;
-  }
-
-  /**
    * Generates a presigned read (GET) URL for a stored object key.
    * Default validity is 12 hours (43,200 seconds).
    *
-   * If the key is already a full remote URL (e.g. legacy/third-party image),
-   * it is returned as-is without modification.
-   * If it is an existing/expired R2 URL, its key is extracted and resigned fresh.
+   * If the input is an external HTTP URL (e.g. Unsplash), it is returned as-is.
+   * Otherwise, generates a fresh presigned GET URL for the object key.
    */
   async getPresignedUrl(
     keyOrUrl: string,
@@ -130,34 +95,40 @@ export class StorageService {
   ): Promise<string> {
     if (!keyOrUrl) return '';
 
-    const cleanKey = this.extractObjectKey(keyOrUrl);
+    const clean = keyOrUrl.trim();
 
-    // If it's an external URL (not R2/S3), return directly as-is
-    if (cleanKey === null) {
-      return keyOrUrl;
+    // If it is an external URL (not an R2/S3 bucket host), return directly as-is
+    if (
+      (clean.startsWith('http://') || clean.startsWith('https://')) &&
+      !clean.includes('.r2.cloudflarestorage.com') &&
+      !clean.includes('.amazonaws.com')
+    ) {
+      return clean;
     }
+
+    // Clean leading slashes from the object key
+    const key = clean.replace(/^\/+/, '');
 
     if (this.isReady && this.s3Client) {
       try {
         const command = new GetObjectCommand({
           Bucket: this.bucketName,
-          Key: cleanKey,
+          Key: key,
         });
 
-        const signedUrl = await getSignedUrl(this.s3Client, command, {
+        return await getSignedUrl(this.s3Client, command, {
           expiresIn: expiresInSeconds,
         });
-        return signedUrl;
       } catch (err: any) {
         this.logger.error(
-          `Failed to generate presigned GET URL for key "${cleanKey}": ${err.message}`
+          `Failed to generate presigned GET URL for key "${key}": ${err.message}`
         );
-        return `/uploads/${cleanKey}`;
+        return `/uploads/${key}`;
       }
     }
 
     // Local fallback
-    return `/uploads/${cleanKey}`;
+    return `/uploads/${key}`;
   }
 
   /**

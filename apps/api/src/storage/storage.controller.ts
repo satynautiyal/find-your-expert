@@ -97,11 +97,14 @@ export class StorageController {
 
     await this.storageService.putObject(file.buffer, key, file.mimetype);
 
+    const presignedUrl = await this.storageService.getPresignedUrl(key);
+
     return {
       success: true,
       data: {
         key,
-        url: `/api/storage/file?key=${encodeURIComponent(key)}`,
+        url: presignedUrl,
+        stableUrl: `/api/storage/file?key=${encodeURIComponent(key)}`,
         size: file.size,
         contentType: file.mimetype,
       },
@@ -111,23 +114,26 @@ export class StorageController {
 
   /**
    * GET /api/storage/file?key=blog-covers/2026/10/abc-photo.jpg
-   * Stable public image URL: redirects to a fresh presigned R2 URL on every request,
-   * so images embedded in blog content never break when presigned URLs expire.
+   * Stable image URL: redirects to fresh presigned S3/R2 URL.
    */
   @Get('file')
   async getFile(@Query('key') key: string, @Res() res: Response) {
-    if (!key || !SAFE_KEY.test(key) || key.includes('..')) {
-      throw new BadRequestException('Invalid or missing "key"');
+    if (!key) {
+      throw new BadRequestException('Query parameter "key" is required');
+    }
+
+    const cleanKey = key.trim().replace(/^\/+/, '');
+    if (!cleanKey || cleanKey.includes('..')) {
+      throw new BadRequestException('Invalid "key"');
     }
 
     if (!this.storageService.isConfigured()) {
-      const localPath = this.storageService.getLocalFilePath(key);
+      const localPath = this.storageService.getLocalFilePath(cleanKey);
       if (!localPath) throw new NotFoundException('File not found');
       return res.sendFile(localPath);
     }
 
-    const signedUrl = await this.storageService.getPresignedUrl(key, StorageService.DEFAULT_PRESIGNED_EXPIRATION);
-    // Cache the redirect for 1h (presigned URL itself is valid for 12h)
+    const signedUrl = await this.storageService.getPresignedUrl(cleanKey, StorageService.DEFAULT_PRESIGNED_EXPIRATION);
     res.setHeader('Cache-Control', 'public, max-age=3600');
     return res.redirect(302, signedUrl);
   }
@@ -145,16 +151,17 @@ export class StorageController {
       throw new BadRequestException('Query parameter "key" is required');
     }
 
+    const cleanKey = key.trim().replace(/^\/+/, '');
     const parsedExpiresIn = expiresIn
       ? parseInt(expiresIn, 10)
       : StorageService.DEFAULT_PRESIGNED_EXPIRATION;
 
-    const url = await this.storageService.getPresignedUrl(key, parsedExpiresIn);
+    const url = await this.storageService.getPresignedUrl(cleanKey, parsedExpiresIn);
 
     return {
       success: true,
       data: {
-        key,
+        key: cleanKey,
         url,
         expiresInSeconds: parsedExpiresIn,
       },

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import Header from '@/components/common/Header';
 import Footer from '@/components/common/Footer';
+import SafeImage from '@/components/common/SafeImage';
 import { fetchBlogs, fetchFeaturedBlog, fetchBlogCategories } from '@/lib/blogs-api';
 import type { BlogPost } from '@repo/types';
 
@@ -110,17 +111,14 @@ export default async function BlogIndexPage({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-0">
               {/* Image */}
               <div className="lg:col-span-7 relative h-64 sm:h-80 lg:h-auto overflow-hidden bg-gray-100">
-                {featuredPost.coverImageUrl ? (
-                  <img
-                    src={featuredPost.coverImageUrl}
-                    alt={featuredPost.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-100">
-                    <BookOpen className="w-12 h-12" />
-                  </div>
-                )}
+                <SafeImage
+                  src={featuredPost.coverImageUrl}
+                  alt={featuredPost.title}
+                  fallbackCategory={featuredPost.category}
+                  fallbackTitle={featuredPost.title}
+                  fallbackIcon="image"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
                 <div className="absolute top-4 left-4">
                   <span className="bg-primary text-white text-[11px] font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-xs flex items-center gap-1">
                     <Sparkles className="w-3 h-3" />
@@ -245,17 +243,14 @@ export default async function BlogIndexPage({
               >
                 {/* Image */}
                 <Link href={`/blog/${post.slug}`} className="block relative h-48 bg-gray-100 overflow-hidden">
-                  {post.coverImageUrl ? (
-                    <img
-                      src={post.coverImageUrl}
-                      alt={post.coverImageAlt || post.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-300">
-                      <BookOpen className="w-8 h-8" />
-                    </div>
-                  )}
+                  <SafeImage
+                    src={post.coverImageUrl}
+                    alt={post.coverImageAlt || post.title}
+                    fallbackCategory={post.category}
+                    fallbackTitle={post.title}
+                    fallbackIcon="image"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
                   <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-xs text-gray-800 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md shadow-xs">
                     {post.category}
                   </span>

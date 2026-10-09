@@ -48,6 +48,8 @@ import {
   uploadImageToStorage,
   fetchBlogCategories,
 } from '@/lib/blogs-api';
+import { getMediaUrl } from '@/lib/media-url';
+import SafeImage from '@/components/common/SafeImage';
 import TiptapEditor from './TiptapEditor';
 
 interface BlogEditorFormProps {
@@ -949,9 +951,12 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                       <div className="space-y-2.5 pt-1 text-xs">
                         {coverImageUrl ? (
                           <div className="relative group rounded-lg overflow-hidden border border-gray-200">
-                            <img
+                            <SafeImage
                               src={coverImageUrl}
                               alt={coverImageAlt || 'Featured'}
+                              fallbackCategory={category}
+                              fallbackTitle={title}
+                              fallbackIcon="image"
                               className="w-full h-32 object-cover"
                             />
                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
@@ -1333,9 +1338,12 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                       <div className="border border-gray-200 rounded-lg overflow-hidden shadow-xs bg-white">
                         <div className="h-28 bg-gray-100 flex items-center justify-center overflow-hidden">
                           {coverImageUrl || ogImageUrl ? (
-                            <img
+                            <SafeImage
                               src={ogImageUrl || coverImageUrl}
                               alt="Social preview"
+                              fallbackCategory={category}
+                              fallbackTitle={title}
+                              fallbackIcon="image"
                               className="w-full h-full object-cover"
                             />
                           ) : (
@@ -1495,7 +1503,14 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
               {/* Cover Image */}
               {coverImageUrl && (
                 <div className="mb-6 rounded-xl overflow-hidden border border-gray-200">
-                  <img src={coverImageUrl} alt={coverImageAlt || title} className="w-full max-h-[400px] object-cover" />
+                  <SafeImage
+                    src={coverImageUrl}
+                    alt={coverImageAlt || title}
+                    fallbackCategory={customCategory || category}
+                    fallbackTitle={title}
+                    fallbackIcon="image"
+                    className="w-full max-h-[400px] object-cover"
+                  />
                 </div>
               )}
 

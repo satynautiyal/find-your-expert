@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import Header from '@/components/common/Header';
 import Footer from '@/components/common/Footer';
+import SafeImage from '@/components/common/SafeImage';
 import { fetchBlogBySlug } from '@/lib/blogs-api';
 import type { BlogPost } from '@repo/types';
 
@@ -242,9 +243,12 @@ export default async function BlogDetailPage({ params }: PageProps) {
         {/* Featured Cover Image */}
         {blog.coverImageUrl && (
           <div className="mb-10 rounded-2xl overflow-hidden border border-gray-200 shadow-xs">
-            <img
+            <SafeImage
               src={blog.coverImageUrl}
               alt={blog.coverImageAlt || blog.title}
+              fallbackCategory={blog.category}
+              fallbackTitle={blog.title}
+              fallbackIcon="image"
               className="w-full max-h-[480px] object-cover"
             />
           </div>

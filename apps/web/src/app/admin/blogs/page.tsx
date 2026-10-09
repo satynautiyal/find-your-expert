@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { BlogPost } from '@repo/types';
 import { fetchAdminBlogs, deleteAdminBlog } from '@/lib/blogs-api';
+import SafeImage from '@/components/common/SafeImage';
 
 export default function AdminBlogsPage() {
   const [blogs, setBlogs] = useState<BlogPost[]>([]);
@@ -239,17 +240,14 @@ export default function AdminBlogsPage() {
                         {/* Title & Cover */}
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-3">
-                            {blog.coverImageUrl ? (
-                              <img
-                                src={blog.coverImageUrl}
-                                alt={blog.title}
-                                className="w-12 h-12 rounded-lg object-cover border border-gray-200 shrink-0"
-                              />
-                            ) : (
-                              <div className="w-12 h-12 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400 shrink-0">
-                                <FileText className="w-5 h-5" />
-                              </div>
-                            )}
+                            <SafeImage
+                              src={blog.coverImageUrl}
+                              alt={blog.title}
+                              fallbackCategory={blog.category}
+                              fallbackTitle={blog.title}
+                              fallbackIcon="letter"
+                              className="w-12 h-12 rounded-lg object-cover border border-gray-200 shrink-0"
+                            />
                             <div className="space-y-0.5">
                               <Link
                                 href={`/admin/blogs/${blog.id}`}
@@ -351,17 +349,14 @@ export default function AdminBlogsPage() {
                 {blogs.map((blog) => (
                   <div key={blog.id} className="p-4 space-y-3">
                     <div className="flex items-start gap-3">
-                      {blog.coverImageUrl ? (
-                        <img
-                          src={blog.coverImageUrl}
-                          alt={blog.title}
-                          className="w-14 h-14 rounded-xl object-cover border border-gray-200 shrink-0"
-                        />
-                      ) : (
-                        <div className="w-14 h-14 rounded-xl bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400 shrink-0">
-                          <FileText className="w-6 h-6" />
-                        </div>
-                      )}
+                      <SafeImage
+                        src={blog.coverImageUrl}
+                        alt={blog.title}
+                        fallbackCategory={blog.category}
+                        fallbackTitle={blog.title}
+                        fallbackIcon="letter"
+                        className="w-14 h-14 rounded-xl object-cover border border-gray-200 shrink-0"
+                      />
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span
