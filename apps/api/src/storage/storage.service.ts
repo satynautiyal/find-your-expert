@@ -83,6 +83,50 @@ export class StorageService {
   }
 
   /**
+   * Helper: Extracts clean S3 object key from raw key, query URL, or presigned URL.
+   * Returns external permanent URLs (e.g. Unsplash) untouched.
+   */
+  public extractCleanKey(keyOrUrl: string): string {
+    if (!keyOrUrl) return '';
+    const trimmed = keyOrUrl.trim();
+    if (!trimmed) return '';
+
+    // If external permanent URL (Unsplash, Cloudinary, etc.), keep as-is
+    if (
+      (trimmed.startsWith('http://') || trimmed.startsWith('https://')) &&
+      !trimmed.includes('.r2.cloudflarestorage.com') &&
+      !trimmed.includes('.amazonaws.com') &&
+      !trimmed.includes('/api/storage/')
+    ) {
+      return trimmed;
+    }
+
+    // If it contains a `key=` parameter (e.g. /api/storage/file?key=... or full URL with key query)
+    if (trimmed.includes('key=')) {
+      const match = trimmed.match(/key=([^&]+)/);
+      if (match && match[1]) {
+        return decodeURIComponent(match[1]).replace(/^\/+/, '');
+      }
+    }
+
+    // If it's a full S3/R2 URL, extract pathname
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      try {
+        const parsed = new URL(trimmed);
+        let pathname = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''));
+        if (pathname.startsWith(`${this.bucketName}/`)) {
+          pathname = pathname.substring(this.bucketName.length + 1);
+        }
+        return pathname;
+      } catch {
+        // Fallback
+      }
+    }
+
+    return trimmed.replace(/^\/+/, '');
+  }
+
+  /**
    * Generates a presigned read (GET) URL for a stored object key.
    * Default validity is 12 hours (43,200 seconds).
    *
@@ -95,25 +139,19 @@ export class StorageService {
   ): Promise<string> {
     if (!keyOrUrl) return '';
 
-    const clean = keyOrUrl.trim();
+    const cleanKey = this.extractCleanKey(keyOrUrl);
+    if (!cleanKey) return '';
 
-    // If it is an external URL (not an R2/S3 bucket host), return directly as-is
-    if (
-      (clean.startsWith('http://') || clean.startsWith('https://')) &&
-      !clean.includes('.r2.cloudflarestorage.com') &&
-      !clean.includes('.amazonaws.com')
-    ) {
-      return clean;
+    // If external permanent URL (Unsplash), return directly as-is
+    if (cleanKey.startsWith('http://') || cleanKey.startsWith('https://')) {
+      return cleanKey;
     }
-
-    // Clean leading slashes from the object key
-    const key = clean.replace(/^\/+/, '');
 
     if (this.isReady && this.s3Client) {
       try {
         const command = new GetObjectCommand({
           Bucket: this.bucketName,
-          Key: key,
+          Key: cleanKey,
         });
 
         return await getSignedUrl(this.s3Client, command, {
@@ -121,14 +159,14 @@ export class StorageService {
         });
       } catch (err: any) {
         this.logger.error(
-          `Failed to generate presigned GET URL for key "${key}": ${err.message}`
+          `Failed to generate presigned GET URL for key "${cleanKey}": ${err.message}`
         );
-        return `/uploads/${key}`;
+        return `/uploads/${cleanKey}`;
       }
     }
 
     // Local fallback
-    return `/uploads/${key}`;
+    return `/uploads/${cleanKey}`;
   }
 
   /**

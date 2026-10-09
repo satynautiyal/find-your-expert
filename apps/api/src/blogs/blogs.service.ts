@@ -60,24 +60,8 @@ export class BlogsService {
    */
   private toStorageKey(urlOrKey?: string | null): string | null {
     if (!urlOrKey) return null;
-    const clean = urlOrKey.trim();
-    if (!clean) return null;
-
-    // Keep external CDN URLs (e.g. Unsplash) as-is
-    if (
-      (clean.startsWith('http://') || clean.startsWith('https://')) &&
-      !clean.includes('.r2.cloudflarestorage.com') &&
-      !clean.includes('.amazonaws.com')
-    ) {
-      return clean;
-    }
-
-    try {
-      const parsed = new URL(clean);
-      return decodeURIComponent(parsed.pathname.replace(/^\/+/, ''));
-    } catch {
-      return clean.replace(/^\/+/, '');
-    }
+    const cleanKey = this.storageService.extractCleanKey(urlOrKey);
+    return cleanKey || null;
   }
 
   /**
