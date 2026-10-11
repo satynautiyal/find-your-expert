@@ -8,6 +8,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-sans)', 'Plus Jakarta Sans', 'Outfit', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+      },
       colors: {
         forest: {
           950: '#06261C',
@@ -16,6 +19,7 @@ const config: Config = {
           700: '#135E46',
           600: '#187A5B',
           500: '#1F9872',
+          400: '#34D399',
           100: '#E6F4EE',
           50: '#F2FAF6',
         },
@@ -27,22 +31,45 @@ const config: Config = {
           border: 'var(--primary-border)',
           subtle: 'var(--primary-subtle)',
         },
+        secondary: {
+          DEFAULT: 'var(--secondary)',
+          hover: 'var(--secondary-hover)',
+          dark: 'var(--secondary-dark)',
+          light: 'var(--secondary-light)',
+          border: 'var(--secondary-border)',
+          subtle: 'var(--secondary-subtle)',
+        },
+        orange: {
+          50: '#FFF7ED',
+          100: '#FFEDD5',
+          200: '#FED7AA',
+          300: '#FDBA74',
+          400: '#FB923C',
+          500: '#F15A24',
+          600: '#EA580C',
+          700: '#C2410C',
+          800: '#9A3412',
+          900: '#7C2D12',
+        },
         brand: {
           50: 'var(--primary-light)',
           100: 'var(--primary-subtle)',
           200: 'var(--primary-border)',
-          300: '#FDBA74',
-          400: '#FB923C',
+          300: '#A8D5C2',
+          400: '#269A86',
           500: 'var(--primary)',
           600: 'var(--primary-hover)',
           700: 'var(--primary-dark)',
-          800: '#C23B0B',
-          900: '#9A2E08',
+          800: '#0F4C39',
+          900: '#0B3B2C',
+          orange: 'var(--secondary)',
+          green: 'var(--primary)',
         },
         action: {
           primary: 'var(--primary)',
           'primary-hover': 'var(--primary-hover)',
           'primary-light': 'var(--primary-light)',
+          secondary: 'var(--secondary)',
         },
       },
       boxShadow: {

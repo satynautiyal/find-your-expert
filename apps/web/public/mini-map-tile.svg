@@ -1,0 +1,35 @@
+<svg width="240" height="90" viewBox="0 0 240 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="240" height="90" fill="#EAE9E6"/>
+  
+  <!-- Green park area matching Google Maps style -->
+  <path d="M135 0H240V90H170L135 0Z" fill="#DDE8D6"/>
+  <path d="M0 60L75 90H0V60Z" fill="#E4EFE0"/>
+  
+  <!-- Primary road casing and fill -->
+  <path d="M-10 38L250 20" stroke="#DAD9D4" stroke-width="14" stroke-linecap="round"/>
+  <path d="M-10 38L250 20" stroke="#FFFFFF" stroke-width="11" stroke-linecap="round"/>
+  
+  <!-- Secondary road crossing -->
+  <path d="M85 -5L120 95" stroke="#DAD9D4" stroke-width="11" stroke-linecap="round"/>
+  <path d="M85 -5L120 95" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Tertiary street in park -->
+  <path d="M170 -5L195 95" stroke="#D3DFC9" stroke-width="8" stroke-linecap="round"/>
+  <path d="M170 -5L195 95" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Secondary cross street -->
+  <path d="M-5 75L130 50" stroke="#DAD9D4" stroke-width="8" stroke-linecap="round"/>
+  <path d="M-5 75L130 50" stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- Street Label -->
+  <text x="22" y="31" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="7.5" font-weight="600" fill="#9CA3AF" letter-spacing="0.4">OAK MOUNTAIN DR</text>
+
+  <!-- Pin Drop Shadow -->
+  <ellipse cx="120" cy="58" rx="6" ry="2.5" fill="rgba(0,0,0,0.18)"/>
+
+  <!-- Red/Terracotta Google-style Teardrop Location Pin -->
+  <g transform="translate(107, 24)">
+    <path d="M13 2C8.03 2 4 6.03 4 11C4 16.9 13 27 13 27C13 27 22 16.9 22 11C22 6.03 17.97 2 13 2Z" fill="#DA5F2F"/>
+    <circle cx="13" cy="10.5" r="4" fill="#FFFFFF"/>
+  </g>
+</svg>

@@ -1,13 +1,21 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
+import { Plus_Jakarta_Sans } from 'next/font/google';
 import './globals.css';
+
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
+  variable: '--font-sans',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   // Resolves relative image URLs (e.g. /api/storage/file?key=...) into absolute URLs for OG/Twitter tags
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://findyourexperts.com'),
-  title: 'Top Roofing Contractors in New York, NY | FindYourExperts',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://homeprocompare.com'),
+  title: 'HomeProCompare - Find the Best Home Service Contractors Near You',
   description:
-    'Compare the best residential and commercial roofing contractors based on authentic customer reviews, verified NYC DOB credentials, project quality, and transparent pricing.',
+    'Compare verified contractors, real customer reviews, project photos, pricing insights and credentials across the USA — all in one place.',
   verification: {
     google: 'yqQ1qJ8-abqYTo5SDXR8RbAf3pjJO7bmiZszTRRohkU',
   },
@@ -19,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={plusJakarta.variable}>
       <head>
         {/* Google Tag Manager */}
         <Script
@@ -34,7 +42,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           }}
         />
       </head>
-      <body className="antialiased min-h-screen bg-[#F9FAFB] text-gray-950 selection:bg-primary selection:text-white">
+      <body className={`${plusJakarta.className} antialiased min-h-screen bg-[#F9FAFB] text-gray-950 selection:bg-primary selection:text-white`}>
         {/* Google Tag Manager (noscript) */}
         <noscript>
           <iframe

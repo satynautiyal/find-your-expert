@@ -15,7 +15,7 @@ import { EButton, EInput } from '@/components/EComponents';
 export interface QuoteModalProps {
   isOpen: boolean;
   onClose: () => void;
-  selectedProvider: RooferProvider | null;
+  selectedProvider?: RooferProvider | null;
 }
 
 export default function QuoteModal({

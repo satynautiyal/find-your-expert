@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 30px;
+      background: #E5E7EB;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .ref-box {
+      margin-bottom: 25px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+    }
+    .test-hero {
+      position: relative;
+      background: #FAFBF9;
+      padding: 50px 60px;
+      border-radius: 12px;
+      overflow: hidden;
+      max-width: 1300px;
+    }
+    .kitchen-bg {
+      position: absolute;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 60%;
+      background: url('/hero-kitchen.jpg') center right / cover no-repeat;
+      z-index: 1;
+    }
+    .kitchen-fade {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 250px;
+      background: linear-gradient(to right, #FAFBF9, rgba(250,251,249,0.8) 50%, transparent);
+    }
+    .content {
+      position: relative;
+      z-index: 10;
+      max-width: 1200px;
+    }
+    .kicker {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      color: #111827;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .headline {
+      font-size: 54px;
+      font-weight: 700;
+      line-height: 1.02;
+      letter-spacing: -0.03em;
+      color: #111827;
+      margin: 0;
+    }
+    .headline .green {
+      color: #0B3B2C;
+    }
+    .sub {
+      font-size: 15px;
+      color: #4B5563;
+      max-width: 540px;
+      line-height: 1.5;
+      margin-top: 16px;
+    }
+    .search-bar {
+      margin-top: 28px;
+      background: white;
+      border: 1px solid #E5E7EB;
+      border-radius: 16px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 760px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+    }
+    .review-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      border-radius: 20px;
+      padding: 16px 20px;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.08);
+      border: 1px solid rgba(240, 240, 240, 0.9);
+      width: 290px;
+    }
+    .avatars {
+      display: flex;
+      align-items: center;
+    }
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 2px solid white;
+      margin-left: -8px;
+      object-fit: cover;
+    }
+    .avatar:first-child {
+      margin-left: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ref-box">
+    <h3>Original Reference Position (Crop):</h3>
+    <img src="/hero_center_relationship.png" style="width: 700px; display: block;" />
+  </div>
+
+  <div class="test-hero">
+    <div class="kitchen-bg">
+      <div class="kitchen-fade"></div>
+    </div>
+
+    <div class="content">
+      <!-- Row with Headline on Left and Review Card directly on Right -->
+      <div style="display: flex; align-items: flex-start; gap: 40px;">
+        <div>
+          <div class="kicker">TRUSTED. VERIFIED. LOCAL.</div>
+          <h1 class="headline">
+            Find the Best <span class="green">Home</span><br>
+            Service Contractors<br>
+            Near You
+          </h1>
+          <div class="sub">
+            Compare verified contractors, real customer reviews, project photos, pricing insights and credentials — all in one place.
+          </div>
+        </div>
+
+        <!-- Floating Card Positioned Right Next to Headline -->
+        <div style="margin-top: 15px; margin-left: -20px;">
+          <div class="review-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+              <div class="avatars">
+                <img class="avatar" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" />
+                <img class="avatar" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80" />
+                <img class="avatar" src="https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=100&q=80" />
+              </div>
+              <div>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span style="color: #F59E0B; font-size: 13px;">★★★★★</span>
+                  <span style="font-weight: 800; font-size: 12px; color: #111;">4.8/5</span>
+                </div>
+                <div style="font-size: 11px; font-weight: 700; color: #111; margin-top: 2px;">
+                  18,500+ <span style="font-weight: 400; color: #666;">Homeowners</span>
+                </div>
+              </div>
+            </div>
+            <div style="font-size: 11px; font-weight: 600; color: #374151; margin-top: 8px;">
+              found trusted contractors on HomeProCompare
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search Bar -->
+      <div class="search-bar">
+        <span style="color: #9CA3AF; font-size: 14px;">🔍 What do you need done?</span>
+        <span style="width: 1px; height: 28px; background: #E5E7EB;"></span>
+        <span style="color: #9CA3AF; font-size: 14px; flex: 1;">📍 Enter ZIP code</span>
+        <button style="background: #0B3B2C; color: white; border: none; border-radius: 12px; padding: 12px 24px; font-weight: 600; font-size: 14px; cursor: pointer;">
+          Search Contractors →
+        </button>
+      </div>
+
+      <!-- Popular Searches -->
+      <div style="margin-top: 16px; font-size: 12px; display: flex; align-items: center; gap: 8px;">
+        <span style="font-weight: 700; color: #111;">Popular searches:</span>
+        <span style="background: white; border: 1px solid #ddd; padding: 4px 12px; border-radius: 20px;">Countertops</span>
+        <span style="background: white; border: 1px solid #ddd; padding: 4px 12px; border-radius: 20px;">Kitchen Remodeling</span>
+        <span style="background: white; border: 1px solid #ddd; padding: 4px 12px; border-radius: 20px;">Bathroom Remodeling</span>
+        <span style="background: white; border: 1px solid #ddd; padding: 4px 12px; border-radius: 20px;">Roofing</span>
+        <span style="background: white; border: 1px solid #ddd; padding: 4px 12px; border-radius: 20px;">HVAC</span>
+        <span style="background: white; border: 1px solid #ddd; padding: 4px 12px; border-radius: 20px;">Flooring</span>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

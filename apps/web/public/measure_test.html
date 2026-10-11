@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Outfit:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    body { background: #fafafa; font-family: sans-serif; padding: 20px; }
+    .box { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; border: 1px solid #ddd; }
+    .title { font-weight: bold; color: #666; margin-bottom: 10px; }
+    .target-bar { width: 592px; height: 4px; background: red; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <h2>Target Width: 592px (Red bar)</h2>
+
+  <div class="box">
+    <div class="title">Plus Jakarta Sans 700 - 54px, tracking -0.025em, line-height 1.02</div>
+    <div class="target-bar"></div>
+    <h1 id="pjs-700" style="font-family: 'Plus Jakarta Sans'; font-weight: 700; font-size: 54px; line-height: 1.02; letter-spacing: -0.025em; color: #111827; margin: 0;">
+      Find the Best <span style="color: #0B3B2C;">Home</span><br>
+      Service Contractors<br>
+      Near You
+    </h1>
+    <div id="pjs-700-info" style="margin-top: 10px; font-family: monospace; color: #444;"></div>
+  </div>
+
+  <div class="box">
+    <div class="title">Plus Jakarta Sans 800 - 52px, tracking -0.025em, line-height 1.02</div>
+    <div class="target-bar"></div>
+    <h1 id="pjs-800" style="font-family: 'Plus Jakarta Sans'; font-weight: 800; font-size: 52px; line-height: 1.02; letter-spacing: -0.025em; color: #111827; margin: 0;">
+      Find the Best <span style="color: #0B3B2C;">Home</span><br>
+      Service Contractors<br>
+      Near You
+    </h1>
+    <div id="pjs-800-info" style="margin-top: 10px; font-family: monospace; color: #444;"></div>
+  </div>
+
+  <div class="box">
+    <div class="title">Outfit 700 - 52px, tracking -0.025em, line-height 1.02</div>
+    <div class="target-bar"></div>
+    <h1 id="outfit-700" style="font-family: 'Outfit'; font-weight: 700; font-size: 52px; line-height: 1.02; letter-spacing: -0.025em; color: #111827; margin: 0;">
+      Find the Best <span style="color: #0B3B2C;">Home</span><br>
+      Service Contractors<br>
+      Near You
+    </h1>
+    <div id="outfit-700-info" style="margin-top: 10px; font-family: monospace; color: #444;"></div>
+  </div>
+
+  <script>
+    window.onload = () => {
+      // Measure span widths
+      function measure(id, infoId) {
+        const el = document.getElementById(id);
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let lines = ['Find the Best Home', 'Service Contractors', 'Near You'];
+        let info = [];
+        // Let's create temporary spans to measure each line
+        const temp = document.createElement('div');
+        temp.style.cssText = el.style.cssText;
+        temp.style.position = 'absolute';
+        temp.style.visibility = 'hidden';
+        temp.style.whiteSpace = 'nowrap';
+        document.body.appendChild(temp);
+
+        lines.forEach(l => {
+          temp.innerHTML = l;
+          info.push(`"${l}": ${Math.round(temp.getBoundingClientRect().width)}px`);
+        });
+        document.body.removeChild(temp);
+        document.getElementById(infoId).innerText = info.join(' | ') + ` | Total Block H: ${el.getBoundingClientRect().height}px`;
+      }
+
+      setTimeout(() => {
+        measure('pjs-700', 'pjs-700-info');
+        measure('pjs-800', 'pjs-800-info');
+        measure('outfit-700', 'outfit-700-info');
+      }, 500);
+    };
+  </script>
+</body>
+</html>

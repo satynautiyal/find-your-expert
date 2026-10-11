@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Font Matcher</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900&family=Inter:wght@600;700;800;900&family=Manrope:wght@600;700;800&family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800&family=Urbanist:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background: #F4F6F8;
+      font-family: sans-serif;
+      padding: 30px;
+      color: #111;
+    }
+    .ref-container {
+      background: #fff;
+      padding: 20px;
+      border: 3px solid #0F3E35;
+      border-radius: 12px;
+      margin-bottom: 30px;
+      max-width: 800px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 25px;
+      max-width: 800px;
+    }
+    .candidate {
+      background: #fff;
+      padding: 24px;
+      border-radius: 12px;
+      border: 1px solid #ddd;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+    .candidate-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 12px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 6px;
+    }
+    .headline {
+      font-size: 50px;
+      letter-spacing: -0.025em;
+      line-height: 1.02;
+      color: #0F172A;
+      margin: 0;
+    }
+    .headline .green {
+      color: #0E583A;
+    }
+    .kicker {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      color: #111827;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      font-size: 14px;
+      line-height: 1.5;
+      color: #4B5563;
+      margin-top: 12px;
+      max-width: 520px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Exact Side-by-Side Typography Matcher</h1>
+
+  <div class="ref-container">
+    <div style="font-weight: bold; color: red; margin-bottom: 10px;">USER'S EXACT REFERENCE SCREENSHOT (Cropped to text area):</div>
+    <!-- Crop of user reference screenshot text area -->
+    <div style="width: 660px; height: 380px; overflow: hidden; border: 1px solid #ccc;">
+      <img src="/user_ref.png" style="width: 1000px; margin-top: -30px; margin-left: -20px; display: block;" />
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- Candidate 1: Outfit 800 -->
+    <div class="candidate">
+      <div class="candidate-name">Option 1: Outfit (ExtraBold 800)</div>
+      <div class="kicker" style="font-family: 'Outfit'; font-weight: 800;">TRUSTED. VERIFIED. LOCAL.</div>
+      <div class="headline" style="font-family: 'Outfit'; font-weight: 800;">
+        Find the Best <span class="green">Home</span><br>Service Contractors<br>Near You
+      </div>
+      <div class="subtitle" style="font-family: 'Outfit'; font-weight: 400;">
+        Compare verified contractors, real customer reviews, project photos, pricing insights and credentials — all in one place.
+      </div>
+    </div>
+
+    <!-- Candidate 2: Outfit 700 with tighter leading -->
+    <div class="candidate">
+      <div class="candidate-name">Option 2: Outfit (Bold 700)</div>
+      <div class="kicker" style="font-family: 'Outfit'; font-weight: 700;">TRUSTED. VERIFIED. LOCAL.</div>
+      <div class="headline" style="font-family: 'Outfit'; font-weight: 700;">
+        Find the Best <span class="green">Home</span><br>Service Contractors<br>Near You
+      </div>
+      <div class="subtitle" style="font-family: 'Outfit'; font-weight: 400;">
+        Compare verified contractors, real customer reviews, project photos, pricing insights and credentials — all in one place.
+      </div>
+    </div>
+
+    <!-- Candidate 3: DM Sans 700 -->
+    <div class="candidate">
+      <div class="candidate-name">Option 3: DM Sans (Bold 700)</div>
+      <div class="kicker" style="font-family: 'DM Sans'; font-weight: 700;">TRUSTED. VERIFIED. LOCAL.</div>
+      <div class="headline" style="font-family: 'DM Sans'; font-weight: 700;">
+        Find the Best <span class="green">Home</span><br>Service Contractors<br>Near You
+      </div>
+      <div class="subtitle" style="font-family: 'DM Sans'; font-weight: 400;">
+        Compare verified contractors, real customer reviews, project photos, pricing insights and credentials — all in one place.
+      </div>
+    </div>
+
+    <!-- Candidate 4: Plus Jakarta Sans 800 -->
+    <div class="candidate">
+      <div class="candidate-name">Option 4: Plus Jakarta Sans (ExtraBold 800)</div>
+      <div class="kicker" style="font-family: 'Plus Jakarta Sans'; font-weight: 800;">TRUSTED. VERIFIED. LOCAL.</div>
+      <div class="headline" style="font-family: 'Plus Jakarta Sans'; font-weight: 800;">
+        Find the Best <span class="green">Home</span><br>Service Contractors<br>Near You
+      </div>
+      <div class="subtitle" style="font-family: 'Plus Jakarta Sans'; font-weight: 400;">
+        Compare verified contractors, real customer reviews, project photos, pricing insights and credentials — all in one place.
+      </div>
+    </div>
+
+    <!-- Candidate 5: Plus Jakarta Sans 700 -->
+    <div class="candidate">
+      <div class="candidate-name">Option 5: Plus Jakarta Sans (Bold 700)</div>
+      <div class="kicker" style="font-family: 'Plus Jakarta Sans'; font-weight: 700;">TRUSTED. VERIFIED. LOCAL.</div>
+      <div class="headline" style="font-family: 'Plus Jakarta Sans'; font-weight: 700;">
+        Find the Best <span class="green">Home</span><br>Service Contractors<br>Near You
+      </div>
+      <div class="subtitle" style="font-family: 'Plus Jakarta Sans'; font-weight: 400;">
+        Compare verified contractors, real customer reviews, project photos, pricing insights and credentials — all in one place.
+      </div>
+    </div>
+
+    <!-- Candidate 6: Urbanist 800 -->
+    <div class="candidate">
+      <div class="candidate-name">Option 6: Urbanist (ExtraBold 800)</div>
+      <div class="kicker" style="font-family: 'Urbanist'; font-weight: 800;">TRUSTED. VERIFIED. LOCAL.</div>
+      <div class="headline" style="font-family: 'Urbanist'; font-weight: 800;">
+        Find the Best <span class="green">Home</span><br>Service Contractors<br>Near You
+      </div>
+      <div class="subtitle" style="font-family: 'Urbanist'; font-weight: 400;">
+        Compare verified contractors, real customer reviews, project photos, pricing insights and credentials — all in one place.
+      </div>
+    </div>
+  </div>
+</body>
+</html>

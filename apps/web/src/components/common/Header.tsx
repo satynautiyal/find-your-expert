@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, Heart, Menu, X } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronDown, Heart, Menu, X, Building2, MapPin, Sparkles, BookOpen } from 'lucide-react';
 import { EButton } from '@/components/EComponents';
 
 export interface HeaderProps {
@@ -11,82 +12,261 @@ export interface HeaderProps {
 
 export default function Header({ onOpenQuoteModal, savedCount = 0 }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false);
+  const [statesDropdownOpen, setStatesDropdownOpen] = useState(false);
+  const [resourcesDropdownOpen, setResourcesDropdownOpen] = useState(false);
+  const [aboutDropdownOpen, setAboutDropdownOpen] = useState(false);
 
-  const handleQuoteClick = () => {
-    if (onOpenQuoteModal) {
-      onOpenQuoteModal();
-    } else if (typeof window !== 'undefined') {
-      window.location.href = '/#how-it-works';
-    }
-  };
+  const popularServices = [
+    { name: 'Countertops', href: '/contractors?service=Countertops' },
+    { name: 'Kitchen Remodeling', href: '/contractors?service=Kitchen+Remodeling' },
+    { name: 'Bathroom Remodeling', href: '/contractors?service=Bathroom+Remodeling' },
+    { name: 'Roofing', href: '/contractors?service=Roofing' },
+    { name: 'HVAC', href: '/contractors?service=HVAC' },
+    { name: 'Flooring', href: '/contractors?service=Flooring' },
+    { name: 'Windows & Doors', href: '/contractors?service=Windows+%26+Doors' },
+    { name: 'Painting', href: '/contractors?service=Painting' },
+  ];
+
+  const popularStates = [
+    { name: 'Texas', href: '/contractors?state=Texas' },
+    { name: 'California', href: '/contractors?state=California' },
+    { name: 'Florida', href: '/contractors?state=Florida' },
+    { name: 'New York', href: '/contractors?state=New+York' },
+    { name: 'Illinois', href: '/contractors?state=Illinois' },
+    { name: 'Pennsylvania', href: '/contractors?state=Pennsylvania' },
+    { name: 'Ohio', href: '/contractors?state=Ohio' },
+    { name: 'Georgia', href: '/contractors?state=Georgia' },
+  ];
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <header className="bg-white border-b border-gray-200/90 sticky top-0 z-40 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Left: Brand Logo + Nav */}
           <div className="flex items-center gap-8">
-            <a href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center shadow-xs">
+            <Link href="/" className="flex items-center gap-2 group">
+              <div className="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center shadow-xs transition-transform group-hover:scale-105">
                 <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
                   <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
                 </svg>
               </div>
               <div className="flex items-center text-lg sm:text-xl font-black tracking-tight text-gray-950">
-                <span>FindYour</span>
-                <span className="text-primary-dark">Experts</span>
+                <span>HomePro</span>
+                <span className="text-primary">Compare</span>
               </div>
-            </a>
+            </Link>
 
-            {/* Desktop Navigation Links */}
+            {/* Desktop Navigation Links (Exact from screenshot) */}
             <nav className="hidden lg:flex items-center gap-6 text-xs font-semibold text-gray-700 h-16">
-              <div className="flex items-center gap-1 hover:text-primary-dark cursor-pointer py-2 transition-colors">
-                <span>Find Services</span>
-                <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+              {/* Find Services Dropdown */}
+              <div
+                className="relative py-4"
+                onMouseEnter={() => setServicesDropdownOpen(true)}
+                onMouseLeave={() => setServicesDropdownOpen(false)}
+              >
+                <button
+                  type="button"
+                  className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer py-1"
+                >
+                  <span>Find Services</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 group-hover:text-primary" />
+                </button>
+                {servicesDropdownOpen && (
+                  <div className="absolute top-14 left-0 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      Popular Categories
+                    </div>
+                    {popularServices.map((service) => (
+                      <Link
+                        key={service.name}
+                        href={service.href}
+                        className="block px-3 py-1.5 text-xs text-gray-700 hover:bg-primary-light hover:text-primary transition-colors"
+                        onClick={() => setServicesDropdownOpen(false)}
+                      >
+                        {service.name}
+                      </Link>
+                    ))}
+                    <div className="border-t border-gray-100 mt-1 pt-1">
+                      <Link
+                        href="/contractors"
+                        className="block px-3 py-1.5 text-xs font-bold text-primary hover:underline"
+                        onClick={() => setServicesDropdownOpen(false)}
+                      >
+                        View all services &rarr;
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Active Tab: Roofing with bottom accent indicator */}
-              <div className="relative flex items-center h-full text-gray-950 font-bold px-1 cursor-pointer">
-                <span>Roofing</span>
-                <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-primary rounded-t-full" />
+              {/* States Dropdown */}
+              <div
+                className="relative py-4"
+                onMouseEnter={() => setStatesDropdownOpen(true)}
+                onMouseLeave={() => setStatesDropdownOpen(false)}
+              >
+                <button
+                  type="button"
+                  className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer py-1"
+                >
+                  <span>States</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                </button>
+                {statesDropdownOpen && (
+                  <div className="absolute top-14 left-0 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      Top States
+                    </div>
+                    {popularStates.map((state) => (
+                      <Link
+                        key={state.name}
+                        href={state.href}
+                        className="block px-3 py-1.5 text-xs text-gray-700 hover:bg-primary-light hover:text-primary transition-colors"
+                        onClick={() => setStatesDropdownOpen(false)}
+                      >
+                        {state.name}
+                      </Link>
+                    ))}
+                    <div className="border-t border-gray-100 mt-1 pt-1">
+                      <a
+                        href="/#states"
+                        className="block px-3 py-1.5 text-xs font-bold text-primary hover:underline"
+                        onClick={() => setStatesDropdownOpen(false)}
+                      >
+                        View all 50 states &rarr;
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <a href="#how-it-works" className="hover:text-primary-dark transition-colors py-2">
+              {/* How It Works */}
+              <a
+                href="/#how-it-works"
+                className="hover:text-primary transition-colors py-2"
+              >
                 How It Works
               </a>
 
-              <a href="/blog" className="hover:text-primary-dark transition-colors py-2">
-                Guides & Blog
-              </a>
+              {/* Resources Dropdown */}
+              <div
+                className="relative py-4"
+                onMouseEnter={() => setResourcesDropdownOpen(true)}
+                onMouseLeave={() => setResourcesDropdownOpen(false)}
+              >
+                <button
+                  type="button"
+                  className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer py-1"
+                >
+                  <span>Resources</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                </button>
+                {resourcesDropdownOpen && (
+                  <div className="absolute top-14 left-0 w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <Link
+                      href="/blog"
+                      className="block px-3 py-1.5 text-xs text-gray-700 hover:bg-primary-light hover:text-primary transition-colors"
+                      onClick={() => setResourcesDropdownOpen(false)}
+                    >
+                      Expert Guides & Blog
+                    </Link>
+                    <a
+                      href="/#faq"
+                      className="block px-3 py-1.5 text-xs text-gray-700 hover:bg-primary-light hover:text-primary transition-colors"
+                      onClick={() => setResourcesDropdownOpen(false)}
+                    >
+                      Frequently Asked Questions
+                    </a>
+                    <Link
+                      href="/admin/blogs"
+                      className="block px-3 py-1.5 text-[11px] text-gray-400 hover:text-primary transition-colors border-t border-gray-100 mt-1 pt-1"
+                      onClick={() => setResourcesDropdownOpen(false)}
+                    >
+                      Admin CMS
+                    </Link>
+                  </div>
+                )}
+              </div>
 
-              <a href="/admin/blogs" className="text-gray-400 hover:text-primary transition-colors py-2 text-[11px]">
-                Admin CMS
-              </a>
+              {/* About Us Dropdown */}
+              <div
+                className="relative py-4"
+                onMouseEnter={() => setAboutDropdownOpen(true)}
+                onMouseLeave={() => setAboutDropdownOpen(false)}
+              >
+                <button
+                  type="button"
+                  className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer py-1"
+                >
+                  <span>About Us</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                </button>
+                {aboutDropdownOpen && (
+                  <div className="absolute top-14 left-0 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <a
+                      href="/#about"
+                      className="block px-3 py-1.5 text-xs text-gray-700 hover:bg-primary-light hover:text-primary transition-colors"
+                      onClick={() => setAboutDropdownOpen(false)}
+                    >
+                      About HomeProCompare
+                    </a>
+                    <a
+                      href="/#contractors"
+                      className="block px-3 py-1.5 text-xs text-gray-700 hover:bg-primary-light hover:text-primary transition-colors"
+                      onClick={() => setAboutDropdownOpen(false)}
+                    >
+                      For Contractors
+                    </a>
+                  </div>
+                )}
+              </div>
             </nav>
           </div>
 
           {/* Right: Saved & CTA */}
           <div className="hidden sm:flex items-center gap-5 text-xs font-semibold">
-            <button className="flex items-center gap-1.5 text-gray-700 hover:text-gray-950 transition-colors">
-              <Heart className={`w-4 h-4 ${savedCount > 0 ? 'fill-primary text-primary' : 'text-gray-400'}`} />
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  const el = document.getElementById('listings');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }
+              }}
+              className="flex items-center gap-1.5 text-gray-700 hover:text-gray-950 transition-colors cursor-pointer"
+            >
+              <Heart
+                className={`w-4 h-4 ${savedCount > 0 ? 'fill-primary text-primary' : 'text-gray-400'}`}
+              />
               <span>Saved ({savedCount})</span>
             </button>
 
-            <EButton
-              onClick={handleQuoteClick}
-              variant="primary"
-              size="md"
-              iconRight={<span>&rarr;</span>}
-            >
-              Get Free Quotes
-            </EButton>
+            {onOpenQuoteModal ? (
+              <EButton
+                type="button"
+                onClick={onOpenQuoteModal}
+                variant="primary"
+                size="md"
+              >
+                Find a Pro
+              </EButton>
+            ) : (
+              <EButton
+                href="/contractors"
+                variant="primary"
+                size="md"
+              >
+                Find a Pro
+              </EButton>
+            )}
           </div>
 
           {/* Mobile hamburger */}
-          <div className="flex sm:hidden">
+          <div className="flex lg:hidden">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 text-gray-600 hover:text-gray-900"
+              className="p-2 text-gray-600 hover:text-gray-900 rounded-md"
+              aria-label="Toggle navigation menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -96,33 +276,52 @@ export default function Header({ onOpenQuoteModal, savedCount = 0 }: HeaderProps
 
       {/* Mobile menu */}
       {mobileMenuOpen && (
-        <div className="sm:hidden border-t border-gray-200 bg-white px-4 py-3 space-y-2 text-xs font-semibold text-gray-800">
-          <a href="#" className="block py-1.5">
+        <div className="lg:hidden border-t border-gray-200 bg-white px-4 py-3 space-y-2 text-xs font-semibold text-gray-800 animate-in fade-in duration-150">
+          <Link
+            href="/contractors"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block py-2 hover:text-primary"
+          >
             Find Services
+          </Link>
+          <a
+            href="/#states"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block py-2 hover:text-primary"
+          >
+            States
           </a>
-          <a href="#" className="block py-1.5 text-primary-dark font-bold">
-            Roofing
-          </a>
-          <a href="#" className="block py-1.5">
+          <a
+            href="/#how-it-works"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block py-2 hover:text-primary"
+          >
             How It Works
           </a>
-          <a href="/blog" className="block py-1.5">
-            Guides & Blog
-          </a>
-          <a href="/admin/blogs" className="block py-1.5 text-gray-400">
-            Admin CMS
-          </a>
-          <EButton
-            onClick={() => {
-              setMobileMenuOpen(false);
-              handleQuoteClick();
-            }}
-            variant="primary"
-            size="lg"
-            className="w-full mt-2"
+          <Link
+            href="/blog"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block py-2 hover:text-primary"
           >
-            Get Free Quotes &rarr;
-          </EButton>
+            Resources & Blog
+          </Link>
+          <a
+            href="/#about"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block py-2 hover:text-primary"
+          >
+            About Us
+          </a>
+          <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+            <span className="text-gray-500">Saved ({savedCount})</span>
+            <Link
+              href="/admin/blogs"
+              onClick={() => setMobileMenuOpen(false)}
+              className="px-4 py-1.5 rounded-lg bg-primary text-white font-bold text-xs"
+            >
+              Sign In
+            </Link>
+          </div>
         </div>
       )}
     </header>

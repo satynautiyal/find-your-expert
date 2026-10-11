@@ -1,28 +1,19 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState } from 'react';
+import Link from 'next/link';
 import {
   MapPin,
-  Wrench,
-  Home,
   Search,
   Star,
-  ShieldCheck,
-  Tag,
-  FileText,
-  Shield,
-  Zap,
-  ChevronRight,
+  ChevronDown,
+  Building2,
+  Calendar,
+  MessageSquare,
+  CheckCircle2,
   ArrowRight,
 } from 'lucide-react';
-import { NYC_BOROUGHS, ROOFING_SUB_SERVICES } from '@/data/mockRoofers';
-import {
-  EButton,
-  EBadge,
-  EInput,
-  ESelect,
-  ECard,
-} from '@/components/EComponents';
+import { EButton } from '@/components/EComponents';
 
 export interface HeroBannerProps {
   searchQuery: string;
@@ -31,8 +22,8 @@ export interface HeroBannerProps {
   onSelectBorough: (b: string) => void;
   selectedService: string;
   onSelectService: (s: string) => void;
-  selectedSpace: string;
-  onSelectSpace: (sp: string) => void;
+  selectedSpace?: string;
+  onSelectSpace?: (sp: string) => void;
   onSearchSubmit: () => void;
   companiesCount: number;
   dynamicBoroughs?: string[];
@@ -51,320 +42,283 @@ export default function HeroBanner({
   onSelectBorough,
   selectedService,
   onSelectService,
-  selectedSpace,
-  onSelectSpace,
   onSearchSubmit,
   companiesCount,
-  dynamicBoroughs,
   dynamicServices,
   stats,
 }: HeroBannerProps) {
+  const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
+
+  const popularServices = [
+    'Roof Replacement',
+    'Roof Repair',
+    'Roof Inspection',
+    'Metal Roofing',
+    'Emergency Roofing',
+  ];
+
+  const currentService =
+    selectedService && selectedService !== 'All Services' && selectedService !== 'All'
+      ? selectedService
+      : 'Roofing';
+
+  const currentLocation =
+    selectedBorough && selectedBorough !== 'All'
+      ? `${selectedBorough}, AL`
+      : 'Birmingham, AL';
+
   const handleTagClick = (serviceName: string) => {
     onSelectService(serviceName);
     onSearchSubmit();
   };
 
-  const rawBoroughs = dynamicBoroughs && dynamicBoroughs.length > 0 ? dynamicBoroughs : NYC_BOROUGHS;
-  const rawServices = dynamicServices && dynamicServices.length > 0 ? dynamicServices : ROOFING_SUB_SERVICES;
-
-  const boroughOptions = useMemo(() => [
-    { label: 'All NYC (5 Boroughs)', value: 'All' },
-    ...rawBoroughs.filter((b) => b !== 'All').map((b) => ({
-      label: `${b}, NY`,
-      value: b,
-    })),
-  ], [rawBoroughs]);
-
-  const serviceOptions = useMemo(() => [
-    { label: 'All Roofing Services', value: 'All Services' },
-    ...rawServices.filter((s) => s !== 'All Services').map((s) => ({
-      label: s,
-      value: s,
-    })),
-  ], [rawServices]);
-
-  const propertyOptions = useMemo(() => [
-    { label: 'All Properties', value: 'All' },
-    { label: 'Residential', value: 'Residential' },
-    { label: 'Commercial', value: 'Commercial' },
-  ], []);
-
-  const trustCards = [
-    {
-      icon: <Star className="w-4 h-4 text-primary" />,
-      title: stats?.avgRating ? `${stats.avgRating}` : '4.8',
-      subtitle: `Avg. Rating Across ${stats?.totalReviews ? stats.totalReviews.toLocaleString() : '2,800'}+ Reviews`,
-    },
-    {
-      icon: <ShieldCheck className="w-4 h-4 text-primary" />,
-      title: stats?.totalProviders ? `${stats.totalProviders}+` : `${companiesCount}+`,
-      subtitle: 'Verified Contractors in NYC',
-    },
-    {
-      icon: <Tag className="w-4 h-4 text-primary" />,
-      title: '$4.5k – $15k',
-      subtitle: 'Typical Project Cost Range',
-    },
-    {
-      icon: <FileText className="w-4 h-4 text-primary" />,
-      title: 'Updated 2026',
-      subtitle: 'Latest Reviews & Pricing',
-    },
-    {
-      icon: <Shield className="w-4 h-4 text-primary" />,
-      title: 'Independent',
-      subtitle: 'Verified & Unbiased Reviews',
-    },
-    {
-      icon: <Zap className="w-4 h-4 text-primary" />,
-      title: 'Fast & Easy',
-      subtitle: 'Get Free Quotes in Minutes',
-    },
-  ];
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSearchSubmit();
+  };
 
   return (
-    <section className="relative bg-gradient-to-b from-[#FFFBF9] via-[#FAF7F5] to-[#F9FAFB] border-b border-gray-200 overflow-hidden py-6 sm:py-8">
-      {/* Subtle organic background glow */}
-      <div className="absolute top-12 right-1/4 w-[500px] h-[500px] bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute top-1/3 -left-20 w-[400px] h-[400px] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+    <div className="bg-[#FAFBF9] border-b border-gray-200/80">
+      {/* 1. Full-Bleed Hero Section matching exact reference mockup */}
+      <section className="relative min-h-[460px] lg:min-h-[500px] flex items-center overflow-hidden">
+        {/* Background House Image on Right with Seamless Left Fade */}
+        <div className="absolute right-0 top-0 bottom-0 w-full lg:w-[60%] xl:w-[58%] h-full pointer-events-none select-none z-0">
+          <img
+            src="/roofing-hero-house.jpg"
+            alt="Roofing Contractors in Birmingham, AL"
+            className="w-full h-full object-cover object-[center_right]"
+          />
+          {/* Soft left gradient fade into the off-white background */}
+          <div className="absolute inset-y-0 left-0 w-36 sm:w-64 lg:w-96 bg-gradient-to-r from-[#FAFBF9] via-[#FAFBF9]/80 to-transparent" />
+        </div>
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        {/* Top 2-Column Hero Grid: Left Content + Right Image */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center pt-2">
-          {/* Left Column: Headlines, Trust Pill & Social Proof */}
-          <div className="lg:col-span-6 space-y-4">
-            {/* Pill Badge */}
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary-light border border-primary-border text-[11px] font-bold shadow-2xs">
-              <div className="flex items-center gap-1.5 text-primary-dark">
-                <ShieldCheck className="w-3.5 h-3.5 fill-primary text-white" />
-                <span>TOP RATED &amp; VERIFIED</span>
-              </div>
-              <span className="text-gray-300">|</span>
-              <span className="text-gray-500 font-semibold tracking-wide">
-                NYC &bull; 5,000+ CERTIFIED CONTRACTORS
-              </span>
+        {/* Floating HTML Verified Badge on Bottom-Right over lawn matching reference */}
+        <div className="hidden lg:flex absolute bottom-6 right-6 xl:right-10 bg-white/95 backdrop-blur-md rounded-2xl px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.1)] border border-gray-100 items-center gap-3 z-10 pointer-events-none">
+          <div className="w-8 h-8 rounded-full bg-[#07302C] text-white flex items-center justify-center shrink-0 shadow-2xs">
+            <CheckCircle2 className="w-5 h-5 text-white stroke-[2.4]" />
+          </div>
+          <div>
+            <div className="text-xs sm:text-[13px] font-bold text-[#111827] leading-tight">
+              Verified Local Professionals
             </div>
+            <div className="text-[10px] sm:text-[11px] text-[#5A6578] font-medium leading-tight mt-0.5">
+              Trusted. Compared. Reviewed.
+            </div>
+          </div>
+        </div>
 
-            {/* H1 Heading */}
-            <h1 className="text-3xl sm:text-4xl lg:text-[46px] font-black text-gray-950 tracking-tight leading-[1.12]">
-              Top Roofing Contractors in{' '}
-              <span className="text-primary-dark block sm:inline">New York, NY</span>
+        {/* Hero Content Container (Left-aligned, exact HomePage typography & spacing) */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-10 lg:py-12 relative z-10">
+          <div className="max-w-2xl lg:max-w-xl xl:max-w-2xl">
+            {/* Breadcrumb matching exact reference */}
+            <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-gray-500 mb-3.5 font-normal">
+              <Link href="/" className="hover:text-primary transition-colors">
+                Home
+              </Link>
+              <span className="text-gray-400">&gt;</span>
+              <Link href="/contractors" className="hover:text-primary transition-colors">
+                {currentService}
+              </Link>
+              <span className="text-gray-400">&gt;</span>
+              <span className="hover:text-primary transition-colors cursor-pointer">
+                Alabama
+              </span>
+              <span className="text-gray-400">&gt;</span>
+              <span className="text-gray-900 font-semibold truncate">
+                {currentLocation.split(',')[0]}
+              </span>
+            </nav>
+
+            {/* Main Headline - Plus Jakarta Sans 700 with exact HomePage 1.02 line height */}
+            <h1 className="text-4xl sm:text-5xl lg:text-[50px] xl:text-[54px] font-bold text-[#111827] tracking-[-0.03em] leading-[1.02]">
+              {currentService} Contractors
+              <br />
+              in {currentLocation}
             </h1>
 
-            {/* Subtitle */}
-            <p className="text-xs sm:text-sm text-gray-600 leading-relaxed max-w-xl font-normal">
-              Compare the best residential and commercial roofing contractors based on authentic customer reviews from Google, Yelp, and Facebook, verified NYC DOB credentials, and transparent pricing.
+            {/* Subtitle matching HomePage font size & color */}
+            <p className="mt-4 text-sm sm:text-[15px] lg:text-[15.5px] text-[#4B5563] max-w-[560px] leading-[1.5] font-normal">
+              Compare {currentService.toLowerCase()} companies in {currentLocation.split(',')[0]} based on reputation,
+              services, experience, credentials and verified business information.
             </p>
 
-            {/* Social Proof Review Row */}
-            <div className="flex items-center gap-3 pt-1">
-              {/* Overlapping Avatar Stack */}
-              <div className="flex -space-x-2 shrink-0">
-                <img
-                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80"
-                  alt="Reviewer"
-                  className="w-7 h-7 rounded-full border-2 border-white object-cover"
+            {/* Dual Search Input Bar matching exact reference design */}
+            <form
+              onSubmit={handleSubmit}
+              className="mt-6 bg-white rounded-2xl shadow-[0_4px_25px_rgba(0,0,0,0.06)] border border-gray-200/90 p-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-2xl transition-shadow hover:shadow-[0_8px_30px_rgba(0,0,0,0.09)]"
+            >
+              {/* Search Need Input */}
+              <div className="relative flex items-center gap-2.5 px-3 py-1 flex-1">
+                <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  onFocus={() => setServiceDropdownOpen(true)}
+                  placeholder="What roofing service do you need?"
+                  className="w-full text-xs sm:text-sm text-gray-800 placeholder-gray-400 bg-transparent focus:outline-none font-normal"
                 />
-                <img
-                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&h=120&q=80"
-                  alt="Reviewer"
-                  className="w-7 h-7 rounded-full border-2 border-white object-cover"
-                />
-                <img
-                  src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&h=120&q=80"
-                  alt="Reviewer"
-                  className="w-7 h-7 rounded-full border-2 border-white object-cover"
-                />
-                <img
-                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=120&h=120&q=80"
-                  alt="Reviewer"
-                  className="w-7 h-7 rounded-full border-2 border-white object-cover"
-                />
-              </div>
+                <button
+                  type="button"
+                  onClick={() => setServiceDropdownOpen(!serviceDropdownOpen)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-1 cursor-pointer"
+                  aria-label="Toggle service options"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
 
-              {/* Stars */}
-              <div className="flex text-primary gap-0.5">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-3.5 h-3.5 fill-current" />
-                ))}
-              </div>
-
-              {/* Rating Text */}
-              <div className="text-xs text-gray-700">
-                <span className="font-extrabold text-gray-950">4.8/5</span>{' '}
-                <span className="text-gray-500">from 2,800+ verified reviews</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column: Hero Graphic (NYC Rooftop + Skyline + Floating Badges) */}
-          <div className="lg:col-span-6 relative flex items-center justify-center lg:justify-end">
-            {/* Fluid warm backdrop shapes */}
-            <div className="absolute -top-4 -left-4 sm:left-4 w-72 sm:w-96 h-64 sm:h-80 bg-gradient-to-tr from-primary/30 via-primary/15 to-primary-light/20 rounded-tl-[100px] rounded-3xl -z-10 blur-xs" />
-
-            {/* Main Asymmetrical Framed Image */}
-            <div className="relative w-full max-w-lg h-[260px] sm:h-[320px] rounded-tl-[90px] rounded-tr-3xl rounded-br-3xl rounded-bl-3xl overflow-hidden shadow-2xl border-4 border-white">
-              <img
-                src="https://images.unsplash.com/photo-1534430480872-3498386e7856?auto=format&fit=crop&w=1200&q=80"
-                alt="NYC Rooftop overlooking Manhattan Skyline"
-                className="w-full h-full object-cover object-center"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
-            </div>
-
-            {/* Floating Top-Right Badge: Verified Contractors */}
-            <div className="absolute -top-3 right-2 sm:right-4">
-              <ECard variant="floatingBadge">
-                <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-white shadow-xs">
-                  <ShieldCheck className="w-5 h-5 fill-white text-primary" />
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-gray-950 leading-tight">
-                    Verified Contractors
+                {/* Dropdown Suggestions */}
+                {serviceDropdownOpen && (
+                  <div
+                    className="absolute top-12 left-0 right-0 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+                    onMouseLeave={() => setServiceDropdownOpen(false)}
+                  >
+                    <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      Popular Services
+                    </div>
+                    {popularServices.map((service) => (
+                      <button
+                        key={service}
+                        type="button"
+                        onClick={() => {
+                          onSearchChange(service);
+                          onSelectService(service);
+                          setServiceDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-[#FFF5F0] hover:text-primary transition-colors cursor-pointer"
+                      >
+                        {service}
+                      </button>
+                    ))}
                   </div>
-                  <div className="text-[10px] text-gray-500 font-medium">
-                    Licensed &bull; Insured &bull; Trusted
-                  </div>
-                </div>
-              </ECard>
-            </div>
+                )}
+              </div>
 
-            {/* Decorative Handwritten Script text on the right side */}
-            <div className="absolute -bottom-2 sm:bottom-4 right-0 sm:-right-4 font-['Caveat'] text-2xl sm:text-3xl text-primary-dark rotate-[-6deg] select-none pointer-events-none drop-shadow-xs font-bold hidden sm:block">
-              Better Roofs<br />Bigger Peace<br />of Mind
-            </div>
-          </div>
-        </div>
+              {/* Vertical Divider */}
+              <div className="hidden sm:block w-px h-8 bg-gray-200 shrink-0" />
 
-        {/* Center: Clean Floating Search & Filter Bar */}
-        <ECard variant="elevated">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5 items-center">
-            {/* Segment 1: Location / Borough */}
-            <div className="lg:col-span-4">
-              <ESelect
-                label="Location / Borough"
-                icon={<MapPin className="w-4 h-4" />}
-                value={selectedBorough}
-                onChange={(e) => onSelectBorough(e.target.value)}
-                options={boroughOptions}
-              />
-            </div>
+              {/* Location Input */}
+              <div className="flex items-center gap-2.5 px-3 py-1 sm:w-44">
+                <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
+                <input
+                  type="text"
+                  value={selectedBorough === 'All' ? '35203' : selectedBorough}
+                  onChange={(e) => onSelectBorough(e.target.value)}
+                  placeholder="Enter ZIP code"
+                  className="w-full text-xs sm:text-sm text-gray-800 placeholder-gray-400 bg-transparent focus:outline-none font-normal"
+                />
+              </div>
 
-            {/* Segment 2: Service Needed */}
-            <div className="lg:col-span-4">
-              <ESelect
-                label="Service Needed"
-                icon={<Wrench className="w-4 h-4" />}
-                value={selectedService}
-                onChange={(e) => onSelectService(e.target.value)}
-                options={serviceOptions}
-              />
-            </div>
-
-            {/* Segment 3: Property Type */}
-            <div className="lg:col-span-2">
-              <ESelect
-                label="Property"
-                icon={<Home className="w-4 h-4" />}
-                value={selectedSpace}
-                onChange={(e) => onSelectSpace(e.target.value)}
-                options={propertyOptions}
-              />
-            </div>
-
-            {/* Segment 4: Search Roofers Button */}
-            <div className="lg:col-span-2">
+              {/* Submit EButton */}
               <EButton
-                onClick={onSearchSubmit}
+                type="submit"
                 variant="primary"
-                size="lg"
-                className="w-full py-3 rounded-xl shadow-md shadow-primary/20"
-                iconLeft={<Search className="w-4 h-4 stroke-[2.4]" />}
-                iconRight={<span>&rarr;</span>}
+                size="xl"
+                className="shrink-0"
               >
-                Search Roofers
+                Find Roofers
               </EButton>
-            </div>
-          </div>
+            </form>
 
-          {/* Sub-row: Text search input + Popular tags */}
-          <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
-            <div className="w-full md:w-84">
-              <EInput
-                type="text"
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-                placeholder="Search by contractor name, license, or zip..."
-                iconLeft={<Search className="w-3.5 h-3.5" />}
-                className="bg-gray-50/70 border-gray-200"
-              />
+            {/* Popular Searches Pills matching exact grey pills from reference */}
+            <div className="mt-3.5 flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
+              <span className="text-[#111827] font-bold mr-1">Popular services:</span>
+              {popularServices.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => handleTagClick(item)}
+                  className="px-2.5 sm:px-3 py-1 rounded-full bg-[#ECEEF0] hover:bg-gray-200 text-gray-800 transition-colors cursor-pointer text-xs font-medium"
+                >
+                  {item}
+                </button>
+              ))}
             </div>
 
-            {/* Popular quick chips */}
-            <div className="flex items-center gap-1.5 flex-wrap text-gray-500 text-[11px] w-full md:w-auto">
-              <span className="font-semibold text-gray-400">Popular:</span>
-              <button
-                type="button"
-                onClick={() => handleTagClick('Flat Roof Systems')}
-              >
-                <EBadge variant="popularChip">Flat Roofs</EBadge>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTagClick('Emergency Leak Repair')}
-              >
-                <EBadge variant="popularChip">Emergency Leak</EBadge>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTagClick('Full Roof Replacement')}
-              >
-                <EBadge variant="popularChip">Roof Replacement</EBadge>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTagClick('Commercial Roofing')}
-              >
-                <EBadge variant="popularChip">Commercial</EBadge>
-              </button>
-            </div>
-          </div>
-        </ECard>
-
-        {/* Lower Row: 6 Trust Stat Highlight Cards with Right Chevrons */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5">
-          {trustCards.map((card) => (
-            <ECard key={card.title} variant="stat">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-primary-light border border-primary-border flex items-center justify-center shrink-0">
-                  {card.icon}
+            {/* Mobile-only Verified Badge */}
+            <div className="flex lg:hidden items-center gap-2.5 mt-5 bg-white/95 backdrop-blur-md rounded-2xl px-3.5 py-2.5 shadow-xs border border-gray-100 max-w-xs">
+              <div className="w-7 h-7 rounded-full bg-[#07302C] text-white flex items-center justify-center shrink-0 shadow-2xs">
+                <CheckCircle2 className="w-4 h-4 text-white stroke-[2.4]" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-[#111827] leading-tight">
+                  Verified Local Professionals
                 </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-black text-gray-950">{card.title}</div>
-                  <div className="text-[10px] text-gray-500 font-medium leading-tight">
-                    {card.subtitle}
-                  </div>
+                <div className="text-[10px] text-[#5A6578] font-medium leading-tight mt-0.5">
+                  Trusted. Compared. Reviewed.
                 </div>
               </div>
-              <ChevronRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
-            </ECard>
-          ))}
+            </div>
+          </div>
         </div>
+      </section>
 
-        {/* Bottom CTA with clean divider lines */}
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <div className="w-12 sm:w-20 h-[1px] bg-gray-200" />
-          <EButton
-            onClick={onSearchSubmit}
-            variant="pill"
-            size="sm"
-            iconRight={<ArrowRight className="w-3.5 h-3.5 text-primary" />}
-          >
-            Explore {companiesCount} Verified Contractors in NYC
-          </EButton>
-          <div className="w-12 sm:w-20 h-[1px] bg-gray-200" />
+      {/* 2. Key Statistics Strip Bar matching exact reference design */}
+      <section className="border-t border-[#DEEAE3] bg-[#EBF7F2]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 items-center">
+            {/* Stat 1: Professionals */}
+            <div className="flex items-center gap-3 sm:gap-3.5">
+              <div className="w-9 h-9 rounded-xl bg-white border border-[#D5EADB] text-[#0B3B2C] flex items-center justify-center shrink-0 shadow-2xs">
+                <Building2 className="w-5 h-5 stroke-[2.2]" />
+              </div>
+              <div>
+                <div className="text-base sm:text-lg font-bold text-[#111827] leading-tight tracking-tight">
+                  {stats?.totalProviders ? `${stats.totalProviders}+` : companiesCount > 0 ? `${companiesCount}+` : '174+'}
+                </div>
+                <div className="text-[11px] sm:text-xs text-[#5A6578] font-medium leading-tight mt-0.5">
+                  Roofing Professionals
+                </div>
+              </div>
+            </div>
+
+            {/* Stat 2: Average Rating */}
+            <div className="flex items-center gap-3 sm:gap-3.5">
+              <div className="w-9 h-9 rounded-xl bg-white border border-[#D5EADB] text-[#0B3B2C] flex items-center justify-center shrink-0 shadow-2xs">
+                <Star className="w-5 h-5 stroke-[2.2]" />
+              </div>
+              <div>
+                <div className="text-base sm:text-lg font-bold text-[#111827] leading-tight tracking-tight">
+                  {stats?.avgRating ? `${stats.avgRating}/5` : '4.8/5'}
+                </div>
+                <div className="text-[11px] sm:text-xs text-[#5A6578] font-medium leading-tight mt-0.5">
+                  Average Rating
+                </div>
+              </div>
+            </div>
+
+            {/* Stat 3: Reviews Analyzed */}
+            <div className="flex items-center gap-3 sm:gap-3.5">
+              <div className="w-9 h-9 rounded-xl bg-white border border-[#D5EADB] text-[#0B3B2C] flex items-center justify-center shrink-0 shadow-2xs">
+                <MessageSquare className="w-5 h-5 stroke-[2.2]" />
+              </div>
+              <div>
+                <div className="text-base sm:text-lg font-bold text-[#111827] leading-tight tracking-tight">
+                  {stats?.totalReviews ? `${stats.totalReviews.toLocaleString()}+` : '2,400+'}
+                </div>
+                <div className="text-[11px] sm:text-xs text-[#5A6578] font-medium leading-tight mt-0.5">
+                  Reviews Analyzed
+                </div>
+              </div>
+            </div>
+
+            {/* Stat 4: Last Updated */}
+            <div className="flex items-center gap-3 sm:gap-3.5">
+              <div className="w-9 h-9 rounded-xl bg-white border border-[#D5EADB] text-[#0B3B2C] flex items-center justify-center shrink-0 shadow-2xs">
+                <Calendar className="w-5 h-5 stroke-[2.2]" />
+              </div>
+              <div>
+                <div className="text-base sm:text-lg font-bold text-[#111827] leading-tight tracking-tight">
+                  Last Updated
+                </div>
+                <div className="text-[11px] sm:text-xs text-[#5A6578] font-medium leading-tight mt-0.5">
+                  September 2026
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   );
 }

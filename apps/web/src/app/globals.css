@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&display=swap');
 @tailwind base;
 @tailwind components;
@@ -8,19 +9,37 @@
     --background: #F9FAFB;
     --foreground: #111827;
 
-    /* Theme Primary Color Variables - Change here to re-theme the entire website */
-    --primary: #F15A24;
-    --primary-hover: #DE4714;
-    --primary-dark: #DE4714;
+    /* Theme Primary Color: Vibrant Warm Terracotta Orange (Primary Action Buttons) */
+    --primary: #DA5F2F;
+    --primary-hover: #C44D29;
+    --primary-dark: #B33E1D;
     --primary-light: #FFF5F0;
-    --primary-border: #FED7AA;
+    --primary-border: #FCD8C9;
     --primary-subtle: #FFF8F5;
+
+    /* Theme Secondary Color: Deep Forest Green (Secondary Action & Brand Anchor) */
+    --secondary: #0B3B2C;
+    --secondary-hover: #07261C;
+    --secondary-dark: #051C15;
+    --secondary-light: #EBF7F2;
+    --secondary-border: #A8D5C2;
+    --secondary-subtle: #F2FAF6;
+
+    /* Semantic Forest Tokens */
+    --forest-950: #06261C;
+    --forest-900: #0B3B2C;
+    --forest-800: #0F4C39;
+    --forest-700: #135E46;
+    --forest-600: #187A5B;
+    --forest-500: #1F9872;
+    --forest-100: #E6F4EE;
+    --forest-50: #F2FAF6;
   }
 
   body {
     background-color: #F9FAFB;
     color: #111827;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: var(--font-sans), 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
 }

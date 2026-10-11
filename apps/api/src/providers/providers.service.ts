@@ -194,12 +194,21 @@ export class ProvidersService {
     }
 
     if (service && service !== 'All Services') {
+      const cleanService = service.replace(/^Roof\s+/i, '').trim();
+      const serviceVariants = [service, cleanService];
+      if (/replacement/i.test(service)) serviceVariants.push('Installation', 'Roof Installation');
+      if (/storm/i.test(service)) serviceVariants.push('Repair');
+      if (/shingle/i.test(service)) serviceVariants.push('Roof Installation', 'Installation');
+      if (/metal/i.test(service)) serviceVariants.push('Roof Installation', 'Flat Roof Systems');
+
       where.listings = {
         some: {
           subServices: {
             some: {
               subService: {
-                name: { equals: service, mode: 'insensitive' },
+                OR: serviceVariants.map((v) => ({
+                  name: { contains: v, mode: 'insensitive' as const },
+                })),
               },
             },
           },
