@@ -1,5 +1,5 @@
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -161,8 +161,6 @@ model ProviderProfile {
   borough       String?
   latitude      Decimal? @db.Decimal(10, 7)
   longitude     Decimal? @db.Decimal(10, 7)
-  // PostGIS column managed via raw SQL migration (Section 13)
-  // location      Unsupported("geography(Point, 4326)")?
   serviceRadius Int?     @default(25)
 
   // Credentials & Verification
@@ -228,8 +226,6 @@ model CustomerProfile {
   borough   String?
   latitude  Decimal? @db.Decimal(10, 7)
   longitude Decimal? @db.Decimal(10, 7)
-  // PostGIS column managed via raw SQL migration (Section 13)
-  // location             Unsupported("geography(Point, 4326)")?
 
   // Preferences
   preferredContactMethod ContactMethod @default(EMAIL)
@@ -281,8 +277,8 @@ model City {
   state          State           @relation(fields: [stateId], references: [id], onDelete: Cascade)
   name           String
   slug           String
-  boroughs       String[]        @default([])
-  zipCodes       String[]        @default([])
+  boroughs       Json?
+  zipCodes       Json?
   latitude       Decimal?        @db.Decimal(10, 7)
   longitude      Decimal?        @db.Decimal(10, 7)
   heroTitle      String?
@@ -548,7 +544,7 @@ model SavedProvider {
 }
 
 // ═══════════════════════════════════════════════════════
-// BLOG & CONTENT MANAGEMENT
+// BLOG SYSTEM
 // ═══════════════════════════════════════════════════════
 
 model BlogPost {
@@ -561,29 +557,26 @@ model BlogPost {
   coverImageAlt   String?
   authorName      String      @default("FindYourExperts Editorial")
   authorAvatar    String?
-  authorRole      String?     @default("Content Editor")
+  authorRole      String      @default("Content Editor")
   category        String      @default("General")
-  tags            String[]    @default([])
-  readingTimeMin  Int         @default(3)
+  tags            Json?
+  readingTimeMin  Int         @default(1)
   wordCount       Int         @default(0)
+  viewCount       Int         @default(0)
   status          PostStatus  @default(DRAFT)
   isFeatured      Boolean     @default(false)
-  viewCount       Int         @default(0)
   publishedAt     DateTime?
-
-  // SEO & Social Meta
   metaTitle       String?
   metaDescription String?     @db.Text
   canonicalUrl    String?
   ogImageUrl      String?
   focusKeyword    String?
-
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
   @@index([status, publishedAt(sort: Desc)])
-  @@index([category])
+  @@index([category, status])
+  @@index([isFeatured, status])
   @@index([slug])
   @@map("blog_posts")
 }
-

@@ -1,5 +1,5 @@
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -277,8 +277,8 @@ model City {
   state          State           @relation(fields: [stateId], references: [id], onDelete: Cascade)
   name           String
   slug           String
-  boroughs       String[]        @default([])
-  zipCodes       String[]        @default([])
+  boroughs       Json?
+  zipCodes       Json?
   latitude       Decimal?        @db.Decimal(10, 7)
   longitude      Decimal?        @db.Decimal(10, 7)
   heroTitle      String?
@@ -559,7 +559,7 @@ model BlogPost {
   authorAvatar    String?
   authorRole      String      @default("Content Editor")
   category        String      @default("General")
-  tags            String[]    @default([])
+  tags            Json?
   readingTimeMin  Int         @default(1)
   wordCount       Int         @default(0)
   viewCount       Int         @default(0)

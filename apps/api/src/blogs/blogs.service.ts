@@ -49,6 +49,7 @@ export class BlogsService {
 
     return {
       ...blog,
+      tags: Array.isArray(blog.tags) ? (blog.tags as string[]) : [],
       coverImageUrl: coverImageUrl || null,
       ogImageUrl: ogImageUrl || null,
       authorAvatar: authorAvatar || null,
@@ -145,23 +146,22 @@ export class BlogsService {
     if (category && category !== 'All') {
       where.category = {
         equals: category,
-        mode: 'insensitive',
       };
     }
 
     if (tag) {
       where.tags = {
-        has: tag,
+        array_contains: tag,
       };
     }
 
     if (search && search.trim()) {
       const term = search.trim();
       where.OR = [
-        { title: { contains: term, mode: 'insensitive' } },
-        { excerpt: { contains: term, mode: 'insensitive' } },
-        { content: { contains: term, mode: 'insensitive' } },
-        { category: { contains: term, mode: 'insensitive' } },
+        { title: { contains: term } },
+        { excerpt: { contains: term } },
+        { content: { contains: term } },
+        { category: { contains: term } },
       ];
     }
 
@@ -265,13 +265,14 @@ export class BlogsService {
       .catch((err) => this.logger.warn(`Failed to increment view count: ${err.message}`));
 
     // Fetch related articles (same category or shared tags, excluding current post)
+    const blogTags = Array.isArray(blog.tags) ? (blog.tags as string[]) : [];
     const rawRelatedPosts = await this.prisma.blogPost.findMany({
       where: {
         id: { not: blog.id },
         status: PostStatus.PUBLISHED,
         OR: [
           { category: blog.category },
-          ...(blog.tags.length > 0 ? [{ tags: { hasSome: blog.tags } }] : []),
+          ...(blogTags.length > 0 ? blogTags.map((t) => ({ tags: { array_contains: t } })) : []),
         ],
       },
       take: 3,
@@ -311,15 +312,15 @@ export class BlogsService {
     }
 
     if (category && category !== 'All') {
-      where.category = { equals: category, mode: 'insensitive' };
+      where.category = { equals: category };
     }
 
     if (search && search.trim()) {
       const term = search.trim();
       where.OR = [
-        { title: { contains: term, mode: 'insensitive' } },
-        { excerpt: { contains: term, mode: 'insensitive' } },
-        { category: { contains: term, mode: 'insensitive' } },
+        { title: { contains: term } },
+        { excerpt: { contains: term } },
+        { category: { contains: term } },
       ];
     }
 

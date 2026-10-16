@@ -183,14 +183,14 @@ export class ProvidersService {
 
     if (search) {
       where.OR = [
-        { businessName: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { borough: { contains: search, mode: 'insensitive' } },
+        { businessName: { contains: search } },
+        { description: { contains: search } },
+        { borough: { contains: search } },
       ];
     }
 
     if (borough && borough !== 'All') {
-      where.borough = { equals: borough, mode: 'insensitive' };
+      where.borough = { equals: borough };
     }
 
     if (service && service !== 'All Services') {
@@ -207,7 +207,7 @@ export class ProvidersService {
             some: {
               subService: {
                 OR: serviceVariants.map((v) => ({
-                  name: { contains: v, mode: 'insensitive' as const },
+                  name: { contains: v },
                 })),
               },
             },
@@ -224,7 +224,6 @@ export class ProvidersService {
     if ((query as any).boroughs && Array.isArray((query as any).boroughs)) {
       where.borough = {
         in: (query as any).boroughs,
-        mode: 'insensitive',
       };
     }
 
@@ -234,7 +233,7 @@ export class ProvidersService {
           subServices: {
             some: {
               subService: {
-                name: { in: (query as any).services, mode: 'insensitive' },
+                name: { in: (query as any).services },
               },
             },
           },
