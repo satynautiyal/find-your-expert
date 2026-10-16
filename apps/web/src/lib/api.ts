@@ -48,6 +48,8 @@ function buildApiUrl(
   const envUrl = process.env.NEXT_PUBLIC_API_URL;
   if (envUrl && (envUrl.startsWith('http://') || envUrl.startsWith('https://'))) {
     fullUrl = `${envUrl.replace(/\/+$/, '')}/${cleanEndpoint}`;
+  } else if (process.env.NODE_ENV === 'production') {
+    fullUrl = `https://api.prosvetted.com/api/${cleanEndpoint}`;
   } else if (typeof window !== 'undefined') {
     // 2. In browser: use same-origin /api rewrite
     fullUrl = `${window.location.origin}/api/${cleanEndpoint}`;

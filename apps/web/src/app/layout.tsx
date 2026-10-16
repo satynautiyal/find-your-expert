@@ -12,7 +12,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 
 export const metadata: Metadata = {
   // Resolves relative image URLs (e.g. /api/storage/file?key=...) into absolute URLs for OG/Twitter tags
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://homeprocompare.com'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://prosvetted.com'),
   title: 'HomeProCompare - Find the Best Home Service Contractors Near You',
   description:
     'Compare verified contractors, real customer reviews, project photos, pricing insights and credentials across the USA — all in one place.',
