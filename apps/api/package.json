@@ -5,6 +5,8 @@
   "scripts": {
     "build": "prisma generate && nest build",
     "scrape": "ts-node scripts/scrape-providers.ts",
+    "scrape:cabinets": "ts-node scripts/scrape-houzz-cabinets.ts",
+    "sync:reviews": "ts-node scripts/sync-reviews-worker.ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "dev": "nest start --watch",
     "start": "node dist/main",
