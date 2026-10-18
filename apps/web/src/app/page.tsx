@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -8,8 +8,10 @@ import {
   Footer,
   QuoteModal,
 } from '@/components/common';
+import { fetchCategories, CategoryItem, DEFAULT_CATEGORIES } from '@/lib/api';
 import { EButton } from '@/components/EComponents';
 import USStateMap from '@/components/USStateMap';
+import PopularServicesCarousel from '@/components/PopularServicesCarousel';
 import {
   Search,
   MapPin,
@@ -34,7 +36,11 @@ import {
   Award,
   Users2,
   TrendingUp,
+  Clock,
 } from 'lucide-react';
+import SafeImage from '@/components/common/SafeImage';
+import { fetchBlogs } from '@/lib/blogs-api';
+import type { BlogPost } from '@/types/blogs';
 
 export default function Home() {
   const router = useRouter();
@@ -49,8 +55,32 @@ export default function Home() {
   // FAQ accordion open index state
   const [openFaqIndices, setOpenFaqIndices] = useState<number[]>([]);
 
-  // Horizontal scroll ref for popular services
-  const servicesScrollRef = useRef<HTMLDivElement>(null);
+  // Horizontal scroll refs
+  const blogsScrollRef = useRef<HTMLDivElement>(null);
+
+  // Dynamic categories state loaded from backend API / database
+  const [categories, setCategories] = useState<CategoryItem[]>(DEFAULT_CATEGORIES);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchCategories()
+      .then((data) => {
+        if (isMounted && data && data.length > 0) {
+          setCategories(data);
+        }
+      })
+      .catch((err) => {
+        console.warn('Error loading dynamic categories:', err);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingCategories(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,77 +100,37 @@ export default function Home() {
     );
   };
 
-  const scrollServices = (direction: 'left' | 'right') => {
-    if (servicesScrollRef.current) {
-      const scrollAmount = direction === 'left' ? -280 : 280;
-      servicesScrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-    }
+
+  const scrollBlogs = (direction: 'left' | 'right') => {
+    if (!blogsScrollRef.current) return;
+    const container = blogsScrollRef.current;
+    const scrollDistance = Math.max(300, container.clientWidth * 0.75);
+    container.scrollBy({
+      left: direction === 'left' ? -scrollDistance : scrollDistance,
+      behavior: 'smooth',
+    });
   };
 
-  // Popular Services Data
-  const popularServices = [
-    {
-      name: 'Countertops',
-      image: 'https://images.unsplash.com/photo-1556909212-d5b604d0c90d?auto=format&fit=crop&w=300&q=80',
-      href: '/contractors?service=Countertops',
-    },
-    {
-      name: 'Kitchen Remodeling',
-      image: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=300&q=80',
-      href: '/contractors?service=Kitchen+Remodeling',
-    },
-    {
-      name: 'Bathroom Remodeling',
-      image: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=300&q=80',
-      href: '/contractors?service=Bathroom+Remodeling',
-    },
-    {
-      name: 'Roofing',
-      image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=300&q=80',
-      href: '/contractors?service=Roofing',
-    },
-    {
-      name: 'HVAC',
-      image: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=300&q=80',
-      href: '/contractors?service=HVAC',
-    },
-    {
-      name: 'Flooring',
-      image: 'https://images.unsplash.com/photo-1581858726788-75bc0f6a952d?auto=format&fit=crop&w=300&q=80',
-      href: '/contractors?service=Flooring',
-    },
-    {
-      name: 'Windows & Doors',
-      image: 'https://images.unsplash.com/photo-1509644851169-2acc08aa25b5?auto=format&fit=crop&w=300&q=80',
-      href: '/contractors?service=Windows+%26+Doors',
-    },
-    {
-      name: 'Painting',
-      image: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?auto=format&fit=crop&w=300&q=80',
-      href: '/contractors?service=Painting',
-    },
-  ];
-
-  // States Data
+  // States Data - New York is currently active, others are coming soon
   const stateList = [
-    'Texas',
-    'California',
-    'Florida',
-    'New York',
-    'Illinois',
-    'Pennsylvania',
-    'Ohio',
-    'Georgia',
-    'North Carolina',
-    'Michigan',
-    'Arizona',
-    'Tennessee',
+    { name: 'New York', isLive: true, pros: '24+ Active Pros' },
+    { name: 'California', isLive: false, pros: 'Coming Soon' },
+    { name: 'Texas', isLive: false, pros: 'Coming Soon' },
+    { name: 'Florida', isLive: false, pros: 'Coming Soon' },
+    { name: 'Illinois', isLive: false, pros: 'Coming Soon' },
+    { name: 'Pennsylvania', isLive: false, pros: 'Coming Soon' },
+    { name: 'Ohio', isLive: false, pros: 'Coming Soon' },
+    { name: 'Georgia', isLive: false, pros: 'Coming Soon' },
+    { name: 'North Carolina', isLive: false, pros: 'Coming Soon' },
+    { name: 'Michigan', isLive: false, pros: 'Coming Soon' },
+    { name: 'Arizona', isLive: false, pros: 'Coming Soon' },
+    { name: 'Tennessee', isLive: false, pros: 'Coming Soon' },
   ];
 
   // FAQs Data
   const faqs = [
     {
-      question: 'How does HomeProCompare rank contractors?',
+      question: 'How does Click Sailors rank contractors?',
       answer:
         'We evaluate contractors across verified license verifications, confirmed liability insurance, cross-platform review sentiment (Google, Yelp, Facebook), BBB standing, and demonstrated project history to produce our independent score.',
     },
@@ -160,9 +150,9 @@ export default function Home() {
         'Yes. You have full transparency to call listed direct phone numbers, request a free quote through our instant form, or visit contractor websites directly without any barriers.',
     },
     {
-      question: 'Is it free to use HomeProCompare?',
+      question: 'Is it free to use Click Sailors?',
       answer:
-        'Yes, HomeProCompare is 100% free for homeowners. You can search, browse rankings, compare companies, and request estimates with zero cost and no obligation.',
+        'Yes, Click Sailors is 100% free for homeowners. You can search, browse rankings, compare companies, and request estimates with zero cost and no obligation.',
     },
     {
       question: 'Do you work with contractors?',
@@ -171,39 +161,39 @@ export default function Home() {
     },
   ];
 
-  // Blog articles
-  const articles = [
-    {
-      title: 'Quartz vs Granite Countertops: Which is Right for Your Home?',
-      category: 'COUNTERTOPS',
-      tagColor: 'bg-orange-50 text-orange-600 border-orange-200',
-      excerpt:
-        'Compare durability, cost, maintenance and style to choose the best countertop for your kitchen.',
-      date: 'Sep 15, 2025',
-      image: 'https://images.unsplash.com/photo-1556909212-d5b604d0c90d?auto=format&fit=crop&w=600&q=80',
-      slug: 'quartz-vs-granite-countertops',
-    },
-    {
-      title: 'Bathroom Remodeling Costs in 2026: Complete Guide',
-      category: 'BATHROOM REMODELING',
-      tagColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      excerpt:
-        'Get the latest cost ranges, design ideas and tips to plan your bathroom remodel with confidence.',
-      date: 'Sep 11, 2025',
-      image: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=600&q=80',
-      slug: 'bathroom-remodeling-costs-2026',
-    },
-    {
-      title: 'How to Choose the Right Roofing Contractor',
-      category: 'ROOFING',
-      tagColor: 'bg-teal-50 text-teal-800 border-teal-200',
-      excerpt:
-        'Learn what to look for, questions to ask and red flags to avoid before hiring a roofing contractor.',
-      date: 'Sep 5, 2025',
-      image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80',
-      slug: 'how-to-choose-right-roofing-contractor',
-    },
-  ];
+  // Dynamic blogs state loaded from database / API (Strictly dynamic, no static data)
+  const [dynamicBlogs, setDynamicBlogs] = useState<BlogPost[]>([]);
+  const [loadingBlogs, setLoadingBlogs] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchBlogs({ limit: 6 })
+      .then((res) => {
+        if (isMounted && res && Array.isArray(res.blogs)) {
+          setDynamicBlogs(res.blogs);
+        }
+      })
+      .catch((err) => {
+        console.warn('Error loading dynamic blogs for landing page:', err);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingBlogs(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Helper for category badge styling
+  const getCategoryBadgeClass = (category?: string | null) => {
+    const cat = (category || '').toLowerCase();
+    if (cat.includes('bath')) return 'bg-emerald-50 text-emerald-800 border-emerald-200/80';
+    if (cat.includes('roof')) return 'bg-teal-50 text-teal-800 border-teal-200/80';
+    if (cat.includes('counter') || cat.includes('kitchen')) return 'bg-orange-50 text-orange-800 border-orange-200/80';
+    if (cat.includes('cabinet')) return 'bg-amber-50 text-amber-800 border-amber-200/80';
+    return 'bg-blue-50 text-blue-800 border-blue-200/80';
+  };
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] text-gray-900 flex flex-col font-sans selection:bg-[#0F3E35] selection:text-white">
@@ -293,7 +283,7 @@ export default function Home() {
 
                   {/* Caption */}
                   <p className="text-[11.5px] font-semibold text-gray-700 leading-tight mt-2.5">
-                    found trusted contractors on HomeProCompare
+                    found trusted contractors on Click Sailors
                   </p>
                 </div>
               </div>
@@ -343,17 +333,20 @@ export default function Home() {
               </EButton>
             </form>
 
-            {/* Popular Searches Pills - All 6 sit on one row on desktop */}
+            {/* Popular Searches Pills - dynamic categories */}
             <div className="mt-4 flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs max-w-3xl">
               <span className="text-[#111827] font-bold mr-1">Popular searches:</span>
-              {[
-                'Countertops',
-                'Kitchen Remodeling',
-                'Bathroom Remodeling',
-                'Roofing',
-                'HVAC',
-                'Flooring',
-              ].map((item) => (
+              {(categories.length > 0
+                ? categories.slice(0, 6).map((c) => c.name)
+                : [
+                    'Custom Cabinets',
+                    'Roofing',
+                    'Kitchen Remodeling',
+                    'Bathroom Remodeling',
+                    'Countertops',
+                    'HVAC',
+                  ]
+              ).map((item) => (
                 <EButton
                   key={item}
                   type="button"
@@ -395,7 +388,7 @@ export default function Home() {
                 <span className="font-black text-xs text-gray-900">18,500+</span>{' '}
                 <span className="text-xs text-gray-500">Homeowners</span>
                 <p className="text-[11px] text-gray-600 font-medium">
-                  found trusted contractors on HomeProCompare
+                  found trusted contractors on Click Sailors
                 </p>
               </div>
             </div>
@@ -483,7 +476,7 @@ export default function Home() {
         </section>
 
         {/* ========================================================= */}
-        {/* 4. ABOUT HOMEPROCOMPARE */}
+        {/* 4. ABOUT CLICK SAILORS */}
         {/* ========================================================= */}
         <section id="about" className="py-14 sm:py-20 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -491,7 +484,7 @@ export default function Home() {
               {/* Left Column: Text + CTA */}
               <div className="lg:col-span-6 max-w-xl">
                 <span className="text-[#0B3B2C] font-bold text-[11.5px] sm:text-[12px] tracking-[0.15em] uppercase block mb-3">
-                  ABOUT HOMEPROCOMPARE
+                  ABOUT CLICK SAILORS
                 </span>
                 <h2 className="text-3xl sm:text-4xl lg:text-[40px] xl:text-[43px] font-bold text-[#111827] tracking-[-0.028em] leading-[1.08]">
                   A Smarter Way to Find
@@ -499,7 +492,7 @@ export default function Home() {
                   Home Service Contractors
                 </h2>
                 <p className="mt-4 text-[14px] sm:text-[14.5px] text-[#4B5563] leading-[1.58] max-w-[470px]">
-                  HomeProCompare helps homeowners find and compare the best home service
+                  Click Sailors helps homeowners find and compare the best home service
                   contractors across the USA. We verify licenses, insurance, reviews and
                   project quality so you can make confident decisions. Our mission is to make
                   home improvement easier, safer and more transparent for everyone.
@@ -642,77 +635,10 @@ export default function Home() {
         {/* ========================================================= */}
         {/* 5. POPULAR HOME SERVICES */}
         {/* ========================================================= */}
-        <section className="py-14 sm:py-16 bg-[#F9FAFB] border-t border-gray-200/60">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Header */}
-            <div className="flex items-end justify-between mb-8">
-              <div>
-                <span className="text-[#0F3E35] font-extrabold text-[11px] uppercase tracking-wider block mb-1">
-                  POPULAR HOME SERVICES
-                </span>
-                <h2 className="text-2xl sm:text-3xl font-black text-gray-950 tracking-tight">
-                  Find Contractors by Project Type
-                </h2>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <Link
-                  href="/contractors"
-                  className="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-[#DA5F2F] hover:text-[#C44D29] hover:underline"
-                >
-                  <span>View all services</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-
-                <div className="flex items-center gap-1.5">
-                  <EButton
-                    type="button"
-                    variant="outline"
-                    size="iconRound"
-                    onClick={() => scrollServices('left')}
-                    aria-label="Previous services"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </EButton>
-                  <EButton
-                    type="button"
-                    variant="outline"
-                    size="iconRound"
-                    onClick={() => scrollServices('right')}
-                    aria-label="Next services"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </EButton>
-                </div>
-              </div>
-            </div>
-
-            {/* Circular Category items */}
-            <div
-              ref={servicesScrollRef}
-              className="flex items-start gap-6 sm:gap-8 overflow-x-auto pb-4 pt-2 no-scrollbar scroll-smooth"
-            >
-              {popularServices.map((service) => (
-                <Link
-                  key={service.name}
-                  href={service.href}
-                  className="flex flex-col items-center group shrink-0 w-24 sm:w-28 text-center"
-                >
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-white shadow-md group-hover:shadow-lg group-hover:scale-105 transition-all duration-200">
-                    <img
-                      src={service.image}
-                      alt={service.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <span className="font-bold text-xs text-gray-800 group-hover:text-[#0F3E35] transition-colors mt-3 leading-snug">
-                    {service.name}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
+        <PopularServicesCarousel
+          categories={categories}
+          loading={loadingCategories}
+        />
 
         {/* ========================================================= */}
         {/* 6. BROWSE BY STATE */}
@@ -728,35 +654,70 @@ export default function Home() {
                 <h2 className="text-2xl sm:text-3xl lg:text-[34px] xl:text-[36px] font-bold text-[#111827] tracking-[-0.025em] leading-[1.15]">
                   Find Top Contractors in Your State
                 </h2>
-                <p className="text-sm sm:text-[14.5px] text-[#4B5563] mt-2 mb-6 font-normal">
-                  Explore contractors by state to find trusted local professionals.
+                <p className="text-sm sm:text-[14.5px] text-[#4B5563] mt-2 mb-4 font-normal">
+                  Currently live and actively vetting top contractors across the <strong>New York</strong> metropolitan area. Nationwide coverage expanding soon!
                 </p>
 
-                {/* 4-column state button grid matching reference mockup */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-                  {stateList.map((state) => (
-                    <Link
-                      key={state}
-                      href={`/contractors?state=${encodeURIComponent(state)}`}
-                      className="flex items-center gap-2 px-3 py-2.5 sm:px-3.5 sm:py-2.5 bg-white border border-gray-100 rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.03)] hover:border-[#0B3B2C] hover:text-[#0B3B2C] hover:shadow-xs transition-all group"
-                    >
-                      <MapPin className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#0B3B2C] shrink-0" />
-                      <span className="text-[12.5px] sm:text-[13px] font-semibold text-[#111827] group-hover:text-[#0B3B2C] truncate">
-                        {state}
-                      </span>
-                    </Link>
-                  ))}
+                {/* Live Status Indicator Banner */}
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-900 text-xs font-semibold mb-6">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+                  </span>
+                  <span>Currently Live: <strong>New York</strong> (All 5 Boroughs)</span>
                 </div>
 
-                <div className="pt-6">
+                {/* 4-column state button grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                  {stateList.map((state) =>
+                    state.isLive ? (
+                      <Link
+                        key={state.name}
+                        href={`/contractors?state=${encodeURIComponent(state.name)}`}
+                        className="relative flex items-center justify-between gap-1.5 px-3 py-2.5 sm:px-3.5 sm:py-2.5 bg-gradient-to-r from-emerald-50/90 via-white to-white border-2 border-[#0B3B2C] rounded-xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all group ring-2 ring-emerald-500/10"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <MapPin className="w-3.5 h-3.5 text-[#0B3B2C] shrink-0" />
+                          <span className="text-[12.5px] sm:text-[13px] font-bold text-[#0B3B2C] truncate">
+                            {state.name}
+                          </span>
+                        </div>
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-[#0B3B2C] text-white tracking-wider uppercase shrink-0">
+                          LIVE
+                        </span>
+                      </Link>
+                    ) : (
+                      <div
+                        key={state.name}
+                        title={`${state.name} is coming soon! We are currently serving New York.`}
+                        className="flex items-center justify-between gap-1 px-3 py-2.5 sm:px-3.5 sm:py-2.5 bg-gray-50/70 border border-gray-200/70 rounded-xl text-gray-400 select-none transition-colors"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <MapPin className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                          <span className="text-[12.5px] sm:text-[13px] font-medium text-gray-500 truncate">
+                            {state.name}
+                          </span>
+                        </div>
+                        <span className="text-[9px] font-semibold text-amber-700 bg-amber-50/90 border border-amber-200/60 rounded px-1.5 py-0.5 tracking-tight shrink-0">
+                          Soon
+                        </span>
+                      </div>
+                    )
+                  )}
+                </div>
+
+                <div className="pt-6 flex flex-wrap items-center gap-3">
                   <EButton
-                    href="/contractors"
-                    variant="secondaryOutline"
+                    href="/contractors?state=New+York"
+                    variant="secondary"
                     size="lg"
                     iconRight={<ArrowRight className="w-4 h-4 stroke-[2]" />}
                   >
-                    View All States
+                    Explore New York Contractors
                   </EButton>
+                  <span className="text-xs text-gray-500 font-medium">
+                    (Vetted pros in NYC, Brooklyn, Queens & more)
+                  </span>
                 </div>
               </div>
 
@@ -962,6 +923,8 @@ export default function Home() {
                     type="button"
                     variant="outline"
                     size="iconRound"
+                    onClick={() => scrollBlogs('left')}
+                    className="hover:scale-105 active:scale-90 transition-all duration-200 hover:border-[#0F3E35] hover:text-[#0F3E35]"
                     aria-label="Previous articles"
                   >
                     <ChevronLeft className="w-4 h-4" />
@@ -970,6 +933,8 @@ export default function Home() {
                     type="button"
                     variant="outline"
                     size="iconRound"
+                    onClick={() => scrollBlogs('right')}
+                    className="hover:scale-105 active:scale-90 transition-all duration-200 hover:border-[#0F3E35] hover:text-[#0F3E35]"
                     aria-label="Next articles"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -978,50 +943,121 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 3 Blog Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
-              {articles.map((article) => (
-                <div
-                  key={article.title}
-                  className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between group"
+            {/* 100% Dynamic Database Blog Cards */}
+            {loadingBlogs ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="bg-white rounded-2xl border border-gray-200/80 p-5 space-y-4 animate-pulse"
+                  >
+                    <div className="aspect-[16/10] bg-gray-100 rounded-xl" />
+                    <div className="h-4 bg-gray-100 rounded w-1/4" />
+                    <div className="h-6 bg-gray-100 rounded w-4/5" />
+                    <div className="h-4 bg-gray-100 rounded w-full" />
+                  </div>
+                ))}
+              </div>
+            ) : dynamicBlogs.length === 0 ? (
+              <div className="bg-gray-50 rounded-2xl border border-dashed border-gray-300 p-12 text-center space-y-3">
+                <p className="text-base font-bold text-gray-800">No blog articles published yet</p>
+                <p className="text-xs text-gray-500 max-w-md mx-auto">
+                  Guides and home project advice will appear here automatically once created in the admin portal.
+                </p>
+                <Link
+                  href="/admin/blogs/new"
+                  className="inline-block text-xs font-bold text-[#DA5F2F] hover:text-[#C44D29] hover:underline pt-2"
                 >
-                  <div>
-                    <div className="relative aspect-[16/10] overflow-hidden">
-                      <img
-                        src={article.image}
-                        alt={article.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                    </div>
-
-                    <div className="p-5 space-y-2.5">
-                      <span
-                        className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${article.tagColor}`}
+                  Create your first post in Admin &rarr;
+                </Link>
+              </div>
+            ) : (
+              <div
+                ref={blogsScrollRef}
+                className={`grid gap-6 lg:gap-8 scroll-smooth overflow-x-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
+                  dynamicBlogs.length === 1
+                    ? 'grid-cols-1 max-w-xl mx-auto'
+                    : dynamicBlogs.length === 2
+                    ? 'grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto'
+                    : 'grid-cols-1 md:grid-cols-3'
+                }`}
+              >
+                {dynamicBlogs.map((article) => (
+                  <div
+                    key={article.id}
+                    className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col justify-between group"
+                  >
+                    <div>
+                      <Link
+                        href={`/blog/${article.slug}`}
+                        className="block relative aspect-[16/10] overflow-hidden bg-gray-100"
                       >
-                        {article.category}
-                      </span>
-                      <h3 className="font-extrabold text-sm sm:text-base text-gray-950 group-hover:text-[#0F3E35] transition-colors leading-snug line-clamp-2">
-                        <Link href="/blog">{article.title}</Link>
-                      </h3>
-                      <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">
-                        {article.excerpt}
-                      </p>
+                        <SafeImage
+                          src={article.coverImageUrl}
+                          alt={article.coverImageAlt || article.title}
+                          fallbackCategory={article.category}
+                          fallbackTitle={article.title}
+                          fallbackIcon="image"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        {article.category && (
+                          <span
+                            className={`absolute top-3 left-3 text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wider shadow-xs backdrop-blur-xs border ${getCategoryBadgeClass(
+                              article.category
+                            )}`}
+                          >
+                            {article.category}
+                          </span>
+                        )}
+                      </Link>
+
+                      <div className="p-5 space-y-2.5">
+                        <div className="flex items-center gap-2 text-[11px] text-gray-400 font-semibold">
+                          <span>
+                            {article.publishedAt
+                              ? new Date(article.publishedAt).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })
+                              : 'Recent'}
+                          </span>
+                          {article.readingTimeMin ? (
+                            <>
+                              <span>•</span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-gray-400" />
+                                {article.readingTimeMin} min read
+                              </span>
+                            </>
+                          ) : null}
+                        </div>
+
+                        <h3 className="font-extrabold text-base text-gray-950 group-hover:text-[#0B3B2C] transition-colors leading-snug line-clamp-2">
+                          <Link href={`/blog/${article.slug}`}>{article.title}</Link>
+                        </h3>
+                        {article.excerpt && (
+                          <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">
+                            {article.excerpt}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="px-5 pb-5 pt-2 flex items-center justify-between border-t border-gray-100 text-xs">
+                      <span className="text-gray-400 font-medium">Free Guide</span>
+                      <Link
+                        href={`/blog/${article.slug}`}
+                        className="font-bold text-[#DA5F2F] hover:text-[#C44D29] hover:underline flex items-center gap-1"
+                      >
+                        <span>Read Article</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
                     </div>
                   </div>
-
-                  <div className="px-5 pb-5 pt-2 flex items-center justify-between border-t border-gray-100 text-xs text-gray-400">
-                    <span>{article.date}</span>
-                    <Link
-                      href="/blog"
-                      className="font-bold text-[#DA5F2F] hover:text-[#C44D29] hover:underline flex items-center gap-1"
-                    >
-                      <span>Read Article</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
@@ -1066,26 +1102,44 @@ export default function Home() {
                     return (
                       <div
                         key={faq.question}
-                        className="bg-white rounded-xl border border-gray-200/80 hover:border-gray-300 transition-all shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
+                        className={`bg-white rounded-xl border transition-all duration-300 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden ${
+                          isOpen ? 'border-[#0B3B2C]/40 ring-1 ring-[#0B3B2C]/10 shadow-sm' : 'border-gray-200/80 hover:border-gray-300'
+                        }`}
                       >
                         <button
                           type="button"
                           onClick={() => toggleFaq(index)}
-                          className="w-full flex items-center justify-between gap-3 text-left px-4 py-3 sm:px-5 sm:py-3.5 cursor-pointer select-none"
+                          className="w-full flex items-center justify-between gap-3 text-left px-4 py-3.5 sm:px-5 sm:py-4 cursor-pointer select-none group"
+                          aria-expanded={isOpen}
                         >
-                          <span className="font-bold text-[13px] sm:text-[13.5px] text-[#111827] leading-snug tracking-tight">
+                          <span
+                            className={`font-bold text-[13px] sm:text-[13.5px] leading-snug tracking-tight transition-colors duration-200 ${
+                              isOpen ? 'text-[#0B3B2C]' : 'text-[#111827] group-hover:text-[#0B3B2C]'
+                            }`}
+                          >
                             {faq.question}
                           </span>
-                          <ChevronDown
-                            className={`w-3.5 h-3.5 text-[#111827] shrink-0 stroke-[2] transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#0B3B2C]' : ''
-                              }`}
-                          />
-                        </button>
-                        {isOpen && (
-                          <div className="px-4 pb-3.5 sm:px-5 sm:pb-4 text-[12.5px] text-[#5A6578] leading-relaxed border-t border-gray-100 pt-2 animate-in fade-in duration-150">
-                            {faq.answer}
+                          <div
+                            className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                              isOpen
+                                ? 'bg-[#0B3B2C]/10 text-[#0B3B2C] rotate-180'
+                                : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-800'
+                            }`}
+                          >
+                            <ChevronDown className="w-3.5 h-3.5 stroke-[2.2]" />
                           </div>
-                        )}
+                        </button>
+                        <div
+                          className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                            isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                          }`}
+                        >
+                          <div className="overflow-hidden">
+                            <div className="px-4 pb-4 sm:px-5 sm:pb-4.5 text-[12.5px] text-[#5A6578] leading-relaxed border-t border-gray-100/90 pt-3">
+                              {faq.answer}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -1099,26 +1153,44 @@ export default function Home() {
                     return (
                       <div
                         key={faq.question}
-                        className="bg-white rounded-xl border border-gray-200/80 hover:border-gray-300 transition-all shadow-[0_1px_3px_rgba(0,0,0,0.02)]"
+                        className={`bg-white rounded-xl border transition-all duration-300 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden ${
+                          isOpen ? 'border-[#0B3B2C]/40 ring-1 ring-[#0B3B2C]/10 shadow-sm' : 'border-gray-200/80 hover:border-gray-300'
+                        }`}
                       >
                         <button
                           type="button"
                           onClick={() => toggleFaq(index)}
-                          className="w-full flex items-center justify-between gap-3 text-left px-4 py-3 sm:px-5 sm:py-3.5 cursor-pointer select-none"
+                          className="w-full flex items-center justify-between gap-3 text-left px-4 py-3.5 sm:px-5 sm:py-4 cursor-pointer select-none group"
+                          aria-expanded={isOpen}
                         >
-                          <span className="font-bold text-[13px] sm:text-[13.5px] text-[#111827] leading-snug tracking-tight">
+                          <span
+                            className={`font-bold text-[13px] sm:text-[13.5px] leading-snug tracking-tight transition-colors duration-200 ${
+                              isOpen ? 'text-[#0B3B2C]' : 'text-[#111827] group-hover:text-[#0B3B2C]'
+                            }`}
+                          >
                             {faq.question}
                           </span>
-                          <ChevronDown
-                            className={`w-3.5 h-3.5 text-[#111827] shrink-0 stroke-[2] transition-transform duration-200 ${isOpen ? 'rotate-180 text-[#0B3B2C]' : ''
-                              }`}
-                          />
-                        </button>
-                        {isOpen && (
-                          <div className="px-4 pb-3.5 sm:px-5 sm:pb-4 text-[12.5px] text-[#5A6578] leading-relaxed border-t border-gray-100 pt-2 animate-in fade-in duration-150">
-                            {faq.answer}
+                          <div
+                            className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                              isOpen
+                                ? 'bg-[#0B3B2C]/10 text-[#0B3B2C] rotate-180'
+                                : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-800'
+                            }`}
+                          >
+                            <ChevronDown className="w-3.5 h-3.5 stroke-[2.2]" />
                           </div>
-                        )}
+                        </button>
+                        <div
+                          className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                            isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                          }`}
+                        >
+                          <div className="overflow-hidden">
+                            <div className="px-4 pb-4 sm:px-5 sm:pb-4.5 text-[12.5px] text-[#5A6578] leading-relaxed border-t border-gray-100/90 pt-3">
+                              {faq.answer}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
@@ -1131,7 +1203,7 @@ export default function Home() {
                 <div className="w-44 h-44 sm:w-48 sm:h-48 -mb-14 sm:-mb-16 lg:mr-3 relative z-0 flex items-center justify-center opacity-70">
                   <img
                     src="/faq-house.png"
-                    alt="HomePro FAQ illustration"
+                    alt="Click Sailors FAQ illustration"
                     className="w-full h-full object-contain pointer-events-none select-none"
                   />
                 </div>
@@ -1224,7 +1296,7 @@ export default function Home() {
                     FOR CONTRACTORS
                   </span>
                   <h2 className="text-2xl sm:text-[27px] lg:text-[28px] xl:text-[31px] font-bold text-[#111827] tracking-[-0.025em] leading-[1.15] mb-3">
-                    Grow Your Business with HomeProCompare
+                    Grow Your Business with Click Sailors
                   </h2>
                   <p className="text-[13px] sm:text-[13.5px] text-[#5A6578] leading-[1.55] max-w-[460px] mb-6">
                     Claim your free profile to showcase your services, display your work, and connect with homeowners looking for trusted professionals.

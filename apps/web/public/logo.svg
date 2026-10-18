@@ -1,0 +1,9 @@
+<svg viewBox="0 0 160 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Click Sailors Icon -->
+  <path d="M4 27L13 7C13.6 5.8 15.3 5.8 15.9 7L23 23" stroke="#EA580C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M17 23L24.1 7C24.7 5.8 26.4 5.8 27 7L36 27" stroke="#EA580C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Click Sailors Text -->
+  <text x="44" y="25" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="900" fill="#0F172A" letter-spacing="-0.5">Click</text>
+  <text x="92" y="25" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="600" fill="#0F172A" letter-spacing="-0.5">Sailors</text>
+</svg>

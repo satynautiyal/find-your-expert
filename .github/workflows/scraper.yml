@@ -1,0 +1,93 @@
+name: Run Scrapers & Sync Reviews
+
+on:
+  # 1. Manual trigger from GitHub Actions UI (Buttons & Inputs)
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Scraping task to run'
+        required: true
+        type: choice
+        default: 'sync-reviews'
+        options:
+          - 'sync-reviews'
+          - 'scrape-cabinets'
+          - 'scrape-roofers'
+      slug:
+        description: 'Provider slug (for sync-reviews, or "all")'
+        required: false
+        default: 'all'
+        type: string
+
+  # 2. Webhook trigger from external API (Hostinger / cURL)
+  repository_dispatch:
+    types: [sync-reviews, scrape-cabinets]
+
+  # 3. Scheduled run (Weekly on Sunday 04:00 UTC)
+  schedule:
+    - cron: '0 4 * * 0'
+
+jobs:
+  scrape-and-sync:
+    name: Execute Headless Chrome Scraper
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Verify Pre-installed Google Chrome
+        run: |
+          google-chrome --version || which google-chrome
+
+      - name: Install API Dependencies
+        working-directory: apps/api
+        run: |
+          pnpm install --frozen-lockfile=false
+
+      - name: Generate Prisma Client
+        working-directory: apps/api
+        run: |
+          pnpm exec prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Run Scraping Task
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome
+          NODE_ENV: production
+        run: |
+          TASK="${{ github.event.inputs.task || github.event.client_payload.task || 'sync-reviews' }}"
+          SLUG="${{ github.event.inputs.slug || github.event.client_payload.slug || 'all' }}"
+          
+          echo "=================================================="
+          echo "Running Task: $TASK with Slug: $SLUG"
+          echo "=================================================="
+
+          if [ "$TASK" = "sync-reviews" ]; then
+            if [ "$SLUG" = "all" ]; then
+              npx ts-node scripts/sync-reviews-worker.ts --all
+            else
+              npx ts-node scripts/sync-reviews-worker.ts --slug="$SLUG"
+            fi
+          elif [ "$TASK" = "scrape-cabinets" ]; then
+            npx ts-node scripts/scrape-houzz-cabinets.ts
+          elif [ "$TASK" = "scrape-roofers" ]; then
+            npx ts-node scripts/scrape-providers.ts
+          else
+            echo "Unknown task: $TASK"
+            exit 1
+          fi

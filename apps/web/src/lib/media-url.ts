@@ -9,20 +9,25 @@
 export function getMediaUrl(urlOrKey: string | null | undefined): string {
   if (!urlOrKey) return '';
 
-  const trimmed = urlOrKey.trim();
+  let trimmed = urlOrKey.trim();
   if (!trimmed) return '';
+
+  // If Houzz CDN thumbnail (_0-xxxx or _1-xxxx), automatically upgrade to sharp resolution
+  if (trimmed.includes('hzcdn.com') && /_[0-2]-/.test(trimmed)) {
+    trimmed = trimmed.replace(/_[0-2]-/, '_10-');
+  }
 
   // 1. Direct absolute URLs (e.g. presigned S3/R2 URL, Unsplash, Cloudinary)
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }
 
-  // 2. Relative API storage URLs or uploads
-  if (trimmed.startsWith('/api/storage/') || trimmed.startsWith('/uploads/')) {
+  // 2. Relative public URLs, API storage URLs, or uploads (e.g. /categories/..., /services/..., /api/...)
+  if (trimmed.startsWith('/')) {
     return trimmed;
   }
 
-  // 3. Raw object key (e.g. 'blog-covers/2026/10/photo.jpg')
+  // 3. Raw object key in Cloudflare R2 (e.g. 'blog-covers/2026/10/photo.jpg')
   const cleanKey = trimmed.replace(/^\/+/, '');
   return `/api/storage/file?key=${encodeURIComponent(cleanKey)}`;
 }

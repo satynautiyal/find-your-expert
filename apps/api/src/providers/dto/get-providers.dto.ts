@@ -16,6 +16,10 @@ export class GetProvidersQueryDto {
 
   @IsOptional()
   @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
   topPickCategory?: string;
 
   @IsOptional()

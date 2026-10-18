@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, Heart, Menu, X, Building2, MapPin, Sparkles, BookOpen } from 'lucide-react';
 import { EButton } from '@/components/EComponents';
+import BrandLogo from './BrandLogo';
 
 export interface HeaderProps {
   onOpenQuoteModal?: () => void;
@@ -45,17 +46,7 @@ export default function Header({ onOpenQuoteModal, savedCount = 0 }: HeaderProps
         <div className="flex items-center justify-between h-16">
           {/* Left: Brand Logo + Nav */}
           <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-2 group">
-              <div className="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center shadow-xs transition-transform group-hover:scale-105">
-                <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
-                  <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-                </svg>
-              </div>
-              <div className="flex items-center text-lg sm:text-xl font-black tracking-tight text-gray-950">
-                <span>HomePro</span>
-                <span className="text-primary">Compare</span>
-              </div>
-            </Link>
+            <BrandLogo variant="light" size="md" />
 
             {/* Desktop Navigation Links (Exact from screenshot) */}
             <nav className="hidden lg:flex items-center gap-6 text-xs font-semibold text-gray-700 h-16">
@@ -209,7 +200,7 @@ export default function Header({ onOpenQuoteModal, savedCount = 0 }: HeaderProps
                       className="block px-3 py-1.5 text-xs text-gray-700 hover:bg-primary-light hover:text-primary transition-colors"
                       onClick={() => setAboutDropdownOpen(false)}
                     >
-                      About HomeProCompare
+                      About Click Sailors
                     </a>
                     <a
                       href="/#contractors"

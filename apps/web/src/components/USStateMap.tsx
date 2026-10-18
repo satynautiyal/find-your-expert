@@ -10,13 +10,14 @@ interface StatePin {
   xPercent: number; // percentage from left
   yPercent: number; // percentage from top
   contractors: string;
+  isLive?: boolean;
 }
 
 const FEATURED_PINS: StatePin[] = [
-  { id: 'ca', name: 'California', code: 'CA', xPercent: 15.0, yPercent: 48.0, contractors: '24,500+' },
-  { id: 'tx', name: 'Texas', code: 'TX', xPercent: 41.5, yPercent: 71.0, contractors: '19,200+' },
-  { id: 'fl', name: 'Florida', code: 'FL', xPercent: 72.0, yPercent: 74.0, contractors: '15,400+' },
-  { id: 'ny', name: 'New York', code: 'NY', xPercent: 80.5, yPercent: 29.0, contractors: '16,800+' },
+  { id: 'ny', name: 'New York', code: 'NY', xPercent: 80.5, yPercent: 29.0, contractors: '24+ Active Pros', isLive: true },
+  { id: 'ca', name: 'California', code: 'CA', xPercent: 15.0, yPercent: 48.0, contractors: 'Coming Soon', isLive: false },
+  { id: 'tx', name: 'Texas', code: 'TX', xPercent: 41.5, yPercent: 71.0, contractors: 'Coming Soon', isLive: false },
+  { id: 'fl', name: 'Florida', code: 'FL', xPercent: 72.0, yPercent: 74.0, contractors: 'Coming Soon', isLive: false },
 ];
 
 export default function USStateMap() {
@@ -64,7 +65,7 @@ export default function USStateMap() {
           <path id="nh" d="m 862.6,93.6 -1.3,.1 -1,-1.1 -1.9,1.4 -.5,6.1 1.2,2.3 -1.1,3.5 2.1,2.8 -.4,1.7 .1,1.3 -1.1,2.1 -1.4,.4 -.6,1.3 -2.1,1 -.7,1.5 1.4,3.4 -.5,2.5 .5,1.5 -1,1.9 .4,1.9 -1.3,1.9 .2,2.2 -.7,1.1 .7,4.5 .7,1.5 -.5,2.6 .9,1.8 -.2,2.5 -.5,1.3 -.1,1.4 2.1,2.6 18.4,-3.8 1,-1.5 .3,-1.7 1.9,-.6 .5,-1.1 1.7,-1.1 1.3,.3 .8,-4.8 -2.3,-1.4 -.8,-2.2 -3.2,-2 -.6,-4 -11.9,-36.8 z" className="fill-[#DEEAE2] hover:fill-[#CFE2D6] transition-colors duration-200 cursor-pointer" />
           <path id="nj" d="m 842.5,195.4 -14.6,-4.9 -1.8,2.5 .1,2.2 -3,5.4 1.5,1.8 -.7,2 -1,1 .5,3.6 2.7,.9 1,2.8 2.1,1.1 4.2,3.2 -3.3,2.6 -1.6,2.3 -1.8,3 -1.6,.6 -1.4,1.7 -1,2.2 -.3,2.1 .8,.9 .4,2.3 1.2,.6 2.4,1.5 1.8,.8 1.6,.8 .1,1.1 .8,.1 1.1,-1.2 .8,.4 2.1,.2 -.2,2.9 .2,2.5 1.8,-.7 1.5,-3.9 1.6,-4.8 2.9,-2.8 .6,-3.5 -.6,-1.2 1.7,-2.9 v -1.2 l -.7,-1.1 1.2,-2.7 -.3,-3.6 -.6,-8.2 -1.2,-1.4 v 1.4 l .5,.6 h -1.1 l -.6,-.4 -1.3,-.2 -.9,.6 -1.2,-1.6 .7,-1.7 v -1 l 1.7,-.7 .8,-2.1 z" className="fill-[#DEEAE2] hover:fill-[#CFE2D6] transition-colors duration-200 cursor-pointer" />
           <path id="nm" d="m 357.5,332.9 h -.8 l -7.9,99.3 -31.8,-2.6 -34.4,-3.6 -.3,3 2,2.2 -30.8,-4.1 -1.4,10.2 -15.7,-2.2 17.4,-124.1 52.6,6.5 51.7,4.8 z" className="fill-[#DEEAE2] hover:fill-[#CFE2D6] transition-colors duration-200 cursor-pointer" />
-          <path id="ny" d="m 872.9,181.6 -1.3,.1 -.5,1 z m -30.6,22.7 .7,.6 1.3,-.3 1.1,.3 .9,-1.3 h 1.9 l 2.4,-.9 5.1,-2.1 -.5,-.5 -1.9,.8 -2,.9 .2,-.8 2.6,-1.1 .8,-1 1.2,.1 4.1,-2.3 v .7 l -4.2,3 4.5,-2.8 1.7,-2.2 1.5,-.1 4.5,-3.1 3.2,-3.1 3,-2.3 1,-1.2 -1.7,-.1 -1,1.2 -.2,.7 -.9,.7 -.8,-1.1 -1.7,1 -.1,.9 -.9,-.2 .5,-.9 -1.2,-.7 -.6,.9 .9,.3 .2,.5 -.3,.5 -1.4,2.6 h -1.9 l .9,-1.8 .9,-.6 .3,-1.7 1.4,-1.6 .9,-.8 1.5,-.7 -1.2,-.2 -.7,.9 h -.7 l -1.1,.8 -.2,1 -2.2,2.1 -.4,.9 -1.4,.9 -7.7,1.9 .2,.9 -.9,.7 -2,.3 -1,-.6 -.2,1.1 -1.1,-.4 .1,1 -1.2,-.1 -1.2,.5 -.2,1.1 h -1 l .2,1 h -.7 l .2,1 -1.8,.4 -1.5,2.3 z m -.8,-.4 -1.6,.4 v 1 l -.7,1.6 .6,.7 2.4,-2.3 -.1,-.9 z m -10.1,-95.2 -.6,1.9 1.4,.9 -.4,1.5 .5,3.2 2.2,2.3 -.4,2.2 .6,2 -.4,1 -.3,3.8 3.1,6.7 -.8,1.8 .9,2.2 .9,-1.6 1.9,1.5 3,14.2 -.5,2 1.1,1 -.5,15 .7,1 2.8,16.3 1.8,1.5 -3.5,3.4 1.7,2.2 -1.3,3.3 -1.5,1.7 -1.5,2.3 -.2,-.7 .4,-5.9 -14.6,-4.9 -1.6,-1.1 -1.9,.3 -3,-2.2 -3,-5.8 h -2 l -.4,-1.5 -1.7,-1.1 -70.5,13.9 -.8,-6 4.3,-3.9 .6,-1.7 3.9,-2.5 .6,-2.4 2.3,-2 .8,-1.1 -1.7,-3.3 -1.7,-.5 -1.8,-3 -.2,-3.2 7.6,-3.9 8.2,-1.6 h 4.4 l 3.2,1.6 .9,-.1 1.8,-1.6 3.4,-.7 h 3 l 2.6,-1.3 2.5,-2.6 2.4,-3.1 1.9,-.4 1.1,-.5 .4,-3.2 -1.4,-2.7 -1.2,-.7 2,-1.3 -.1,-1.8 h -1.5 l -2.3,-1.4 -.1,-3.1 6.2,-6.1 .7,-2.4 3.7,-6.3 5.9,-6.4 2.1,-1.7 2.5,.1 20.6,-5.2 z" className="fill-[#DEEAE2] hover:fill-[#CFE2D6] transition-colors duration-200 cursor-pointer" />
+          <path id="ny" d="m 872.9,181.6 -1.3,.1 -.5,1 z m -30.6,22.7 .7,.6 1.3,-.3 1.1,.3 .9,-1.3 h 1.9 l 2.4,-.9 5.1,-2.1 -.5,-.5 -1.9,.8 -2,.9 .2,-.8 2.6,-1.1 .8,-1 1.2,.1 4.1,-2.3 v .7 l -4.2,3 4.5,-2.8 1.7,-2.2 1.5,-.1 4.5,-3.1 3.2,-3.1 3,-2.3 1,-1.2 -1.7,-.1 -1,1.2 -.2,.7 -.9,.7 -.8,-1.1 -1.7,1 -.1,.9 -.9,-.2 .5,-.9 -1.2,-.7 -.6,.9 .9,.3 .2,.5 -.3,.5 -1.4,2.6 h -1.9 l .9,-1.8 .9,-.6 .3,-1.7 1.4,-1.6 .9,-.8 1.5,-.7 -1.2,-.2 -.7,.9 h -.7 l -1.1,.8 -.2,1 -2.2,2.1 -.4,.9 -1.4,.9 -7.7,1.9 .2,.9 -.9,.7 -2,.3 -1,-.6 -.2,1.1 -1.1,-.4 .1,1 -1.2,-.1 -1.2,.5 -.2,1.1 h -1 l .2,1 h -.7 l .2,1 -1.8,.4 -1.5,2.3 z m -.8,-.4 -1.6,.4 v 1 l -.7,1.6 .6,.7 2.4,-2.3 -.1,-.9 z m -10.1,-95.2 -.6,1.9 1.4,.9 -.4,1.5 .5,3.2 2.2,2.3 -.4,2.2 .6,2 -.4,1 -.3,3.8 3.1,6.7 -.8,1.8 .9,2.2 .9,-1.6 1.9,1.5 3,14.2 -.5,2 1.1,1 -.5,15 .7,1 2.8,16.3 1.8,1.5 -3.5,3.4 1.7,2.2 -1.3,3.3 -1.5,1.7 -1.5,2.3 -.2,-.7 .4,-5.9 -14.6,-4.9 -1.6,-1.1 -1.9,.3 -3,-2.2 -3,-5.8 h -2 l -.4,-1.5 -1.7,-1.1 -70.5,13.9 -.8,-6 4.3,-3.9 .6,-1.7 3.9,-2.5 .6,-2.4 2.3,-2 .8,-1.1 -1.7,-3.3 -1.7,-.5 -1.8,-3 -.2,-3.2 7.6,-3.9 8.2,-1.6 h 4.4 l 3.2,1.6 .9,-.1 1.8,-1.6 3.4,-.7 h 3 l 2.6,-1.3 2.5,-2.6 2.4,-3.1 1.9,-.4 1.1,-.5 .4,-3.2 -1.4,-2.7 -1.2,-.7 2,-1.3 -.1,-1.8 h -1.5 l -2.3,-1.4 -.1,-3.1 6.2,-6.1 .7,-2.4 3.7,-6.3 5.9,-6.4 2.1,-1.7 2.5,.1 20.6,-5.2 z" className="fill-[#0B3B2C] hover:fill-[#07261C] transition-colors duration-200 cursor-pointer drop-shadow-sm" />
           <path id="nc" d="m 829,300.1 -29.1,6.1 -39.4,7.3 -29.4,3.5 v 5.2 l -1.5,-.1 -1.4,1.2 -2.4,5.2 -2.6,-1.1 -3.5,2.5 -.7,2.1 -1.5,1.2 -.8,-.8 -.1,-1.5 -.8,-.2 -4,3.3 -.6,3.4 -4.7,2.4 -.5,1.2 -3.2,2.6 -3.6,.5 -4.6,3 -.8,4.1 -1.3,.9 -1.5,-.1 -1.4,1.3 -.1,4.9 21.4,-3 4.4,-1.9 1.3,-.1 7.3,-4.3 23.2,-2.2 .4,.5 -.2,1.4 .7,.3 1.2,-1.5 3.3,3 .1,2.6 19.7,-2.8 24.5,17.1 4,-2.2 3,-.7 h 1.7 l 1.1,1.1 .8,-2 .6,-5 1.7,-3.9 5.4,-6.1 4.1,-3.5 5.4,-2.3 2.5,-.4 1.3,.4 .7,1.1 3.3,-6.6 3.3,-5.3 -.7,-.3 -4.4,6.8 -.5,-.8 2,-2.2 -.4,-1.5 -2,-.5 1,1.3 -1.2,.1 -1.2,-1.8 -1.2,2 -1.6,.2 1,-2.7 .7,-1.7 -.2,-2.9 -2.2,-.1 .9,-.9 1.1,.3 2.7,.1 .8,-.5 h 2.3 l 2,-1.9 .2,-3.2 1.3,-1.4 1.2,-.2 1.3,-1 -.5,-3.7 -2.2,-3.8 -2.7,-.2 -.9,1.6 -.5,-1 -2.7,.2 -1.2,.4 -1.9,1.2 -.3,-.4 h -.9 l -1.8,1.2 -2.6,.5 v -1.3 l .8,-1 1,.7 h 1 l 1.7,-2.1 3.7,-1.7 2,-2.2 h 2.4 l .8,1.3 1.7,.8 -.5,-1.5 -.3,-1.6 -2.8,-3.1 -.3,-1.4 -.4,1 -.9,-1.3 z m 7,31 2.7,-2.5 4.6,-3.3 v -3.7 l -.4,-3.1 -1.7,-4.2 1.5,1.4 1,3.2 .4,7.6 -1.7,.4 -3.1,2.4 -3.2,3.2 z m 1.9,-19.3 -.9,-.2 v 1 l 2.5,2.2 -.2,-1.4 z m 2.9,2.1 -1.4,-2.8 -2.2,-3.4 -2.4,-3 -2.2,-4.3 -.8,-.7 2.2,4.3 .3,1.3 3.4,5.5 1.8,2.1 z" className="fill-[#DEEAE2] hover:fill-[#CFE2D6] transition-colors duration-200 cursor-pointer" />
           <path id="nd" d="m 464.7,68.6 -1.1,2.8 .8,1.4 -.3,5.1 -.5,1.1 2.7,9.1 1.3,2.5 .7,14 1,2.7 -.4,5.8 2.9,7.4 .3,5.8 -.1,2.1 -29.5,-.4 -46,-2.1 -39.2,-2.9 5.2,-66.7 44.5,3.4 55.3,1.6 z" className="fill-[#DEEAE2] hover:fill-[#CFE2D6] transition-colors duration-200 cursor-pointer" />
           <path id="oh" d="m 685.7,208.8 1.9,-.4 3,1.3 2.1,.6 .7,.9 h 1 l 1,-1.5 1.3,.8 h 1.5 l -.1,1 -3.1,.5 -2,1.1 1.9,.8 1.6,-1.5 2.4,-.4 2.2,1.5 1.5,-.1 2.5,-1.7 3.6,-2.1 5.2,-.3 4.9,-5.9 3.8,-3.1 9.3,-5.1 4.9,29.9 -2.2,1.2 1.4,2.1 -.1,2.2 .6,2 -1.1,3.4 -.1,5.4 -1,3.6 .5,1.1 -.4,2.2 -1.1,.5 -2,3.3 -1.8,2 h -.6 l -1.8,1.7 -1.3,-1.2 -1.5,1.8 -.3,1.2 h -1.3 l -1.3,2.2 .1,2.1 -1,.5 1.4,1.1 v 1.9 l -1,.2 -.7,.8 -1,.5 -.6,-2.1 -1.6,-.5 -1,2.3 -.3,2.2 -1.1,1.3 1.3,3.6 -1.5,.8 -.4,3.5 h -1.5 l -3.2,1.4 -1.2,-2.1 -3.5,-1.4 -.8,-2.9 -.5,-.8 -3.4,1.8 -.6,1.7 h -.9 l -1.3,.7 -1.2,-.8 -3,-.8 -1.9,.8 v 1 l -2.2,-.2 -1.9,-2.1 -2.3,.2 -4.1,-.7 v -1 l -2.2,-3.4 -2.9,-1.2 -1.9,.8 -2.2,-.1 -1.3,-.5 -6.6,-57.2 21.4,-3.5 z" className="fill-[#DEEAE2] hover:fill-[#CFE2D6] transition-colors duration-200 cursor-pointer" />
@@ -199,14 +200,21 @@ export default function USStateMap() {
       {FEATURED_PINS.map((pin) => (
         <Link
           key={pin.id}
-          href={`/contractors?state=${encodeURIComponent(pin.name)}`}
+          href={pin.isLive ? `/contractors?state=${encodeURIComponent(pin.name)}` : '#'}
+          onClick={(e) => {
+            if (!pin.isLive) {
+              e.preventDefault();
+            }
+          }}
           onMouseEnter={() => setHoveredState(pin)}
           onMouseLeave={() => setHoveredState(null)}
           style={{
             left: `${pin.xPercent}%`,
             top: `${pin.yPercent}%`,
           }}
-          className="absolute -translate-x-1/2 -translate-y-[85%] group cursor-pointer z-10 flex flex-col items-center"
+          className={`absolute -translate-x-1/2 -translate-y-[85%] group z-10 flex flex-col items-center ${
+            pin.isLive ? 'cursor-pointer z-20' : 'cursor-default opacity-80 hover:opacity-100'
+          }`}
         >
           {/* Tooltip Card */}
           <div
@@ -217,17 +225,36 @@ export default function USStateMap() {
             }`}
           >
             <span>{pin.name}</span>
-            <span className="text-emerald-400 ml-1.5 font-bold">({pin.contractors})</span>
+            {pin.isLive ? (
+              <span className="text-emerald-400 ml-1.5 font-bold">({pin.contractors})</span>
+            ) : (
+              <span className="text-amber-400 ml-1.5 font-semibold">(Coming Soon)</span>
+            )}
             <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
           </div>
 
-          {/* White Code Badge above pin */}
-          <div className="bg-white border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.12)] rounded-md px-2 py-0.5 text-[11px] sm:text-xs font-bold text-[#111827] tracking-tight group-hover:scale-110 transition-transform">
+          {/* Code Badge above pin */}
+          <div
+            className={`border shadow-[0_2px_8px_rgba(0,0,0,0.12)] rounded-md px-2 py-0.5 text-[11px] sm:text-xs font-bold tracking-tight transition-transform flex items-center gap-1 ${
+              pin.isLive
+                ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] scale-110 shadow-emerald-900/25 ring-2 ring-emerald-500/20'
+                : 'bg-white text-gray-500 border-gray-200'
+            }`}
+          >
             {pin.code}
+            {pin.isLive && (
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400"></span>
+              </span>
+            )}
           </div>
 
-          {/* Deep Forest Green MapPin teardrop with center white dot */}
+          {/* Teardrop Pin */}
           <div className="relative mt-0.5 flex items-center justify-center group-hover:scale-110 transition-transform">
+            {pin.isLive && (
+              <div className="absolute -inset-1 rounded-full bg-[#DA5F2F]/20 animate-pulse pointer-events-none" />
+            )}
             <svg
               className="w-5 h-6 sm:w-[22px] sm:h-[26px] drop-shadow-[0_2px_4px_rgba(0,0,0,0.18)]"
               viewBox="0 0 24 30"
@@ -235,7 +262,7 @@ export default function USStateMap() {
             >
               <path
                 d="M12 0C5.37 0 0 5.37 0 12c0 8 12 18 12 18s12-10 12-18c0-6.63-5.37-12-12-12z"
-                fill="#0B3B2C"
+                fill={pin.isLive ? '#DA5F2F' : '#94A3B8'}
               />
               <circle cx="12" cy="11" r="3.5" fill="#FFFFFF" />
             </svg>

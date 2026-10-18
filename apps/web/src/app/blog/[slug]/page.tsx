@@ -117,8 +117,8 @@ export default async function BlogDetailPage({ params }: PageProps) {
     datePublished: blog.publishedAt
       ? new Date(blog.publishedAt).toISOString()
       : blog.createdAt
-      ? new Date(blog.createdAt).toISOString()
-      : new Date().toISOString(),
+        ? new Date(blog.createdAt).toISOString()
+        : new Date().toISOString(),
     dateModified: blog.updatedAt ? new Date(blog.updatedAt).toISOString() : undefined,
     author: {
       '@type': 'Person',
@@ -312,7 +312,7 @@ export default async function BlogDetailPage({ params }: PageProps) {
         </div>
 
         {/* Lead Gen Call to Action Box */}
-        <div className="bg-gradient-to-br from-gray-950 via-slate-900 to-gray-900 rounded-2xl p-8 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-6 mb-16">
+        <div className="bg-secondary rounded-2xl p-8 text-white shadow-xl flex flex-col sm:flex-row items-center justify-between gap-6 mb-16">
           <div className="space-y-2 text-center sm:text-left">
             <span className="text-primary-light text-xs font-bold uppercase tracking-wider">
               Looking for a top-rated roofer?

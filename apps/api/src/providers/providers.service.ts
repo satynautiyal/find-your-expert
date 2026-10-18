@@ -175,7 +175,7 @@ export class ProvidersService {
    * Search, filter, sort and paginate providers from PostgreSQL
    */
   async findAll(query: GetProvidersQueryDto) {
-    const { search, borough, service, sortBy, page = 1, limit = 12 } = query;
+    const { search, borough, service, category, sortBy, page = 1, limit = 12 } = query;
 
     const where: Prisma.ProviderProfileWhereInput = {
       isActive: true,
@@ -193,7 +193,23 @@ export class ProvidersService {
       where.borough = { equals: borough };
     }
 
-    if (service && service !== 'All Services') {
+    // Filter by high-level category if specified
+    if (category && category !== 'All' && category !== 'All Services') {
+      const cleanCat = category.toLowerCase().trim();
+      where.listings = {
+        some: {
+          category: {
+            OR: [
+              { name: { contains: category } },
+              { slug: { contains: cleanCat.replace(/\s+/g, '-') } },
+            ],
+          },
+        },
+      };
+    }
+
+    // Filter by specific sub-service or trade name
+    if (service && service !== 'All Services' && service !== 'All') {
       const cleanService = service.replace(/^Roof\s+/i, '').trim();
       const serviceVariants = [service, cleanService];
       if (/replacement/i.test(service)) serviceVariants.push('Installation', 'Roof Installation');
@@ -203,15 +219,29 @@ export class ProvidersService {
 
       where.listings = {
         some: {
-          subServices: {
-            some: {
-              subService: {
-                OR: serviceVariants.map((v) => ({
-                  name: { contains: v },
-                })),
+          OR: [
+            // Check if matches category name (e.g. 'Roofing' or 'Custom Cabinets')
+            {
+              category: {
+                OR: [
+                  { name: { contains: service } },
+                  { slug: { contains: service.toLowerCase().replace(/\s+/g, '-') } },
+                ],
               },
             },
-          },
+            // Or matches subService name
+            {
+              subServices: {
+                some: {
+                  subService: {
+                    OR: serviceVariants.map((v) => ({
+                      name: { contains: v },
+                    })),
+                  },
+                },
+              },
+            },
+          ],
         },
       };
     }
@@ -294,7 +324,7 @@ export class ProvidersService {
    * Retrieve dynamic filter options and live database statistics
    */
   async getFiltersAndStats() {
-    const [boroughRecords, subServices, totalProviders, aggregates] =
+    const [boroughRecords, subServices, totalProviders, aggregates, categories] =
       await Promise.all([
         this.prisma.providerProfile.findMany({
           where: { isActive: true, borough: { not: null } },
@@ -311,6 +341,7 @@ export class ProvidersService {
           _avg: { compositeRating: true },
           _sum: { totalReviews: true },
         }),
+        this.getCategories(),
       ]);
 
     const boroughs = [
@@ -333,12 +364,45 @@ export class ProvidersService {
     return {
       boroughs,
       services,
+      categories,
       stats: {
         totalProviders,
         avgRating,
         totalReviews,
       },
     };
+  }
+
+  /**
+   * Retrieve all service categories with active provider count and sub-services
+   */
+  async getCategories() {
+    const rawCategories = await this.prisma.serviceCategory.findMany({
+      include: {
+        subServices: {
+          select: { id: true, name: true, slug: true, isPopular: true },
+          orderBy: { name: 'asc' },
+        },
+        listings: {
+          where: { status: 'ACTIVE' },
+          select: { providerProfileId: true },
+          distinct: ['providerProfileId'],
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    return rawCategories.map((cat) => ({
+      id: cat.id,
+      name: cat.name,
+      slug: cat.slug,
+      description: cat.description,
+      icon: cat.icon,
+      metaTitle: cat.metaTitle,
+      metaDescription: cat.metaDescription,
+      providerCount: cat.listings.length,
+      subServices: cat.subServices,
+    }));
   }
 
   /**

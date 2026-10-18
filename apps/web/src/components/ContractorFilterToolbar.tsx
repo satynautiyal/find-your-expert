@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   MapPin,
   X,
+  Sparkles,
 } from 'lucide-react';
 
 export interface ContractorFilterToolbarProps {
@@ -20,8 +21,8 @@ export interface ContractorFilterToolbarProps {
   selectedService: string;
   onSelectService: (service: string) => void;
   dynamicServices?: string[];
-  roofType: string;
-  onRoofTypeChange: (type: string) => void;
+  projectType: string;
+  onProjectTypeChange: (type: string) => void;
   minRating: number;
   onMinRatingChange: (rating: number) => void;
   minExperience: number;
@@ -42,8 +43,8 @@ export default function ContractorFilterToolbar({
   selectedService,
   onSelectService,
   dynamicServices,
-  roofType,
-  onRoofTypeChange,
+  projectType,
+  onProjectTypeChange,
   minRating,
   onMinRatingChange,
   minExperience,
@@ -55,16 +56,51 @@ export default function ContractorFilterToolbar({
   onResetFilters,
   hasActiveFilters,
 }: ContractorFilterToolbarProps) {
+  const isCabinets = currentService.toLowerCase().includes('cabinet') ||
+    currentService.toLowerCase().includes('shelv') ||
+    currentService.toLowerCase().includes('vanit') ||
+    currentService.toLowerCase().includes('closet');
+
+  // Dynamic Service Dropdown Options
   const serviceOptions = dynamicServices && dynamicServices.length > 0
-    ? ['All Roofing Services', ...dynamicServices.filter(s => s !== 'All Services')]
+    ? ['All Services', ...dynamicServices.filter(s => s !== 'All Services' && s !== 'All')]
+    : isCabinets
+    ? [
+        'All Services',
+        'Custom Cabinets',
+        'Kitchen Cabinetry',
+        'Built-In Shelving',
+        'Bathroom Vanities',
+        'Custom Closets',
+        'Architectural Millwork',
+      ]
     : [
-        'All Roofing Services',
-        'Roof Replacement',
-        'Roof Repair',
-        'Roof Inspection',
-        'Storm Damage',
-        'Shingle Roofing',
-        'Metal Roofing',
+        'All Services',
+        'Roof Installation',
+        'Repair',
+        'Flat Roof Systems',
+        'Waterproofing',
+        'Gutter Installation',
+        'Inspection',
+      ];
+
+  // Dynamic Project Type Options based on trade
+  const projectTypeOptions = isCabinets
+    ? [
+        { label: 'All Cabinet Types', value: 'All' },
+        { label: 'Kitchen Cabinets', value: 'Kitchen' },
+        { label: 'Built-In Shelving', value: 'Shelving' },
+        { label: 'Bathroom Vanities', value: 'Vanities' },
+        { label: 'Custom Closets', value: 'Closet' },
+        { label: 'Architectural Millwork', value: 'Millwork' },
+      ]
+    : [
+        { label: 'All Roof Types', value: 'All' },
+        { label: 'Flat Roof Systems', value: 'Flat' },
+        { label: 'Asphalt Shingle', value: 'Shingle' },
+        { label: 'Waterproofing', value: 'Waterproof' },
+        { label: 'Metal Roofing', value: 'Metal' },
+        { label: 'Gutter Systems', value: 'Gutter' },
       ];
 
   return (
@@ -73,10 +109,10 @@ export default function ContractorFilterToolbar({
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h2 className="text-2xl sm:text-[26px] md:text-[28px] font-bold text-[#111827] tracking-tight leading-tight">
-            {currentService} Contractors in {currentLocation}
+            {currentService} in {currentLocation}
           </h2>
           <p className="mt-1 text-xs sm:text-[13px] text-[#5A6578] font-normal">
-            Compare local {currentService.toLowerCase()} professionals by reputation, experience, services, credentials and customer feedback.
+            Compare licensed and vetted {currentService.toLowerCase()} professionals in New York by reputation, verified credentials, portfolio, and verified reviews.
           </p>
         </div>
 
@@ -88,10 +124,9 @@ export default function ContractorFilterToolbar({
               value={sortBy}
               onChange={(e) => onSortByChange(e.target.value as any)}
               aria-label="Sort contractors"
-              className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 pr-7 text-xs font-semibold text-[#111827] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#DA5F2F]/20 focus:border-[#DA5F2F]"
+              className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg px-3 py-1.5 pr-7 text-xs font-semibold text-[#111827] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
             >
-              <option value="rating">Recommended</option>
-              <option value="rating">Top Rated</option>
+              <option value="rating">Top Rated &amp; Recommended</option>
               <option value="reviews">Most Reviews</option>
               <option value="experience">Years in Business</option>
             </select>
@@ -100,18 +135,18 @@ export default function ContractorFilterToolbar({
         </div>
       </div>
 
-      {/* 6 Filter Dropdown Pills Row */}
+      {/* Filter Dropdown Pills Row */}
       <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 pt-1">
         {/* Filter 1: Services */}
         <div className="relative">
           <select
-            value={selectedService === 'All' || selectedService === 'All Services' ? 'All Roofing Services' : selectedService}
+            value={selectedService === 'All' ? 'All Services' : selectedService}
             onChange={(e) => {
               const val = e.target.value;
-              onSelectService(val === 'All Roofing Services' ? 'All Services' : val);
+              onSelectService(val);
             }}
-            aria-label="Filter by roofing service"
-            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#DA5F2F]/20 focus:border-[#DA5F2F]"
+            aria-label="Filter by service"
+            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
           >
             {serviceOptions.map((s) => (
               <option key={s} value={s}>
@@ -123,21 +158,25 @@ export default function ContractorFilterToolbar({
           <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
-        {/* Filter 2: Roof Types */}
+        {/* Filter 2: Project / Material Type (Context-Aware) */}
         <div className="relative">
           <select
-            value={roofType}
-            onChange={(e) => onRoofTypeChange(e.target.value)}
-            aria-label="Filter by roof type"
-            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#DA5F2F]/20 focus:border-[#DA5F2F]"
+            value={projectType}
+            onChange={(e) => onProjectTypeChange(e.target.value)}
+            aria-label="Filter by project type"
+            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
           >
-            <option value="All">All Roof Types</option>
-            <option value="Asphalt Shingle">Asphalt Shingles</option>
-            <option value="Metal">Metal Roofing</option>
-            <option value="Flat">Flat Roof Systems</option>
-            <option value="Tile">Slate &amp; Tile</option>
+            {projectTypeOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
           </select>
-          <Home className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          {isCabinets ? (
+            <Sparkles className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          ) : (
+            <Home className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          )}
           <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
@@ -147,12 +186,12 @@ export default function ContractorFilterToolbar({
             value={minRating}
             onChange={(e) => onMinRatingChange(Number(e.target.value))}
             aria-label="Filter by rating"
-            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#DA5F2F]/20 focus:border-[#DA5F2F]"
+            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
           >
             <option value={0}>Any Rating</option>
-            <option value={4.0}>4.0+ Rating</option>
-            <option value={4.5}>4.5+ Rating</option>
-            <option value={4.8}>4.8+ Rating</option>
+            <option value={4.0}>4.0+ Stars</option>
+            <option value={4.5}>4.5+ Stars</option>
+            <option value={4.8}>4.8+ Stars</option>
           </select>
           <Star className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -164,45 +203,45 @@ export default function ContractorFilterToolbar({
             value={minExperience}
             onChange={(e) => onMinExperienceChange(Number(e.target.value))}
             aria-label="Filter by experience"
-            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#DA5F2F]/20 focus:border-[#DA5F2F]"
+            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
           >
-            <option value={0}>Any Years</option>
-            <option value={5}>5+ Years</option>
-            <option value={10}>10+ Years</option>
-            <option value={15}>15+ Years</option>
-            <option value={20}>20+ Years</option>
+            <option value={0}>Any Experience</option>
+            <option value={5}>5+ Years in Business</option>
+            <option value={10}>10+ Years in Business</option>
+            <option value={15}>15+ Years in Business</option>
+            <option value={20}>20+ Years in Business</option>
           </select>
           <Award className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
-        {/* Filter 5: Verified */}
+        {/* Filter 5: Verified Status */}
         <div className="relative">
           <select
             value={verifiedOnly ? 'true' : 'false'}
             onChange={(e) => onVerifiedOnlyChange(e.target.value === 'true')}
             aria-label="Filter by verification status"
-            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#DA5F2F]/20 focus:border-[#DA5F2F]"
+            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
           >
             <option value="false">All Contractors</option>
-            <option value="true">Verified Only</option>
+            <option value="true">100% Verified Only</option>
           </select>
           <ShieldCheck className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
-        {/* Filter 6: Distance */}
+        {/* Filter 6: Distance / NYC Coverage */}
         <div className="relative">
           <select
             value={distance}
             onChange={(e) => onDistanceChange(e.target.value)}
-            aria-label="Filter by distance"
-            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#DA5F2F]/20 focus:border-[#DA5F2F]"
+            aria-label="Filter by coverage distance"
+            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
           >
-            <option value="All Areas">All Areas</option>
+            <option value="All Areas">All 5 NYC Boroughs</option>
+            <option value="Within 5 miles">Within 5 miles</option>
             <option value="Within 10 miles">Within 10 miles</option>
             <option value="Within 25 miles">Within 25 miles</option>
-            <option value="Within 50 miles">Within 50 miles</option>
           </select>
           <MapPin className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />

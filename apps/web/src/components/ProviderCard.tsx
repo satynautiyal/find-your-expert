@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
 import { EButton } from '@/components/EComponents';
+import SafeImage from '@/components/common/SafeImage';
 
 export interface ProviderCardProps {
   provider: RooferProvider;
@@ -33,6 +34,17 @@ const HOUSE_PROJECT_PHOTOS = [
   '/services/metal-roofing.jpg',
 ];
 
+const CABINET_PROJECT_PHOTOS = [
+  '/categories/custom-cabinets.jpg',
+  'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80',
+  'https://images.unsplash.com/photo-1594026112284-02bb6f3352fe?auto=format&fit=crop&w=800&q=80',
+  'https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=800&q=80',
+  'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=800&q=80',
+  'https://images.unsplash.com/photo-1556909212-d5b604d0c90d?auto=format&fit=crop&w=800&q=80',
+  'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80',
+  'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80',
+];
+
 export default function ProviderCard({
   provider,
   rank,
@@ -48,14 +60,31 @@ export default function ProviderCard({
     Math.max(82, Math.round((provider.compositeRating || 4.8) * 18.5 + (provider.yearsInBusiness > 10 ? 3 : 1)))
   );
 
+  const isCabinets = provider.services?.some(s => 
+    s.toLowerCase().includes('cabinet') || 
+    s.toLowerCase().includes('shelv') ||
+    s.toLowerCase().includes('vanit') ||
+    s.toLowerCase().includes('closet') ||
+    s.toLowerCase().includes('millwork')
+  ) || provider.tagline?.toLowerCase().includes('cabinet') || provider.description?.toLowerCase().includes('cabinet');
+
   const defaultServices =
     provider.services && provider.services.length > 0
       ? provider.services.slice(0, 3)
-      : ['Roof Replacement', 'Roof Repair', 'Storm Damage'];
+      : isCabinets
+      ? ['Custom Cabinets', 'Kitchen Cabinetry', 'Built-In Shelving']
+      : ['Roof Installation', 'Repair', 'Waterproofing'];
 
-  // Project house photo on the left (rotating realistic residential roofing project photos)
-  const projectPhoto =
-    HOUSE_PROJECT_PHOTOS[(rank - 1) % HOUSE_PROJECT_PHOTOS.length];
+  // High-definition project showcase photo
+  const projectPhoto = (() => {
+    if (isCabinets) {
+      if (provider.imageUrl && (provider.imageUrl.includes('_16-') || provider.imageUrl.includes('_14-'))) {
+        return provider.imageUrl;
+      }
+      return CABINET_PROJECT_PHOTOS[(rank - 1) % CABINET_PROJECT_PHOTOS.length];
+    }
+    return provider.imageUrl || HOUSE_PROJECT_PHOTOS[(rank - 1) % HOUSE_PROJECT_PHOTOS.length];
+  })();
 
   // Web reviews data
   const googleRating = provider.reviews?.google?.rating || 4.8;
@@ -72,12 +101,15 @@ export default function ProviderCard({
         <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-start lg:items-center justify-between">
           {/* Left Block: House Photo + Company Details */}
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start flex-1 min-w-0">
-            {/* Col 1: Real Residential Roof Project Photo with Rank Badge */}
-            <div className="relative w-full sm:w-44 md:w-48 lg:w-52 h-36 sm:h-34 rounded-xl overflow-hidden shrink-0 bg-gray-100 group">
-              <img
+            {/* Col 1: Real Project Photo with Rank Badge */}
+            <div className="relative w-full sm:w-44 md:w-48 lg:w-52 h-36 sm:h-34 rounded-xl overflow-hidden shrink-0 bg-gray-100 group border border-gray-200/60 shadow-xs">
+              <SafeImage
                 src={projectPhoto}
-                alt={`${provider.name} Roofing Project`}
+                alt={`${provider.name} Project`}
+                fallbackCategory={isCabinets ? 'Custom Cabinets' : 'Roofing'}
+                fallbackTitle={provider.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                loading="lazy"
               />
 
               {/* Rank Badge on top-left of image */}
@@ -90,27 +122,18 @@ export default function ProviderCard({
             <div className="space-y-1.5 min-w-0 flex-1">
               {/* Company Logo + Name */}
               <div className="flex items-center gap-2.5">
-                {/* Logo from Cloudflare R2 / DB or fallback roof peak mark */}
+                {/* Logo from Cloudflare R2 / DB or fallback monogram */}
                 {provider.imageUrl ? (
-                  <img
+                  <SafeImage
                     src={provider.imageUrl}
                     alt={provider.name}
+                    fallbackCategory={isCabinets ? 'Custom Cabinets' : 'Roofing'}
+                    fallbackTitle={provider.name}
                     className="w-7 h-7 object-contain rounded shrink-0 bg-white border border-gray-100 p-0.5"
                   />
                 ) : (
-                  <div className="w-7 h-7 flex items-center justify-center shrink-0">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="#DA5F2F"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="w-6 h-6"
-                    >
-                      <path d="M3 11L12 3L21 11" />
-                      <path d="M6 14L12 9L18 14" />
-                    </svg>
+                  <div className="w-7 h-7 rounded bg-[#EBF3F1] text-[#0F3E35] flex items-center justify-center shrink-0 font-bold text-xs">
+                    {provider.name.charAt(0)}
                   </div>
                 )}
 
@@ -169,7 +192,7 @@ export default function ProviderCard({
                 </div>
                 <div className="flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                  <span>{provider.servesArea || 'Birmingham + surrounding areas'}</span>
+                  <span>{provider.servesArea || (provider.borough && provider.borough !== 'All' ? `${provider.borough}, NY` : 'New York City + all 5 boroughs')}</span>
                 </div>
               </div>
             </div>

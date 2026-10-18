@@ -4,6 +4,7 @@ export interface GetProvidersParams {
   search?: string;
   borough?: string;
   service?: string;
+  category?: string;
   sortBy?: 'rating' | 'reviews' | 'experience';
   page?: number;
   limit?: number;
@@ -86,6 +87,9 @@ export async function fetchProviders(
   }
   if (params.service && params.service !== 'All Services') {
     queryParams.service = params.service;
+  }
+  if (params.category && params.category !== 'All' && params.category !== 'All Services') {
+    queryParams.category = params.category;
   }
   if (params.sortBy) {
     queryParams.sortBy = params.sortBy;
@@ -251,3 +255,176 @@ export async function generateAiSummary(slug: string): Promise<AiSummaryResult> 
 
   return json.data;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CATEGORIES & SERVICES
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface CategoryItem {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  icon?: string | null;
+  providerCount: number;
+  image: string;
+  subServices: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    isPopular: boolean;
+  }>;
+}
+
+import { getCategoryImage } from './category-images';
+
+export const DEFAULT_CATEGORIES: CategoryItem[] = [
+  {
+    id: 'cat_custom_cabinets_nyc',
+    name: 'Custom Cabinets',
+    slug: 'custom-cabinets',
+    description: 'Bespoke kitchen cabinetry, built-in shelving, and architectural woodwork.',
+    providerCount: 10,
+    image: getCategoryImage('custom-cabinets'),
+    subServices: [
+      { id: 'sub_cab_custom_cabinets', name: 'Custom Cabinets', slug: 'custom-cabinets', isPopular: true },
+      { id: 'sub_cab_kitchen_cabinets', name: 'Kitchen Cabinetry', slug: 'kitchen-cabinetry', isPopular: true },
+      { id: 'sub_cab_bathroom_vanities', name: 'Bathroom Vanities', slug: 'bathroom-vanities', isPopular: true },
+      { id: 'sub_cab_builtin_shelving', name: 'Built-In Shelving', slug: 'built-in-shelving', isPopular: true },
+    ],
+  },
+  {
+    id: '420f19bd-8420-4c96-b42c-054a5217ab79',
+    name: 'Roofing',
+    slug: 'roofing',
+    description: 'Residential and commercial roof repair, replacement, and inspection.',
+    providerCount: 14,
+    image: getCategoryImage('roofing'),
+    subServices: [
+      { id: '287f836c-fa8e-4405-a5c7-3ee3e8616dbf', name: 'Roof Installation', slug: 'roof-installation', isPopular: true },
+      { id: '3dee85de-69a7-4f32-8367-7d9a1902f036', name: 'Repair', slug: 'roof-repair', isPopular: true },
+      { id: '0c1bd803-ff9b-428b-8648-f1c8f30666b9', name: 'Waterproofing', slug: 'waterproofing', isPopular: true },
+    ],
+  },
+  {
+    id: 'cat_kitchen_remodeling',
+    name: 'Kitchen Remodeling',
+    slug: 'kitchen-remodeling',
+    description: 'Full kitchen transformations, islands, pantries, and backsplashes.',
+    providerCount: 12,
+    image: getCategoryImage('kitchen-remodeling'),
+    subServices: [],
+  },
+  {
+    id: 'cat_bathroom_remodeling',
+    name: 'Bathroom Remodeling',
+    slug: 'bathroom-remodeling',
+    description: 'Custom vanities, glass showers, soaking tubs, and modern tile work.',
+    providerCount: 10,
+    image: getCategoryImage('bathroom-remodeling'),
+    subServices: [],
+  },
+  {
+    id: 'cat_countertops',
+    name: 'Countertops',
+    slug: 'countertops',
+    description: 'Quartz, granite, marble, and butcher block installation and fabrication.',
+    providerCount: 8,
+    image: getCategoryImage('countertops'),
+    subServices: [],
+  },
+  {
+    id: 'cat_builtin_shelving',
+    name: 'Built-In Shelving',
+    slug: 'built-in-shelving',
+    description: 'Custom wall-to-wall bookcases, media centers, and alcove shelving.',
+    providerCount: 10,
+    image: getCategoryImage('built-in-shelving'),
+    subServices: [],
+  },
+  {
+    id: 'cat_hvac',
+    name: 'HVAC',
+    slug: 'hvac',
+    description: 'Heating, ventilation, air conditioning repair, and mini-split installations.',
+    providerCount: 12,
+    image: getCategoryImage('hvac'),
+    subServices: [],
+  },
+  {
+    id: 'cat_flooring',
+    name: 'Flooring',
+    slug: 'flooring',
+    description: 'Hardwood installation, refinishing, luxury vinyl plank, and tile.',
+    providerCount: 9,
+    image: getCategoryImage('flooring'),
+    subServices: [],
+  },
+  {
+    id: 'cat_windows_doors',
+    name: 'Windows & Doors',
+    slug: 'windows-doors',
+    description: 'Energy-efficient window replacements, sliding patio doors, and entryways.',
+    providerCount: 11,
+    image: getCategoryImage('windows-doors'),
+    subServices: [],
+  },
+  {
+    id: 'cat_painting',
+    name: 'Painting',
+    slug: 'painting',
+    description: 'Interior and exterior painting, decorative finishes, and skim coating.',
+    providerCount: 15,
+    image: getCategoryImage('painting'),
+    subServices: [],
+  },
+];
+
+/**
+ * Fetch all categories dynamically with provider counts and resolved images
+ */
+export async function fetchCategories(): Promise<CategoryItem[]> {
+  try {
+    const url = buildApiUrl('categories');
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      // Try providers/categories route fallback
+      const fallbackUrl = buildApiUrl('providers/categories');
+      const fallbackRes = await fetch(fallbackUrl);
+      if (!fallbackRes.ok) throw new Error(`HTTP ${response.status}`);
+      const json = await fallbackRes.json();
+      const items: any[] = json.data || [];
+      if (items.length === 0) return DEFAULT_CATEGORIES;
+      return items.map((cat) => ({
+        ...cat,
+        image: getCategoryImage(cat.slug || cat.name),
+      }));
+    }
+
+    const json: ApiResponse<any[]> = await response.json();
+    const items: any[] = json.data || [];
+    if (items.length === 0) return DEFAULT_CATEGORIES;
+
+    // Merge dynamic categories with defaults if DB has only a few categories
+    const dynamicSlugs = new Set(items.map((c) => c.slug));
+    const merged = [
+      ...items.map((cat) => ({
+        ...cat,
+        image: getCategoryImage(cat.slug || cat.name),
+      })),
+      ...DEFAULT_CATEGORIES.filter((def) => !dynamicSlugs.has(def.slug)),
+    ];
+
+    return merged;
+  } catch (err) {
+    console.warn('Falling back to default categories list:', err);
+    return DEFAULT_CATEGORIES;
+  }
+}
+

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Check } from 'lucide-react';
+import BrandLogo from './BrandLogo';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
@@ -25,18 +26,9 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-6">
           {/* Column 1: Brand Info & Socials */}
           <div className="lg:col-span-3 space-y-4">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-white flex items-center justify-center">
-                <svg className="w-4 h-4 fill-white" viewBox="0 0 24 24">
-                  <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-                </svg>
-              </div>
-              <span className="text-lg font-black text-white tracking-tight">
-                HomePro<span className="text-[#DA5F2F]">Compare</span>
-              </span>
-            </Link>
+            <BrandLogo variant="dark" size="md" />
             <p className="text-xs text-emerald-100/70 max-w-sm leading-relaxed">
-              The most trusted way to find and compare home service contractors across the USA.
+              Your guide to trusted home improvement professionals.
             </p>
 
             {/* Social Icons */}
@@ -300,7 +292,7 @@ export default function Footer() {
 
         {/* Bottom Sub-footer */}
         <div className="pt-8 border-t border-[#0F4C39] flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-emerald-100/60">
-          <p>&copy; 2026 HomeProCompare. All rights reserved.</p>
+          <p>&copy; 2026 Click Sailors. All rights reserved.</p>
           <div className="flex flex-wrap items-center gap-4 sm:gap-6">
             <a href="#" className="hover:text-white transition-colors">
               Terms of Use

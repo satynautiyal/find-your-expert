@@ -35,6 +35,20 @@ export class ProvidersController {
   }
 
   /**
+   * GET /api/providers/categories
+   * Dynamic categories taxonomy with active provider counts and subservices
+   */
+  @Get('categories')
+  async getCategories() {
+    const result = await this.providersService.getCategories();
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
    * GET /api/providers/:slug
    * Retrieve single provider by slug
    */

@@ -13,9 +13,9 @@ const plusJakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   // Resolves relative image URLs (e.g. /api/storage/file?key=...) into absolute URLs for OG/Twitter tags
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://prosvetted.com'),
-  title: 'HomeProCompare - Find the Best Home Service Contractors Near You',
+  title: 'Click Sailors - Find the Best Home Improvement & Roofing Contractors',
   description:
-    'Compare verified contractors, real customer reviews, project photos, pricing insights and credentials across the USA — all in one place.',
+    'Your guide to trusted home improvement professionals. Compare verified contractors, real customer reviews, and pricing insights across the USA.',
   verification: {
     google: 'yqQ1qJ8-abqYTo5SDXR8RbAf3pjJO7bmiZszTRRohkU',
   },

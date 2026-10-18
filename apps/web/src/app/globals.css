@@ -63,6 +63,18 @@
   background: #9CA3AF;
 }
 
+/* Hide scrollbar completely across Chrome, Safari, Edge, and Firefox */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none !important; /* IE and Edge */
+  scrollbar-width: none !important; /* Firefox */
+}
+
 /* Rich Text Editor (Tiptap / ProseMirror) Styling */
 .tiptap-content,
 .ProseMirror {
