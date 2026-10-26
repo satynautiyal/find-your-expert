@@ -19,6 +19,7 @@ import {
 import type { BlogPost } from '@repo/types';
 import { fetchAdminBlogs, deleteAdminBlog } from '@/lib/blogs-api';
 import SafeImage from '@/components/common/SafeImage';
+import BrandLogo from '@/components/common/BrandLogo';
 
 export default function AdminBlogsPage() {
   const [blogs, setBlogs] = useState<BlogPost[]>([]);
@@ -75,12 +76,7 @@ export default function AdminBlogsPage() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-xs">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-            <Link href="/" className="flex items-center gap-1.5 shrink-0">
-              <div className="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center font-bold text-sm">
-                F
-              </div>
-              <span className="font-black text-gray-900 tracking-tight hidden sm:inline">FindYourExperts</span>
-            </Link>
+            <BrandLogo variant="light" size="sm" />
             <span className="text-gray-300 hidden sm:inline">/</span>
             <div className="flex items-center gap-1 bg-primary/10 text-primary-dark font-bold text-xs px-2.5 py-1 rounded-full truncate">
               <Sparkles className="w-3.5 h-3.5 shrink-0" />

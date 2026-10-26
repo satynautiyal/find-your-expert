@@ -292,7 +292,7 @@ function ContractorsDirectoryContent() {
         stats={filterMeta?.stats}
       />
 
-      {/* 3. Trade & Sub-service Selector (Custom Cabinets default | Roofing | Coming Soon) */}
+      {/* 3. SEO Ranking Intro Section */}
       <ServiceCategoriesSection
         selectedCategory={selectedCategory}
         onSelectCategory={(categoryName) => {
@@ -305,6 +305,8 @@ function ContractorsDirectoryContent() {
           setSelectedService(serviceName);
         }}
         categories={categoriesList}
+        companiesCount={filteredProviders.length || totalCount}
+        currentLocation={currentLocation}
       />
 
       {/* 4. Main Content Area */}
@@ -336,11 +338,11 @@ function ContractorsDirectoryContent() {
         <div className="space-y-4">
           {isComingSoon ? (
             /* COMING SOON CARD FOR UNLAUNCHED REGIONS / TRADES */
-            <div className="bg-white rounded-3xl border border-gray-200/90 p-8 sm:p-12 text-center shadow-sm relative overflow-hidden">
+            <div className="bg-white rounded-3xl border border-gray-200/90 p-5 sm:p-12 text-center shadow-sm relative overflow-hidden">
               <div className="absolute top-0 right-0 w-64 h-64 bg-[#EBF3F1] rounded-full blur-3xl -z-10 opacity-70" />
-              <div className="max-w-xl mx-auto space-y-5">
-                <div className="w-16 h-16 rounded-2xl bg-[#EBF3F1] text-[#0F3E35] flex items-center justify-center mx-auto shadow-2xs">
-                  <Sparkles className="w-8 h-8" />
+              <div className="max-w-xl mx-auto space-y-4 sm:space-y-5">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#EBF3F1] text-[#0F3E35] flex items-center justify-center mx-auto shadow-2xs">
+                  <Sparkles className="w-7 h-7 sm:w-8 sm:h-8" />
                 </div>
 
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
@@ -348,13 +350,13 @@ function ContractorsDirectoryContent() {
                   <span>Launching Soon</span>
                 </div>
 
-                <h3 className="text-2xl sm:text-3xl font-black text-gray-950 tracking-tight">
+                <h3 className="text-xl sm:text-3xl font-black text-gray-950 tracking-tight">
                   {isUnlaunchedState
                     ? `${selectedState} Contractors are Coming Soon!`
                     : `${selectedCategory} in New York is Coming Soon!`}
                 </h3>
 
-                <p className="text-sm text-gray-600 leading-relaxed">
+                <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
                   We are currently hand-vetting and verifying licensed contractors in{' '}
                   <strong className="text-gray-900 font-bold">New York City</strong> for{' '}
                   <strong className="text-[#0F3E35] font-bold">Custom Cabinets</strong> and{' '}
@@ -362,7 +364,7 @@ function ContractorsDirectoryContent() {
                 </p>
 
                 {/* Quick Access to Live Trades in New York */}
-                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
                   <button
                     type="button"
                     onClick={() => {
@@ -393,7 +395,7 @@ function ContractorsDirectoryContent() {
                 </div>
 
                 {/* Email Notification Subscription */}
-                <div className="pt-6 border-t border-gray-100 max-w-md mx-auto">
+                <div className="pt-5 sm:pt-6 border-t border-gray-100 max-w-md mx-auto">
                   <span className="text-xs font-semibold text-gray-700 block mb-2">
                     Get notified when {isUnlaunchedState ? selectedState : selectedCategory} goes live:
                   </span>
@@ -403,7 +405,7 @@ function ContractorsDirectoryContent() {
                       <span>Thank you! We will notify you when we launch here.</span>
                     </div>
                   ) : (
-                    <form onSubmit={handleNotifySubmit} className="flex gap-2">
+                    <form onSubmit={handleNotifySubmit} className="flex flex-col sm:flex-row gap-2">
                       <div className="relative flex-1">
                         <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                         <input
@@ -417,7 +419,7 @@ function ContractorsDirectoryContent() {
                       </div>
                       <button
                         type="submit"
-                        className="px-4 py-2 bg-[#0F3E35] text-white rounded-xl text-xs font-bold hover:bg-[#0A2C25] transition-colors cursor-pointer"
+                        className="px-4 py-2 bg-[#0F3E35] text-white rounded-xl text-xs font-bold hover:bg-[#0A2C25] transition-colors cursor-pointer w-full sm:w-auto"
                       >
                         Notify Me
                       </button>

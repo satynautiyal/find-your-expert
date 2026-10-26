@@ -9,14 +9,14 @@ dotenv.config();
 import { PrismaClient, ReviewPlatform } from '@prisma/client';
 import { GoogleReviewsScraperService } from '../src/scrapers/google/google-reviews-scraper.service';
 import { YelpReviewsScraperService } from '../src/scrapers/yelp/yelp-reviews-scraper.service';
-import { FacebookReviewsScraperService } from '../src/scrapers/facebook/facebook-reviews-scraper.service';
+import { HouzzReviewsScraperService } from '../src/scrapers/houzz/houzz-reviews-scraper.service';
 import { ReviewsScraperService } from '../src/scrapers/reviews-scraper.service';
 
 const prisma = new PrismaClient();
 const googleScraper = new GoogleReviewsScraperService();
 const yelpScraper = new YelpReviewsScraperService();
-const fbScraper = new FacebookReviewsScraperService();
-const orchestrator = new ReviewsScraperService(googleScraper, yelpScraper, fbScraper);
+const houzzScraper = new HouzzReviewsScraperService();
+const orchestrator = new ReviewsScraperService(googleScraper, yelpScraper, houzzScraper);
 
 async function syncSingleProvider(profile: any) {
   console.log(`\n===========================================================`);
@@ -26,7 +26,7 @@ async function syncSingleProvider(profile: any) {
 
   const googleUrl = profile.platformReviews?.find((p: any) => p.platform === 'GOOGLE')?.profileUrl;
   const yelpUrl = profile.platformReviews?.find((p: any) => p.platform === 'YELP')?.profileUrl;
-  const facebookUrl = profile.platformReviews?.find((p: any) => p.platform === 'FACEBOOK')?.profileUrl;
+  const houzzUrl = profile.platformReviews?.find((p: any) => p.platform === 'HOUZZ')?.profileUrl;
 
   try {
     const scraped = await orchestrator.scrapeAllPlatforms(
@@ -36,7 +36,7 @@ async function syncSingleProvider(profile: any) {
         city: profile.city || undefined,
         googleUrl,
         yelpUrl,
-        facebookUrl,
+        houzzUrl,
       },
       30
     );
@@ -97,6 +97,32 @@ async function syncSingleProvider(profile: any) {
         },
       });
       console.log(`   ✓ Saved Yelp platform ratings`);
+    }
+
+    if (scraped.platforms.houzz && scraped.platforms.houzz.totalReviews > 0) {
+      await prisma.platformReview.upsert({
+        where: {
+          providerProfileId_platform: {
+            providerProfileId: profile.id,
+            platform: 'HOUZZ',
+          },
+        },
+        update: {
+          rating: scraped.platforms.houzz.rating,
+          reviewCount: scraped.platforms.houzz.totalReviews,
+          profileUrl: scraped.platforms.houzz.profileUrl,
+          lastScrapedAt: new Date(),
+        },
+        create: {
+          providerProfileId: profile.id,
+          platform: 'HOUZZ',
+          rating: scraped.platforms.houzz.rating,
+          reviewCount: scraped.platforms.houzz.totalReviews,
+          profileUrl: scraped.platforms.houzz.profileUrl,
+          lastScrapedAt: new Date(),
+        },
+      });
+      console.log(`   ✓ Saved Houzz platform ratings`);
     }
 
     // 2. Save individual review comments

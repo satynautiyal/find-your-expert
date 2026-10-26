@@ -65,6 +65,7 @@ enum ReviewPlatform {
   FACEBOOK
   HOMEADVISOR
   BBB
+  HOUZZ
 }
 
 enum PhotoCategory {

@@ -37,6 +37,9 @@ import {
   Users2,
   TrendingUp,
   Clock,
+  Tag,
+  Home as HomeIcon,
+  Hammer,
 } from 'lucide-react';
 import SafeImage from '@/components/common/SafeImage';
 import { fetchBlogs } from '@/lib/blogs-api';
@@ -130,9 +133,9 @@ export default function Home() {
   // FAQs Data
   const faqs = [
     {
-      question: 'How does Click Sailors rank contractors?',
+      question: 'How does Prosvetted rank contractors?',
       answer:
-        'We evaluate contractors across verified license verifications, confirmed liability insurance, cross-platform review sentiment (Google, Yelp, Facebook), BBB standing, and demonstrated project history to produce our independent score.',
+        'We evaluate contractors across verified license verifications, confirmed liability insurance, cross-platform review sentiment (Google, Yelp, Houzz), BBB standing, and demonstrated project history to produce our independent score.',
     },
     {
       question: 'Do you verify licenses and insurance?',
@@ -150,9 +153,9 @@ export default function Home() {
         'Yes. You have full transparency to call listed direct phone numbers, request a free quote through our instant form, or visit contractor websites directly without any barriers.',
     },
     {
-      question: 'Is it free to use Click Sailors?',
+      question: 'Is it free to use Prosvetted?',
       answer:
-        'Yes, Click Sailors is 100% free for homeowners. You can search, browse rankings, compare companies, and request estimates with zero cost and no obligation.',
+        'Yes, Prosvetted is 100% free for homeowners. You can search, browse rankings, compare companies, and request estimates with zero cost and no obligation.',
     },
     {
       question: 'Do you work with contractors?',
@@ -204,32 +207,193 @@ export default function Home() {
         {/* ========================================================= */}
         {/* 2. HERO SECTION */}
         {/* ========================================================= */}
-        <section className="relative bg-[#FAFBF9] min-h-[580px] lg:min-h-[640px] flex items-center overflow-hidden border-b border-gray-100">
+        {/* MOBILE HERO VIEW (< lg) - Industry-standard split: Clean readable top copy + 100% clear kitchen showcase + overlapping search card */}
+        <section className="lg:hidden relative bg-[#FAFBF9] overflow-hidden">
+          {/* 1. Top Copy Container on Clean Solid #FAFBF9 Background (100% readable, zero image clutter behind text) */}
+          <div className="pt-4 pb-2 px-4 relative z-10 bg-[#FAFBF9]">
+            {/* Kicker Pill Tag */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EAF3EF] border border-[#D1E5DB] mb-2.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#0F3E35]" />
+              <span className="text-[11.5px] font-semibold text-[#0F3E35] tracking-tight">
+                Trusted &bull; Verified &bull; Local
+              </span>
+            </div>
+
+            {/* 3-Line Headline */}
+            <h1 className="text-[28px] min-[370px]:text-[32px] font-black text-[#111827] tracking-tight leading-[1.08]">
+              <span className="block">Find the Best</span>
+              <span className="block text-[#FF5B26]">Home Service</span>
+              <span className="block">Contractors Near You</span>
+            </h1>
+
+            {/* Subtitle */}
+            <p className="mt-2.5 text-[13.5px] font-normal text-[#374151] leading-[1.48] max-w-[355px]">
+              Compare verified contractors, read real customer reviews, project photos, pricing insights and credentials — all in one place.
+            </p>
+
+            {/* Ratings Row */}
+            <div className="flex items-center gap-2 mt-3">
+              <div className="flex -space-x-1.5 shrink-0">
+                <img
+                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=64&q=80"
+                  alt="Customer"
+                  className="w-6 h-6 rounded-full border-2 border-white object-cover shadow-sm"
+                />
+                <img
+                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=64&q=80"
+                  alt="Customer"
+                  className="w-6 h-6 rounded-full border-2 border-white object-cover shadow-sm"
+                />
+                <img
+                  src="https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=64&q=80"
+                  alt="Customer"
+                  className="w-6 h-6 rounded-full border-2 border-white object-cover shadow-sm"
+                />
+              </div>
+              <div className="flex text-amber-500 text-[11px] tracking-tight shrink-0">
+                {'★'.repeat(5)}
+              </div>
+              <span className="text-xs font-extrabold text-[#111827] shrink-0">4.8/5</span>
+              <span className="text-gray-300 shrink-0">|</span>
+              <span className="text-[11.5px] font-semibold text-[#374151] shrink-0">18,500+ Homeowners</span>
+            </div>
+          </div>
+
+          {/* 2. Dedicated Kitchen Image Showcase + Overlapping Floating Search Card */}
+          <div className="relative">
+            {/* Unobstructed 100% Clear Kitchen Image Window */}
+            <div className="relative h-[230px] sm:h-[280px] w-full overflow-hidden">
+              <img
+                src="/hero-kitchen.jpg"
+                alt="Luxury modern kitchen with island"
+                className="w-full h-full object-cover object-[55%_42%]"
+              />
+              {/* Soft top edge feather so the photo blends seamlessly into the #FAFBF9 copy block above */}
+              <div
+                className="absolute inset-x-0 top-0 h-8 pointer-events-none"
+                style={{
+                  background: 'linear-gradient(180deg, #FAFBF9 0%, rgba(250,251,249,0) 100%)',
+                }}
+              />
+              {/* Subtle bottom vignette to ground the floating search card */}
+              <div
+                className="absolute inset-x-0 bottom-0 h-16 pointer-events-none"
+                style={{
+                  background: 'linear-gradient(0deg, rgba(17,24,39,0.25) 0%, rgba(17,24,39,0) 100%)',
+                }}
+              />
+            </div>
+
+            {/* Floating White Search Card overlapping the lower portion of the kitchen image */}
+            <div className="relative z-10 px-4 -mt-20 pb-4">
+              <div className="bg-white rounded-2xl p-3.5 shadow-[0_14px_34px_rgba(0,0,0,0.12)] border border-gray-200">
+                <form onSubmit={handleSearchSubmit} className="flex flex-col gap-2">
+                  {/* Field 1: What do you need done? */}
+                  <div className="flex items-center justify-between border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white focus-within:border-[#0F3E35] focus-within:ring-1 focus-within:ring-[#0F3E35] transition-all">
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                      <input
+                        type="text"
+                        value={searchNeed}
+                        onChange={(e) => setSearchNeed(e.target.value)}
+                        placeholder="What do you need done?"
+                        className="w-full text-[13px] text-gray-900 placeholder-gray-400 bg-transparent focus:outline-none font-normal"
+                      />
+                    </div>
+                    <ChevronDown className="w-4 h-4 text-gray-400 shrink-0 ml-1 pointer-events-none" />
+                  </div>
+
+                  {/* Field 2: Enter ZIP code */}
+                  <div className="flex items-center border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white focus-within:border-[#0F3E35] focus-within:ring-1 focus-within:ring-[#0F3E35] transition-all">
+                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                      <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
+                      <input
+                        type="text"
+                        value={searchZip}
+                        onChange={(e) => setSearchZip(e.target.value)}
+                        placeholder="Enter ZIP code"
+                        className="w-full text-[13px] text-gray-900 placeholder-gray-400 bg-transparent focus:outline-none font-normal"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    className="w-full mt-1 bg-[#0F3E35] hover:bg-[#0B3B2C] active:scale-[0.99] text-white font-bold text-[14px] py-3 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2"
+                  >
+                    <span>Search Contractors</span>
+                    <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          {/* Popular Row (Under kitchen image, clean white strip) */}
+          <div className="px-4 py-3 bg-[#FAFBF9] border-y border-gray-100">
+            <div className="flex items-center gap-2 text-xs overflow-x-auto no-scrollbar">
+              <span className="font-bold text-[#111827] text-xs shrink-0 mr-0.5">Popular:</span>
+              <button
+                type="button"
+                onClick={() => handlePopularSearch('Custom Cabinets')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-700 font-medium text-xs hover:border-gray-300 hover:bg-gray-50 transition-colors shrink-0 shadow-2xs"
+              >
+                <svg className="w-3.5 h-3.5 text-[#0F3E35]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="4" y="3" width="16" height="18" rx="2" />
+                  <line x1="12" y1="3" x2="12" y2="21" />
+                  <circle cx="8" cy="12" r="1" fill="currentColor" />
+                  <circle cx="16" cy="12" r="1" fill="currentColor" />
+                </svg>
+                <span>Custom Cabinets</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePopularSearch('Roofing')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-700 font-medium text-xs hover:border-gray-300 hover:bg-gray-50 transition-colors shrink-0 shadow-2xs"
+              >
+                <HomeIcon className="w-3.5 h-3.5 text-[#0F3E35]" />
+                <span>Roofing</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handlePopularSearch('Kitchen Remodeling')}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-700 font-medium text-xs hover:border-gray-300 hover:bg-gray-50 transition-colors shrink-0 shadow-2xs"
+              >
+                <Hammer className="w-3.5 h-3.5 text-[#0F3E35]" />
+                <span>Kitchen Remodel</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* DESKTOP HERO VIEW (lg+) - 100% UNTOUCHED ORIGINAL DESKTOP */}
+        <section className="hidden lg:flex relative bg-[#FAFBF9] min-h-[640px] items-center overflow-hidden border-b border-gray-100">
           {/* Background Kitchen Image on Right with Seamless Left Fade */}
-          <div className="absolute right-0 top-0 bottom-0 w-full lg:w-[62%] h-full pointer-events-none select-none z-0">
+          <div className="absolute right-0 top-0 bottom-0 w-[62%] h-full pointer-events-none select-none z-0 overflow-hidden">
             <img
               src="/hero-kitchen.jpg"
               alt="Luxury modern kitchen with island"
-              className="w-full h-full object-cover object-[center_right]"
+              className="w-full h-full object-cover object-[center_right] opacity-100 transition-all duration-300"
             />
-            {/* Soft left gradient fade into the off-white background */}
-            <div className="absolute inset-y-0 left-0 w-36 sm:w-64 lg:w-96 bg-gradient-to-r from-[#FAFBF9] via-[#FAFBF9]/80 to-transparent" />
+            {/* Desktop soft left gradient fade into the off-white background */}
+            <div className="absolute inset-y-0 left-0 w-96 bg-gradient-to-r from-[#FAFBF9] via-[#FAFBF9]/80 to-transparent" />
           </div>
 
-
-
           {/* Main Hero Content (Left-aligned container) */}
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-12 lg:py-16 relative z-10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-16 relative z-10">
             {/* Top row: Headline on Left, Review Card right beside it per reference mockup */}
-            <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 xl:gap-12 max-w-5xl">
+            <div className="flex flex-row items-start justify-between gap-12 max-w-5xl">
               <div className="max-w-2xl">
-                {/* Kicker tag - Dark charcoal, wide tracking per reference */}
-                <span className="text-[#111827] font-bold text-[11.5px] sm:text-[12.5px] tracking-[0.18em] uppercase block mb-3.5">
+                {/* Kicker tag */}
+                <span className="text-[#111827] font-bold text-[12.5px] tracking-[0.18em] uppercase mb-3.5 block">
                   TRUSTED. VERIFIED. LOCAL.
                 </span>
 
-                {/* Main Headline - Plus Jakarta Sans 700 with exact 1.02 line height and #DA5F2F warm orange */}
-                <h1 className="text-4xl sm:text-5xl lg:text-[52px] xl:text-[56px] font-bold text-[#111827] tracking-[-0.03em] leading-[1.02]">
+                {/* Desktop Headline */}
+                <h1 className="text-[52px] xl:text-[56px] font-bold text-[#111827] tracking-[-0.03em] leading-[1.02]">
                   Find the Best <span className="text-primary font-bold">Home</span>
                   <br />
                   <span className="text-primary font-bold">Service Contractors</span>
@@ -238,15 +402,15 @@ export default function Home() {
                 </h1>
 
                 {/* Subtitle */}
-                <p className="mt-4 text-sm sm:text-[15px] lg:text-[15.5px] text-[#4B5563] max-w-[560px] leading-[1.5] font-normal">
+                <p className="mt-4 text-[15.5px] text-[#374151] max-w-[560px] leading-[1.5] font-normal">
                   Compare verified contractors, real customer reviews, project photos,
                   pricing insights and credentials — all in one place.
                 </p>
               </div>
 
-              {/* Floating Customer Rating Card (Positioned directly next to the headline over the kitchen transition) */}
-              <div className="hidden lg:block shrink-0 mt-3 xl:mt-4">
-                <div className="bg-white/95 backdrop-blur-md rounded-2xl p-4 sm:p-5 shadow-[0_16px_36px_rgba(0,0,0,0.08)] border border-gray-100/90 w-[295px] animate-in fade-in duration-300">
+              {/* Floating Customer Rating Card (Positioned directly next to the headline over the kitchen transition on desktop) */}
+              <div className="shrink-0 mt-4">
+                <div className="bg-white/95 backdrop-blur-md rounded-2xl p-5 shadow-[0_16px_36px_rgba(0,0,0,0.08)] border border-gray-100/90 w-[295px] animate-in fade-in duration-300">
                   <div className="flex items-center justify-between gap-3">
                     {/* 3 Overlapping customer avatars */}
                     <div className="flex -space-x-2.5 shrink-0">
@@ -283,62 +447,66 @@ export default function Home() {
 
                   {/* Caption */}
                   <p className="text-[11.5px] font-semibold text-gray-700 leading-tight mt-2.5">
-                    found trusted contractors on Click Sailors
+                    found trusted contractors on Prosvetted
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Dual Search Input Bar */}
-            <form
-              onSubmit={handleSearchSubmit}
-              className="mt-7 bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] border border-gray-200/90 p-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-2xl lg:max-w-[760px] transition-shadow hover:shadow-[0_12px_35px_rgba(0,0,0,0.09)]"
-            >
-              {/* Search Need Input */}
-              <div className="flex items-center gap-2.5 px-3 py-1 flex-1">
-                <Search className="w-4 h-4 text-gray-400 shrink-0" />
-                <input
-                  type="text"
-                  value={searchNeed}
-                  onChange={(e) => setSearchNeed(e.target.value)}
-                  placeholder="What do you need done?"
-                  className="w-full text-xs sm:text-sm text-gray-800 placeholder-gray-400 bg-transparent focus:outline-none font-normal"
-                />
-              </div>
-
-              {/* Divider */}
-              <div className="hidden sm:block w-px h-8 bg-gray-200 shrink-0" />
-
-              {/* ZIP Code Input */}
-              <div className="flex items-center gap-2.5 px-3 py-1 sm:w-44">
-                <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
-                <input
-                  type="text"
-                  value={searchZip}
-                  onChange={(e) => setSearchZip(e.target.value)}
-                  placeholder="Enter ZIP code"
-                  className="w-full text-xs sm:text-sm text-gray-800 placeholder-gray-400 bg-transparent focus:outline-none font-normal"
-                />
-              </div>
-
-              {/* Submit Button */}
-              <EButton
-                type="submit"
-                variant="secondary"
-                size="xl"
-                iconRight={<ArrowRight className="w-4 h-4 stroke-[2.5]" />}
-                className="shrink-0"
+            {/* Bottom Actions: Search Form & Quick Filters */}
+            <div className="mt-6">
+              {/* Dual Search Input Bar */}
+              <form
+                onSubmit={handleSearchSubmit}
+                className="bg-white backdrop-blur-md rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] border border-gray-200/90 p-2 flex flex-row items-center gap-2 max-w-[760px] transition-shadow hover:shadow-[0_16px_40px_rgba(15,62,53,0.15)]"
               >
-                Search Contractors
-              </EButton>
-            </form>
+                {/* Search Need Input */}
+                <div className="flex items-center gap-2.5 px-3 py-1 flex-1">
+                  <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={searchNeed}
+                    onChange={(e) => setSearchNeed(e.target.value)}
+                    placeholder="What do you need done?"
+                    className="w-full text-sm text-gray-800 placeholder-gray-400 bg-transparent focus:outline-none font-normal"
+                  />
+                </div>
 
-            {/* Popular Searches Pills - dynamic categories */}
-            <div className="mt-4 flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs max-w-3xl">
-              <span className="text-[#111827] font-bold mr-1">Popular searches:</span>
-              {(categories.length > 0
-                ? categories.slice(0, 6).map((c) => c.name)
-                : [
+                {/* Divider for desktop */}
+                <div className="w-px h-8 bg-gray-200 shrink-0" />
+
+                {/* ZIP Code Input */}
+                <div className="flex items-center gap-2.5 px-3 py-1 w-44">
+                  <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={searchZip}
+                    onChange={(e) => setSearchZip(e.target.value)}
+                    placeholder="Enter ZIP code"
+                    className="w-full text-sm text-gray-800 placeholder-gray-400 bg-transparent focus:outline-none font-normal"
+                  />
+                </div>
+
+                {/* Submit Button */}
+                <EButton
+                  type="submit"
+                  variant="secondary"
+                  size="xl"
+                  iconRight={<ArrowRight className="w-4 h-4 stroke-[2.5]" />}
+                  className="shrink-0 w-auto justify-center"
+                >
+                  Search Contractors
+                </EButton>
+              </form>
+
+              {/* Popular Searches / Quick Filter Chips */}
+              <div className="mt-4 flex items-center gap-2 text-xs max-w-3xl flex-wrap">
+                <span className="text-[#111827] font-bold mr-1 shrink-0">
+                  Popular:
+                </span>
+                {(categories.length > 0
+                  ? categories.slice(0, 6).map((c) => c.name)
+                  : [
                     'Custom Cabinets',
                     'Roofing',
                     'Kitchen Remodeling',
@@ -346,50 +514,18 @@ export default function Home() {
                     'Countertops',
                     'HVAC',
                   ]
-              ).map((item) => (
-                <EButton
-                  key={item}
-                  type="button"
-                  variant="pill"
-                  size="sm"
-                  onClick={() => handlePopularSearch(item)}
-                >
-                  {item}
-                </EButton>
-              ))}
-            </div>
-
-            {/* Mobile-only Rating Card */}
-            <div className="block md:hidden mt-6 bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-md border border-gray-200/80 max-w-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex -space-x-2">
-                  <img
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80"
-                    alt="Customer"
-                    className="w-7 h-7 rounded-full border-2 border-white object-cover"
-                  />
-                  <img
-                    src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=80&q=80"
-                    alt="Customer"
-                    className="w-7 h-7 rounded-full border-2 border-white object-cover"
-                  />
-                  <img
-                    src="https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=80&q=80"
-                    alt="Customer"
-                    className="w-7 h-7 rounded-full border-2 border-white object-cover"
-                  />
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="flex text-amber-500 text-xs">★★★★★</div>
-                  <span className="text-xs font-black text-gray-900">4.8/5</span>
-                </div>
-              </div>
-              <div className="mt-1.5">
-                <span className="font-black text-xs text-gray-900">18,500+</span>{' '}
-                <span className="text-xs text-gray-500">Homeowners</span>
-                <p className="text-[11px] text-gray-600 font-medium">
-                  found trusted contractors on Click Sailors
-                </p>
+                ).map((item) => (
+                  <EButton
+                    key={item}
+                    type="button"
+                    variant="pill"
+                    size="sm"
+                    className="shrink-0 whitespace-nowrap"
+                    onClick={() => handlePopularSearch(item)}
+                  >
+                    {item}
+                  </EButton>
+                ))}
               </div>
             </div>
           </div>
@@ -398,12 +534,59 @@ export default function Home() {
         {/* ========================================================= */}
         {/* 3. VALUE PROPOSITION STRIP (Trust Badges) */}
         {/* ========================================================= */}
-        <section className="bg-[#F1F7F4] border-y border-[#E2EBE5] py-5 sm:py-6">
+        {/* Mobile Trust Badges (< lg) - Exactly 3 columns matching reference screenshot */}
+        <section className="lg:hidden bg-white border-b border-gray-100 py-6">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {/* Column 1: Licenses Checked */}
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 rounded-full bg-[#EAF3EF] flex items-center justify-center mb-2.5 shrink-0">
+                  <ShieldCheck className="w-6 h-6 text-[#0F3E35] stroke-[2]" />
+                </div>
+                <h3 className="font-bold text-[12.5px] min-[360px]:text-[13px] text-[#111827] leading-tight">
+                  Licenses Checked
+                </h3>
+                <p className="text-[11px] text-[#4B5563] font-medium mt-1 leading-[1.35] max-w-[115px]">
+                  We verify state licenses for eligible contractors.
+                </p>
+              </div>
+
+              {/* Column 2: Verified Reviews */}
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 rounded-full bg-[#EAF3EF] flex items-center justify-center mb-2.5 shrink-0">
+                  <Star className="w-6 h-6 text-[#0F3E35] stroke-[2]" />
+                </div>
+                <h3 className="font-bold text-[12.5px] min-[360px]:text-[13px] text-[#111827] leading-tight">
+                  Verified Reviews
+                </h3>
+                <p className="text-[11px] text-[#4B5563] font-medium mt-1 leading-[1.35] max-w-[115px]">
+                  Real customer reviews and ratings.
+                </p>
+              </div>
+
+              {/* Column 3: No Hidden Fees */}
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 rounded-full bg-[#EAF3EF] flex items-center justify-center mb-2.5 shrink-0">
+                  <Tag className="w-6 h-6 text-[#0F3E35] stroke-[2]" />
+                </div>
+                <h3 className="font-bold text-[12.5px] min-[360px]:text-[13px] text-[#111827] leading-tight">
+                  No Hidden Fees
+                </h3>
+                <p className="text-[11px] text-[#4B5563] font-medium mt-1 leading-[1.35] max-w-[115px]">
+                  Get upfront pricing and compare easily.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Desktop Trust Badges (lg+) - 100% UNTOUCHED ORIGINAL DESKTOP */}
+        <section className="hidden lg:block bg-[#F1F7F4] border-y border-[#E2EBE5] py-4 sm:py-6">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-6 xl:gap-8">
+            <div className="grid grid-cols-4 gap-6 xl:gap-8">
               {/* Item 1: Licenses Checked */}
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-white/90 flex items-center justify-center shrink-0">
+                <div className="w-13 h-13 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-white/90 flex items-center justify-center shrink-0">
                   <svg className="w-7 h-7 text-[#0B3B2C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     <path d="M12 2.5v19" />
@@ -411,10 +594,10 @@ export default function Home() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-bold text-[13.5px] sm:text-[14px] text-[#0E2D1F] tracking-[-0.01em]">
+                  <h3 className="font-bold text-[14px] text-[#0E2D1F] tracking-[-0.01em]">
                     Licenses Checked
                   </h3>
-                  <p className="text-[11.5px] sm:text-[12px] text-[#5A6578] mt-0.5 leading-[1.35]">
+                  <p className="text-[12px] text-[#5A6578] mt-0.5 leading-[1.35]">
                     We verify state licenses for eligible contractors.
                   </p>
                 </div>
@@ -422,17 +605,17 @@ export default function Home() {
 
               {/* Item 2: Insurance Verified */}
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-white/90 flex items-center justify-center shrink-0">
+                <div className="w-13 h-13 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-white/90 flex items-center justify-center shrink-0">
                   <svg className="w-7 h-7 text-[#0B3B2C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                     <path d="m9 12 2 2 4-4" strokeWidth="2.4" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-bold text-[13.5px] sm:text-[14px] text-[#0E2D1F] tracking-[-0.01em]">
+                  <h3 className="font-bold text-[14px] text-[#0E2D1F] tracking-[-0.01em]">
                     Insurance Verified
                   </h3>
-                  <p className="text-[11.5px] sm:text-[12px] text-[#5A6578] mt-0.5 leading-[1.35]">
+                  <p className="text-[12px] text-[#5A6578] mt-0.5 leading-[1.35]">
                     Confirmed insurance and bonding where available.
                   </p>
                 </div>
@@ -440,14 +623,14 @@ export default function Home() {
 
               {/* Item 3: Real Customer Reviews */}
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-white/90 flex items-center justify-center shrink-0">
+                <div className="w-13 h-13 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-white/90 flex items-center justify-center shrink-0">
                   <Star className="w-7 h-7 text-[#0B3B2C] stroke-[2.2] fill-none" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-[13.5px] sm:text-[14px] text-[#0E2D1F] tracking-[-0.01em]">
+                  <h3 className="font-bold text-[14px] text-[#0E2D1F] tracking-[-0.01em]">
                     Real Customer Reviews
                   </h3>
-                  <p className="text-[11.5px] sm:text-[12px] text-[#5A6578] mt-0.5 leading-[1.35]">
+                  <p className="text-[12px] text-[#5A6578] mt-0.5 leading-[1.35]">
                     Ratings from multiple trusted platforms.
                   </p>
                 </div>
@@ -455,7 +638,7 @@ export default function Home() {
 
               {/* Item 4: Rankings Never Sold */}
               <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-white/90 flex items-center justify-center shrink-0">
+                <div className="w-13 h-13 rounded-full bg-white shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-white/90 flex items-center justify-center shrink-0">
                   <svg className="w-7 h-7 text-[#0B3B2C]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="3" y="14" width="4.5" height="7" rx="1.5" />
                     <rect x="10" y="8" width="4.5" height="13" rx="1.5" />
@@ -463,10 +646,10 @@ export default function Home() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-bold text-[13.5px] sm:text-[14px] text-[#0E2D1F] tracking-[-0.01em]">
+                  <h3 className="font-bold text-[14px] text-[#0E2D1F] tracking-[-0.01em]">
                     Rankings Never Sold
                   </h3>
-                  <p className="text-[11.5px] sm:text-[12px] text-[#5A6578] mt-0.5 leading-[1.35]">
+                  <p className="text-[12px] text-[#5A6578] mt-0.5 leading-[1.35]">
                     Our rankings are independent and not influenced by contractors.
                   </p>
                 </div>
@@ -476,33 +659,34 @@ export default function Home() {
         </section>
 
         {/* ========================================================= */}
-        {/* 4. ABOUT CLICK SAILORS */}
+        {/* 4. ABOUT PROSVETTED */}
         {/* ========================================================= */}
-        <section id="about" className="py-14 sm:py-20 bg-white">
+        <section id="about" className="py-10 sm:py-20 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
               {/* Left Column: Text + CTA */}
               <div className="lg:col-span-6 max-w-xl">
-                <span className="text-[#0B3B2C] font-bold text-[11.5px] sm:text-[12px] tracking-[0.15em] uppercase block mb-3">
-                  ABOUT CLICK SAILORS
+                <span className="text-[#0B3B2C] font-bold text-[11px] sm:text-[12px] tracking-[0.15em] uppercase block mb-2 sm:mb-3">
+                  ABOUT PROSVETTED
                 </span>
-                <h2 className="text-3xl sm:text-4xl lg:text-[40px] xl:text-[43px] font-bold text-[#111827] tracking-[-0.028em] leading-[1.08]">
+                <h2 className="text-2xl sm:text-4xl lg:text-[40px] xl:text-[43px] font-bold text-[#111827] tracking-[-0.028em] leading-[1.12] sm:leading-[1.08]">
                   A Smarter Way to Find
-                  <br />
+                  <br className="hidden sm:inline" />{' '}
                   Home Service Contractors
                 </h2>
-                <p className="mt-4 text-[14px] sm:text-[14.5px] text-[#4B5563] leading-[1.58] max-w-[470px]">
-                  Click Sailors helps homeowners find and compare the best home service
+                <p className="mt-3.5 sm:mt-4 text-[13.5px] sm:text-[14.5px] text-[#4B5563] leading-[1.58] max-w-[470px]">
+                  Prosvetted helps homeowners find and compare the best home service
                   contractors across the USA. We verify licenses, insurance, reviews and
                   project quality so you can make confident decisions. Our mission is to make
                   home improvement easier, safer and more transparent for everyone.
                 </p>
-                <div className="mt-7">
+                <div className="mt-6 sm:mt-7">
                   <EButton
                     href="/contractors"
                     variant="secondary"
                     size="xl"
                     iconRight={<ArrowRight className="w-4 h-4 stroke-[2.5]" />}
+                    className="w-full sm:w-auto justify-center"
                   >
                     Learn More About Us
                   </EButton>
@@ -585,45 +769,53 @@ export default function Home() {
                 </div>
 
                 {/* Mobile-only stacked stats card */}
-                <div className="sm:hidden mt-4 bg-white rounded-2xl shadow-sm border border-gray-100 p-4 grid grid-cols-2 gap-4">
-                  <div className="flex items-center gap-2.5">
-                    <svg className="w-5 h-5 text-[#0B3B2C] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M4 6.5C5.2 6 6.8 6.6 8 7.5c1.2.9 2.4.7 3.5 0 1.2-.8 2.5-.7 3.8-.2 1.3.5 2.7.2 3.7-.5.8 1.4 1 3.2.2 4.8-.6 1.2-.5 2.6-.1 3.9.4 1.3-.2 2.7-1.4 3.5-1.5 1-3.2.5-4.8 1.2-1.3.6-2.5 1.8-4.2 1.5-1.2-.2-2.1-1.3-3.2-1.8-1.5-.7-2.6.4-4-.1-1-.4-1.2-1.8-1.3-3-.2-2.1-.2-4.2.3-6.2.3-1.4-.4-2.8-.5-4.2C3.1 7.4 3.5 6.7 4 6.5z" />
-                    </svg>
+                <div className="sm:hidden mt-4 bg-white rounded-2xl shadow-sm border border-gray-100 p-3.5 grid grid-cols-2 gap-2.5">
+                  <div className="flex items-center gap-2.5 bg-gray-50/70 p-2.5 rounded-xl border border-gray-100">
+                    <div className="w-7 h-7 rounded-lg bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 6.5C5.2 6 6.8 6.6 8 7.5c1.2.9 2.4.7 3.5 0 1.2-.8 2.5-.7 3.8-.2 1.3.5 2.7.2 3.7-.5.8 1.4 1 3.2.2 4.8-.6 1.2-.5 2.6-.1 3.9.4 1.3-.2 2.7-1.4 3.5-1.5 1-3.2.5-4.8 1.2-1.3.6-2.5 1.8-4.2 1.5-1.2-.2-2.1-1.3-3.2-1.8-1.5-.7-2.6.4-4-.1-1-.4-1.2-1.8-1.3-3-.2-2.1-.2-4.2.3-6.2.3-1.4-.4-2.8-.5-4.2C3.1 7.4 3.5 6.7 4 6.5z" />
+                      </svg>
+                    </div>
                     <div>
-                      <div className="text-lg font-bold text-gray-950 leading-none">50+</div>
-                      <div className="text-[11px] text-[#5A6578] mt-0.5">States Covered</div>
+                      <div className="text-base font-bold text-gray-950 leading-none">50+</div>
+                      <div className="text-[10px] text-[#5A6578] mt-1 font-medium">States Covered</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <svg className="w-5 h-5 text-[#0B3B2C] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M8 6.5a4 4 0 0 1 8 0" />
-                      <path d="M6 9h12" />
-                      <path d="M8.5 9v2a3.5 3.5 0 0 0 7 0V9" />
-                      <path d="M4.5 21v-1a7.5 7.5 0 0 1 15 0v1" />
-                    </svg>
+                  <div className="flex items-center gap-2.5 bg-gray-50/70 p-2.5 rounded-xl border border-gray-100">
+                    <div className="w-7 h-7 rounded-lg bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M8 6.5a4 4 0 0 1 8 0" />
+                        <path d="M6 9h12" />
+                        <path d="M8.5 9v2a3.5 3.5 0 0 0 7 0V9" />
+                        <path d="M4.5 21v-1a7.5 7.5 0 0 1 15 0v1" />
+                      </svg>
+                    </div>
                     <div>
-                      <div className="text-lg font-bold text-gray-950 leading-none">200k+</div>
-                      <div className="text-[11px] text-[#5A6578] mt-0.5">Contractors</div>
+                      <div className="text-base font-bold text-gray-950 leading-none">200k+</div>
+                      <div className="text-[10px] text-[#5A6578] mt-1 font-medium">Contractors</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <svg className="w-5 h-5 text-[#0B3B2C] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <polygon points="12 2.5 15.1 8.8 22 9.8 17 14.7 18.2 21.5 12 18.2 5.8 21.5 7 14.7 2 9.8 8.9 8.8 12 2.5" />
-                    </svg>
+                  <div className="flex items-center gap-2.5 bg-gray-50/70 p-2.5 rounded-xl border border-gray-100">
+                    <div className="w-7 h-7 rounded-lg bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="12 2.5 15.1 8.8 22 9.8 17 14.7 18.2 21.5 12 18.2 5.8 21.5 7 14.7 2 9.8 8.9 8.8 12 2.5" />
+                      </svg>
+                    </div>
                     <div>
-                      <div className="text-lg font-bold text-gray-950 leading-none">1M+</div>
-                      <div className="text-[11px] text-[#5A6578] mt-0.5">Reviews</div>
+                      <div className="text-base font-bold text-gray-950 leading-none">1M+</div>
+                      <div className="text-[10px] text-[#5A6578] mt-1 font-medium">Reviews</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5">
-                    <svg className="w-5 h-5 text-[#0B3B2C] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3.5 10.5L12 3.5l8.5 7V20a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 20v-9.5z" />
-                      <path d="m8.5 12.5 2.5 2.5 4.5-4.5" strokeWidth="2.4" />
-                    </svg>
+                  <div className="flex items-center gap-2.5 bg-gray-50/70 p-2.5 rounded-xl border border-gray-100">
+                    <div className="w-7 h-7 rounded-lg bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3.5 10.5L12 3.5l8.5 7V20a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 20v-9.5z" />
+                        <path d="m8.5 12.5 2.5 2.5 4.5-4.5" strokeWidth="2.4" />
+                      </svg>
+                    </div>
                     <div>
-                      <div className="text-lg font-bold text-gray-950 leading-none">25+</div>
-                      <div className="text-[11px] text-[#5A6578] mt-0.5">Categories</div>
+                      <div className="text-base font-bold text-gray-950 leading-none">25+</div>
+                      <div className="text-[10px] text-[#5A6578] mt-1 font-medium">Categories</div>
                     </div>
                   </div>
                 </div>
@@ -643,23 +835,23 @@ export default function Home() {
         {/* ========================================================= */}
         {/* 6. BROWSE BY STATE */}
         {/* ========================================================= */}
-        <section id="states" className="py-14 sm:py-20 bg-white border-t border-gray-100">
+        <section id="states" className="py-10 sm:py-20 bg-white border-t border-gray-100">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 xl:gap-12 items-center">
               {/* Left Column: State buttons grid */}
               <div className="lg:col-span-7">
-                <span className="text-[#0B3B2C] font-bold text-[11.5px] sm:text-[12px] tracking-[0.15em] uppercase block mb-2.5">
+                <span className="text-[#0B3B2C] font-bold text-[11px] sm:text-[12px] tracking-[0.15em] uppercase block mb-2 sm:mb-2.5">
                   BROWSE BY STATE
                 </span>
                 <h2 className="text-2xl sm:text-3xl lg:text-[34px] xl:text-[36px] font-bold text-[#111827] tracking-[-0.025em] leading-[1.15]">
                   Find Top Contractors in Your State
                 </h2>
-                <p className="text-sm sm:text-[14.5px] text-[#4B5563] mt-2 mb-4 font-normal">
+                <p className="text-xs sm:text-[14.5px] text-[#4B5563] mt-2 mb-4 font-normal leading-relaxed">
                   Currently live and actively vetting top contractors across the <strong>New York</strong> metropolitan area. Nationwide coverage expanding soon!
                 </p>
 
                 {/* Live Status Indicator Banner */}
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-900 text-xs font-semibold mb-6">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200/80 text-emerald-900 text-xs font-semibold mb-5 sm:mb-6">
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
@@ -668,21 +860,21 @@ export default function Home() {
                 </div>
 
                 {/* 4-column state button grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                   {stateList.map((state) =>
                     state.isLive ? (
                       <Link
                         key={state.name}
                         href={`/contractors?state=${encodeURIComponent(state.name)}`}
-                        className="relative flex items-center justify-between gap-1.5 px-3 py-2.5 sm:px-3.5 sm:py-2.5 bg-gradient-to-r from-emerald-50/90 via-white to-white border-2 border-[#0B3B2C] rounded-xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all group ring-2 ring-emerald-500/10"
+                        className="relative flex items-center justify-between gap-1 px-2.5 py-2 sm:px-3.5 sm:py-2.5 bg-gradient-to-r from-emerald-50/90 via-white to-white border-2 border-[#0B3B2C] rounded-xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all group ring-2 ring-emerald-500/10"
                       >
                         <div className="flex items-center gap-1.5 min-w-0">
                           <MapPin className="w-3.5 h-3.5 text-[#0B3B2C] shrink-0" />
-                          <span className="text-[12.5px] sm:text-[13px] font-bold text-[#0B3B2C] truncate">
+                          <span className="text-xs sm:text-[13px] font-bold text-[#0B3B2C] truncate">
                             {state.name}
                           </span>
                         </div>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-[#0B3B2C] text-white tracking-wider uppercase shrink-0">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[8.5px] sm:text-[9px] font-extrabold bg-[#0B3B2C] text-white tracking-wider uppercase shrink-0">
                           LIVE
                         </span>
                       </Link>
@@ -690,15 +882,15 @@ export default function Home() {
                       <div
                         key={state.name}
                         title={`${state.name} is coming soon! We are currently serving New York.`}
-                        className="flex items-center justify-between gap-1 px-3 py-2.5 sm:px-3.5 sm:py-2.5 bg-gray-50/70 border border-gray-200/70 rounded-xl text-gray-400 select-none transition-colors"
+                        className="flex items-center justify-between gap-1 px-2.5 py-2 sm:px-3.5 sm:py-2.5 bg-gray-50/70 border border-gray-200/70 rounded-xl text-gray-400 select-none transition-colors"
                       >
                         <div className="flex items-center gap-1.5 min-w-0">
                           <MapPin className="w-3.5 h-3.5 text-gray-300 shrink-0" />
-                          <span className="text-[12.5px] sm:text-[13px] font-medium text-gray-500 truncate">
+                          <span className="text-xs sm:text-[13px] font-medium text-gray-500 truncate">
                             {state.name}
                           </span>
                         </div>
-                        <span className="text-[9px] font-semibold text-amber-700 bg-amber-50/90 border border-amber-200/60 rounded px-1.5 py-0.5 tracking-tight shrink-0">
+                        <span className="text-[8.5px] sm:text-[9px] font-semibold text-amber-700 bg-amber-50/90 border border-amber-200/60 rounded px-1.5 py-0.5 tracking-tight shrink-0">
                           Soon
                         </span>
                       </div>
@@ -706,23 +898,24 @@ export default function Home() {
                   )}
                 </div>
 
-                <div className="pt-6 flex flex-wrap items-center gap-3">
+                <div className="pt-5 sm:pt-6 flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3">
                   <EButton
                     href="/contractors?state=New+York"
                     variant="secondary"
                     size="lg"
                     iconRight={<ArrowRight className="w-4 h-4 stroke-[2]" />}
+                    className="w-full sm:w-auto justify-center"
                   >
                     Explore New York Contractors
                   </EButton>
-                  <span className="text-xs text-gray-500 font-medium">
+                  <span className="text-xs text-gray-500 font-medium text-center sm:text-left">
                     (Vetted pros in NYC, Brooklyn, Queens & more)
                   </span>
                 </div>
               </div>
 
               {/* Right Column: Stylized Continental USA Map */}
-              <div className="lg:col-span-5">
+              <div className="lg:col-span-5 mt-4 lg:mt-0">
                 <USStateMap />
               </div>
             </div>
@@ -732,11 +925,11 @@ export default function Home() {
         {/* ========================================================= */}
         {/* 7. HOW IT WORKS */}
         {/* ========================================================= */}
-        <section id="how-it-works" className="py-14 sm:py-20 bg-white border-t border-gray-100">
+        <section id="how-it-works" className="py-10 sm:py-20 bg-white border-t border-gray-100">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Header: Left-aligned per reference mockup */}
-            <div className="mb-10 sm:mb-12">
-              <span className="text-[#0B3B2C] font-bold text-[11.5px] sm:text-[12px] tracking-[0.15em] uppercase block mb-2">
+            <div className="mb-7 sm:mb-12">
+              <span className="text-[#0B3B2C] font-bold text-[11px] sm:text-[12px] tracking-[0.15em] uppercase block mb-1.5 sm:mb-2">
                 - HOW IT WORKS
               </span>
               <h2 className="text-2xl sm:text-3xl lg:text-[34px] xl:text-[36px] font-bold text-[#111827] tracking-[-0.025em] leading-[1.15]">
@@ -745,12 +938,12 @@ export default function Home() {
             </div>
 
             {/* 4 Process Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-6 relative">
               {/* Step 1 */}
-              <div className="bg-white rounded-2xl p-5 sm:p-6 border border-gray-100/90 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow relative flex flex-col justify-between">
+              <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100/90 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow relative flex flex-col justify-between">
                 <div>
                   {/* Top row: Number and Main Icon side-by-side on left */}
-                  <div className="flex items-center gap-3.5 mb-5">
+                  <div className="flex items-center gap-3.5 mb-4 sm:mb-5">
                     <div className="w-6 h-6 rounded-full bg-[#DA5F2F] text-white flex items-center justify-center font-bold text-xs shrink-0">
                       1
                     </div>
@@ -765,7 +958,7 @@ export default function Home() {
                     <svg className="w-3.5 h-3.5 text-[#9EBDB0] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M5 12h14M13 6l6 6-6 6" />
                     </svg>
-                    <h3 className="font-bold text-[14.5px] sm:text-[15px] text-[#111827] tracking-tight">
+                    <h3 className="font-bold text-[14px] sm:text-[15px] text-[#111827] tracking-tight">
                       Search Your Project
                     </h3>
                   </div>
@@ -784,10 +977,10 @@ export default function Home() {
               </div>
 
               {/* Step 2 */}
-              <div className="bg-white rounded-2xl p-5 sm:p-6 border border-gray-100/90 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow relative flex flex-col justify-between">
+              <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100/90 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow relative flex flex-col justify-between">
                 <div>
                   {/* Top row: Number and Main Icon */}
-                  <div className="flex items-center gap-3.5 mb-5">
+                  <div className="flex items-center gap-3.5 mb-4 sm:mb-5">
                     <div className="w-6 h-6 rounded-full bg-[#DA5F2F] text-white flex items-center justify-center font-bold text-xs shrink-0">
                       2
                     </div>
@@ -804,7 +997,7 @@ export default function Home() {
                     <svg className="w-3.5 h-3.5 text-[#9EBDB0] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M5 12h14M13 6l6 6-6 6" />
                     </svg>
-                    <h3 className="font-bold text-[14.5px] sm:text-[15px] text-[#111827] tracking-tight">
+                    <h3 className="font-bold text-[14px] sm:text-[15px] text-[#111827] tracking-tight">
                       Compare Contractors
                     </h3>
                   </div>
@@ -823,10 +1016,10 @@ export default function Home() {
               </div>
 
               {/* Step 3 */}
-              <div className="bg-white rounded-2xl p-5 sm:p-6 border border-gray-100/90 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow relative flex flex-col justify-between">
+              <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100/90 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow relative flex flex-col justify-between">
                 <div>
                   {/* Top row: Number and Main Icon */}
-                  <div className="flex items-center gap-3.5 mb-5">
+                  <div className="flex items-center gap-3.5 mb-4 sm:mb-5">
                     <div className="w-6 h-6 rounded-full bg-[#DA5F2F] text-white flex items-center justify-center font-bold text-xs shrink-0">
                       3
                     </div>
@@ -840,7 +1033,7 @@ export default function Home() {
                     <svg className="w-3.5 h-3.5 text-[#9EBDB0] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M5 12h14M13 6l6 6-6 6" />
                     </svg>
-                    <h3 className="font-bold text-[14.5px] sm:text-[15px] text-[#111827] tracking-tight">
+                    <h3 className="font-bold text-[14px] sm:text-[15px] text-[#111827] tracking-tight">
                       Find the Best Fit
                     </h3>
                   </div>
@@ -859,10 +1052,10 @@ export default function Home() {
               </div>
 
               {/* Step 4 */}
-              <div className="bg-white rounded-2xl p-5 sm:p-6 border border-gray-100/90 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow relative flex flex-col justify-between">
+              <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100/90 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow relative flex flex-col justify-between">
                 <div>
                   {/* Top row: Number and Main Icon */}
-                  <div className="flex items-center gap-3.5 mb-5">
+                  <div className="flex items-center gap-3.5 mb-4 sm:mb-5">
                     <div className="w-6 h-6 rounded-full bg-[#DA5F2F] text-white flex items-center justify-center font-bold text-xs shrink-0">
                       4
                     </div>
@@ -880,7 +1073,7 @@ export default function Home() {
                     <svg className="w-3.5 h-3.5 text-[#9EBDB0] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M5 12h14M13 6l6 6-6 6" />
                     </svg>
-                    <h3 className="font-bold text-[14.5px] sm:text-[15px] text-[#111827] tracking-tight">
+                    <h3 className="font-bold text-[14px] sm:text-[15px] text-[#111827] tracking-tight">
                       Get in Touch
                     </h3>
                   </div>
@@ -897,10 +1090,10 @@ export default function Home() {
         {/* ========================================================= */}
         {/* 8. LATEST BLOGS & UPDATES */}
         {/* ========================================================= */}
-        <section className="py-14 sm:py-20 bg-white border-t border-gray-200/60">
+        <section className="py-10 sm:py-20 bg-white border-t border-gray-200/60">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Header */}
-            <div className="flex items-end justify-between mb-8">
+            <div className="flex items-end justify-between mb-6 sm:mb-8">
               <div>
                 <span className="text-[#0F3E35] font-extrabold text-[11px] uppercase tracking-wider block mb-1">
                   LATEST BLOGS & UPDATES
@@ -974,18 +1167,12 @@ export default function Home() {
             ) : (
               <div
                 ref={blogsScrollRef}
-                className={`grid gap-6 lg:gap-8 scroll-smooth overflow-x-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${
-                  dynamicBlogs.length === 1
-                    ? 'grid-cols-1 max-w-xl mx-auto'
-                    : dynamicBlogs.length === 2
-                    ? 'grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto'
-                    : 'grid-cols-1 md:grid-cols-3'
-                }`}
+                className="flex md:grid overflow-x-auto md:overflow-visible pb-4 md:pb-0 gap-4 sm:gap-6 lg:gap-8 scroll-smooth no-scrollbar snap-x snap-mandatory md:snap-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:grid-cols-3"
               >
                 {dynamicBlogs.map((article) => (
                   <div
                     key={article.id}
-                    className="bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col justify-between group"
+                    className="min-w-[270px] xs:min-w-[310px] sm:min-w-[340px] md:min-w-0 w-[82vw] xs:w-[78vw] sm:w-[65vw] md:w-auto snap-center shrink-0 md:shrink bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col justify-between group"
                   >
                     <div>
                       <Link
@@ -1011,15 +1198,15 @@ export default function Home() {
                         )}
                       </Link>
 
-                      <div className="p-5 space-y-2.5">
+                      <div className="p-4 sm:p-5 space-y-2 sm:space-y-2.5">
                         <div className="flex items-center gap-2 text-[11px] text-gray-400 font-semibold">
                           <span>
                             {article.publishedAt
                               ? new Date(article.publishedAt).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric',
-                                })
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })
                               : 'Recent'}
                           </span>
                           {article.readingTimeMin ? (
@@ -1033,7 +1220,7 @@ export default function Home() {
                           ) : null}
                         </div>
 
-                        <h3 className="font-extrabold text-base text-gray-950 group-hover:text-[#0B3B2C] transition-colors leading-snug line-clamp-2">
+                        <h3 className="font-extrabold text-sm sm:text-base text-gray-950 group-hover:text-[#0B3B2C] transition-colors leading-snug line-clamp-2">
                           <Link href={`/blog/${article.slug}`}>{article.title}</Link>
                         </h3>
                         {article.excerpt && (
@@ -1044,7 +1231,7 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <div className="px-5 pb-5 pt-2 flex items-center justify-between border-t border-gray-100 text-xs">
+                    <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-2 flex items-center justify-between border-t border-gray-100 text-xs">
                       <span className="text-gray-400 font-medium">Free Guide</span>
                       <Link
                         href={`/blog/${article.slug}`}
@@ -1058,18 +1245,29 @@ export default function Home() {
                 ))}
               </div>
             )}
+
+            {/* Mobile View all articles link */}
+            <div className="mt-4 sm:hidden text-center">
+              <Link
+                href="/blog"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#DA5F2F] hover:text-[#C44D29] hover:underline"
+              >
+                <span>View all articles</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
         </section>
 
         {/* ========================================================= */}
         {/* 9. FREQUENTLY ASKED QUESTIONS */}
         {/* ========================================================= */}
-        <section id="faq" className="py-12 sm:py-16 lg:py-20 bg-white border-t border-gray-100">
+        <section id="faq" className="py-10 sm:py-16 lg:py-20 bg-white border-t border-gray-100">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Header: Left Kicker + Title, Right Link + Circle Button */}
-            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8 sm:mb-10">
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-7 sm:mb-10">
               <div>
-                <span className="text-[#0B3B2C] font-bold text-[11px] sm:text-[11.5px] tracking-[0.16em] uppercase block mb-2">
+                <span className="text-[#0B3B2C] font-bold text-[11px] sm:text-[11.5px] tracking-[0.16em] uppercase block mb-1.5 sm:mb-2">
                   - FREQUENTLY ASKED QUESTIONS
                 </span>
                 <h2 className="text-2xl sm:text-3xl lg:text-[34px] xl:text-[36px] font-bold text-[#111827] tracking-[-0.025em] leading-[1.12]">
@@ -1081,7 +1279,7 @@ export default function Home() {
                 href="#faq"
                 className="inline-flex items-center gap-2.5 group cursor-pointer self-start sm:self-end"
               >
-                <span className="text-[12.5px] sm:text-[13px] font-bold text-[#DA5F2F] group-hover:text-[#C44D29] transition-colors">
+                <span className="text-[12px] sm:text-[13px] font-bold text-[#DA5F2F] group-hover:text-[#C44D29] transition-colors">
                   View all FAQs &rarr;
                 </span>
                 <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-gray-200/90 bg-white flex items-center justify-center text-[#DA5F2F] shadow-2xs group-hover:border-[#DA5F2F] group-hover:bg-[#DA5F2F] group-hover:text-white transition-colors">
@@ -1090,10 +1288,56 @@ export default function Home() {
               </Link>
             </div>
 
-            {/* Content: 2-Column Accordion Grid + Right Illustration Card */}
+            {/* Content: 2-Column Accordion Grid on Desktop + Mobile Sequential Accordion + Right Illustration Card */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 xl:gap-8 items-center">
-              {/* FAQs: 2 Columns of 3 items each */}
-              <div className="lg:col-span-8 xl:col-span-9 grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-3.5">
+              {/* Mobile Sequential FAQ List (Indices 0 to 5 in natural order) */}
+              <div className="md:hidden space-y-3">
+                {faqs.map((faq, index) => {
+                  const isOpen = openFaqIndices.includes(index);
+                  return (
+                    <div
+                      key={`mob-${faq.question}`}
+                      className={`bg-white rounded-xl border transition-all duration-300 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden ${isOpen ? 'border-[#0B3B2C]/40 ring-1 ring-[#0B3B2C]/10 shadow-sm' : 'border-gray-200/80 hover:border-gray-300'
+                        }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleFaq(index)}
+                        className="w-full flex items-center justify-between gap-3 text-left px-4 py-3.5 cursor-pointer select-none group"
+                        aria-expanded={isOpen}
+                      >
+                        <span
+                          className={`font-bold text-[13px] leading-snug tracking-tight transition-colors duration-200 ${isOpen ? 'text-[#0B3B2C]' : 'text-[#111827] group-hover:text-[#0B3B2C]'
+                            }`}
+                        >
+                          {faq.question}
+                        </span>
+                        <div
+                          className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isOpen
+                            ? 'bg-[#0B3B2C]/10 text-[#0B3B2C] rotate-180'
+                            : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-800'
+                            }`}
+                        >
+                          <ChevronDown className="w-3.5 h-3.5 stroke-[2.2]" />
+                        </div>
+                      </button>
+                      <div
+                        className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                          }`}
+                      >
+                        <div className="overflow-hidden">
+                          <div className="px-4 pb-4 text-[12px] text-[#5A6578] leading-relaxed border-t border-gray-100/90 pt-3">
+                            {faq.answer}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop: 2 Columns of 3 items each */}
+              <div className="hidden md:grid lg:col-span-8 xl:col-span-9 md:grid-cols-2 gap-3 sm:gap-3.5">
                 {/* Column 1 (indices 0, 2, 4) */}
                 <div className="space-y-3 sm:space-y-3.5">
                   {[0, 2, 4].map((index) => {
@@ -1102,9 +1346,8 @@ export default function Home() {
                     return (
                       <div
                         key={faq.question}
-                        className={`bg-white rounded-xl border transition-all duration-300 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden ${
-                          isOpen ? 'border-[#0B3B2C]/40 ring-1 ring-[#0B3B2C]/10 shadow-sm' : 'border-gray-200/80 hover:border-gray-300'
-                        }`}
+                        className={`bg-white rounded-xl border transition-all duration-300 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden ${isOpen ? 'border-[#0B3B2C]/40 ring-1 ring-[#0B3B2C]/10 shadow-sm' : 'border-gray-200/80 hover:border-gray-300'
+                          }`}
                       >
                         <button
                           type="button"
@@ -1113,26 +1356,23 @@ export default function Home() {
                           aria-expanded={isOpen}
                         >
                           <span
-                            className={`font-bold text-[13px] sm:text-[13.5px] leading-snug tracking-tight transition-colors duration-200 ${
-                              isOpen ? 'text-[#0B3B2C]' : 'text-[#111827] group-hover:text-[#0B3B2C]'
-                            }`}
+                            className={`font-bold text-[13px] sm:text-[13.5px] leading-snug tracking-tight transition-colors duration-200 ${isOpen ? 'text-[#0B3B2C]' : 'text-[#111827] group-hover:text-[#0B3B2C]'
+                              }`}
                           >
                             {faq.question}
                           </span>
                           <div
-                            className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-                              isOpen
-                                ? 'bg-[#0B3B2C]/10 text-[#0B3B2C] rotate-180'
-                                : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-800'
-                            }`}
+                            className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isOpen
+                              ? 'bg-[#0B3B2C]/10 text-[#0B3B2C] rotate-180'
+                              : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-800'
+                              }`}
                           >
                             <ChevronDown className="w-3.5 h-3.5 stroke-[2.2]" />
                           </div>
                         </button>
                         <div
-                          className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-                            isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-                          }`}
+                          className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                            }`}
                         >
                           <div className="overflow-hidden">
                             <div className="px-4 pb-4 sm:px-5 sm:pb-4.5 text-[12.5px] text-[#5A6578] leading-relaxed border-t border-gray-100/90 pt-3">
@@ -1153,9 +1393,8 @@ export default function Home() {
                     return (
                       <div
                         key={faq.question}
-                        className={`bg-white rounded-xl border transition-all duration-300 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden ${
-                          isOpen ? 'border-[#0B3B2C]/40 ring-1 ring-[#0B3B2C]/10 shadow-sm' : 'border-gray-200/80 hover:border-gray-300'
-                        }`}
+                        className={`bg-white rounded-xl border transition-all duration-300 shadow-[0_1px_3px_rgba(0,0,0,0.02)] overflow-hidden ${isOpen ? 'border-[#0B3B2C]/40 ring-1 ring-[#0B3B2C]/10 shadow-sm' : 'border-gray-200/80 hover:border-gray-300'
+                          }`}
                       >
                         <button
                           type="button"
@@ -1164,26 +1403,23 @@ export default function Home() {
                           aria-expanded={isOpen}
                         >
                           <span
-                            className={`font-bold text-[13px] sm:text-[13.5px] leading-snug tracking-tight transition-colors duration-200 ${
-                              isOpen ? 'text-[#0B3B2C]' : 'text-[#111827] group-hover:text-[#0B3B2C]'
-                            }`}
+                            className={`font-bold text-[13px] sm:text-[13.5px] leading-snug tracking-tight transition-colors duration-200 ${isOpen ? 'text-[#0B3B2C]' : 'text-[#111827] group-hover:text-[#0B3B2C]'
+                              }`}
                           >
                             {faq.question}
                           </span>
                           <div
-                            className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-                              isOpen
-                                ? 'bg-[#0B3B2C]/10 text-[#0B3B2C] rotate-180'
-                                : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-800'
-                            }`}
+                            className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isOpen
+                              ? 'bg-[#0B3B2C]/10 text-[#0B3B2C] rotate-180'
+                              : 'bg-gray-100 text-gray-500 group-hover:bg-gray-200 group-hover:text-gray-800'
+                              }`}
                           >
                             <ChevronDown className="w-3.5 h-3.5 stroke-[2.2]" />
                           </div>
                         </button>
                         <div
-                          className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-                            isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-                          }`}
+                          className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                            }`}
                         >
                           <div className="overflow-hidden">
                             <div className="px-4 pb-4 sm:px-5 sm:pb-4.5 text-[12.5px] text-[#5A6578] leading-relaxed border-t border-gray-100/90 pt-3">
@@ -1198,18 +1434,18 @@ export default function Home() {
               </div>
 
               {/* Right Side: 3D Illustration + Floating Card aligned with right edge */}
-              <div className="lg:col-span-4 xl:col-span-3 flex flex-col items-center lg:items-end justify-center relative pt-1 sm:pt-2">
+              <div className="lg:col-span-4 xl:col-span-3 flex flex-col items-center lg:items-end justify-center relative pt-2 sm:pt-2">
                 {/* Soft 3D circular illustration backdrop */}
-                <div className="w-44 h-44 sm:w-48 sm:h-48 -mb-14 sm:-mb-16 lg:mr-3 relative z-0 flex items-center justify-center opacity-70">
+                <div className="w-36 h-36 sm:w-48 sm:h-48 -mb-10 sm:-mb-16 lg:mr-3 relative z-0 flex items-center justify-center opacity-70">
                   <img
                     src="/faq-house.png"
-                    alt="Click Sailors FAQ illustration"
+                    alt="Prosvetted FAQ illustration"
                     className="w-full h-full object-contain pointer-events-none select-none"
                   />
                 </div>
 
                 {/* Floating White Card */}
-                <div className="w-full max-w-[245px] sm:max-w-[260px] bg-white rounded-2xl px-4 py-3.5 sm:py-4 border border-gray-100/90 shadow-[0_8px_25px_rgba(0,0,0,0.05)] relative z-10 flex items-center gap-3">
+                <div className="w-full max-w-[280px] sm:max-w-[260px] bg-white rounded-2xl px-4 py-3.5 sm:py-4 border border-gray-100/90 shadow-[0_8px_25px_rgba(0,0,0,0.05)] relative z-10 flex items-center gap-3">
                   <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#EAF4EE] border border-[#D5EADB] flex items-center justify-center shrink-0">
                     <svg
                       className="w-5 h-5 text-[#0B3B2C]"
@@ -1226,7 +1462,7 @@ export default function Home() {
                     </svg>
                   </div>
                   <div>
-                    <h3 className="font-bold text-[13.5px] sm:text-[14px] text-[#111827] tracking-tight leading-tight">
+                    <h3 className="font-bold text-[13px] sm:text-[14px] text-[#111827] tracking-tight leading-tight">
                       Still have questions?
                     </h3>
                     <p className="text-[11px] sm:text-[11.5px] text-[#5A6578] mt-0.5 leading-tight">
@@ -1242,72 +1478,75 @@ export default function Home() {
         {/* ========================================================= */}
         {/* 10. FOR CONTRACTORS BANNER */}
         {/* ========================================================= */}
-        <section id="contractors" className="py-12 sm:py-16 bg-[#FAF8F5]">
+        <section id="contractors" className="py-10 sm:py-16 bg-[#FAF8F5]">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="bg-[#FAF9F6] border border-[#E2EBE5] rounded-3xl overflow-hidden relative shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
+            <div className="bg-[#FAF9F6] border border-[#E2EBE5] rounded-2xl sm:rounded-3xl overflow-hidden relative shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
               <div className="grid grid-cols-1 lg:grid-cols-12 items-center min-h-[340px] sm:min-h-[360px]">
                 {/* Left Column: Contractor Photo + Overlapping Feature Card */}
-                <div className="lg:col-span-4 relative flex items-center h-full min-h-[320px] sm:min-h-[360px] overflow-hidden">
-                  {/* Contractor Image with cap, plaid shirt and tool belt */}
-                  <div className="w-[190px] sm:w-[220px] lg:w-[235px] h-[320px] sm:h-[360px] shrink-0 relative overflow-hidden">
-                    <img
-                      src="/contractor-portrait.jpg"
-                      alt="Professional verified contractor with tools"
-                      className="w-full h-full object-cover object-[center_top]"
-                    />
-                    {/* Soft fade on the right side into the background */}
-                    <div className="absolute inset-y-0 right-0 w-14 bg-gradient-to-l from-[#FAF9F6] via-[#FAF9F6]/60 to-transparent pointer-events-none" />
-                  </div>
+                <div className="lg:col-span-4 relative flex items-center justify-center lg:justify-start h-full min-h-[280px] sm:min-h-[360px] overflow-hidden">
+                  <div className="relative flex items-center">
+                    {/* Contractor Image with cap, plaid shirt and tool belt */}
+                    <div className="w-[155px] xs:w-[190px] sm:w-[220px] lg:w-[235px] h-[280px] sm:h-[360px] shrink-0 relative overflow-hidden">
+                      <img
+                        src="/contractor-portrait.jpg"
+                        alt="Professional verified contractor with tools"
+                        className="w-full h-full object-cover object-[center_top]"
+                      />
+                      {/* Soft fade on the right side into the background */}
+                      <div className="absolute inset-y-0 right-0 w-12 sm:w-14 bg-gradient-to-l from-[#FAF9F6] via-[#FAF9F6]/60 to-transparent pointer-events-none" />
+                    </div>
 
-                  {/* Floating White Feature Card */}
-                  <div className="absolute left-[140px] sm:left-[165px] lg:left-[175px] z-10 bg-white rounded-2xl p-3.5 sm:p-4 border border-gray-100/90 shadow-[0_10px_30px_rgba(0,0,0,0.06)] shrink-0 w-[180px] sm:w-[195px]">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center shrink-0">
-                          <TrendingUp className="w-3.5 h-3.5 stroke-[2.4]" />
+                    {/* Floating White Feature Card */}
+                    <div className="absolute left-[105px] xs:left-[130px] sm:left-[165px] lg:left-[175px] z-10 bg-white rounded-2xl p-3 sm:p-4 border border-gray-100/90 shadow-[0_10px_30px_rgba(0,0,0,0.06)] shrink-0 w-[165px] xs:w-[180px] sm:w-[195px]">
+                      <div className="space-y-2.5 sm:space-y-3">
+                        <div className="flex items-center gap-2 sm:gap-2.5">
+                          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center shrink-0">
+                            <TrendingUp className="w-3.5 h-3.5 stroke-[2.4]" />
+                          </div>
+                          <span className="font-bold text-[11.5px] sm:text-[12.5px] text-[#111827] tracking-tight">
+                            Increase Visibility
+                          </span>
                         </div>
-                        <span className="font-bold text-[12px] sm:text-[12.5px] text-[#111827] tracking-tight">
-                          Increase Visibility
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center shrink-0">
-                          <Users2 className="w-3.5 h-3.5 stroke-[2.4]" />
+                        <div className="flex items-center gap-2 sm:gap-2.5">
+                          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center shrink-0">
+                            <Users2 className="w-3.5 h-3.5 stroke-[2.4]" />
+                          </div>
+                          <span className="font-bold text-[11.5px] sm:text-[12.5px] text-[#111827] tracking-tight">
+                            Get More Leads
+                          </span>
                         </div>
-                        <span className="font-bold text-[12px] sm:text-[12.5px] text-[#111827] tracking-tight">
-                          Get More Leads
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center shrink-0">
-                          <Sparkles className="w-3.5 h-3.5 stroke-[2.4]" />
+                        <div className="flex items-center gap-2 sm:gap-2.5">
+                          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center shrink-0">
+                            <Sparkles className="w-3.5 h-3.5 stroke-[2.4]" />
+                          </div>
+                          <span className="font-bold text-[11.5px] sm:text-[12.5px] text-[#111827] tracking-tight">
+                            Showcase Your Work
+                          </span>
                         </div>
-                        <span className="font-bold text-[12px] sm:text-[12.5px] text-[#111827] tracking-tight">
-                          Showcase Your Work
-                        </span>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Middle Column: Headline, Copy & Action Buttons */}
-                <div className="lg:col-span-5 px-6 py-8 sm:px-6 lg:px-6 xl:px-8 lg:py-10 z-10">
-                  <span className="text-[#0B3B2C] font-bold text-[11px] sm:text-[11.5px] tracking-[0.16em] uppercase block mb-2">
+                <div className="lg:col-span-5 px-5 py-7 sm:px-6 sm:py-8 lg:px-6 xl:px-8 lg:py-10 z-10">
+                  <span className="text-[#0B3B2C] font-bold text-[11px] sm:text-[11.5px] tracking-[0.16em] uppercase block mb-1.5 sm:mb-2">
                     FOR CONTRACTORS
                   </span>
-                  <h2 className="text-2xl sm:text-[27px] lg:text-[28px] xl:text-[31px] font-bold text-[#111827] tracking-[-0.025em] leading-[1.15] mb-3">
-                    Grow Your Business with Click Sailors
+                  <h2 className="text-2xl sm:text-[27px] lg:text-[28px] xl:text-[31px] font-bold text-[#111827] tracking-[-0.025em] leading-[1.15] mb-2.5 sm:mb-3">
+                    Grow Your Business with Prosvetted
                   </h2>
-                  <p className="text-[13px] sm:text-[13.5px] text-[#5A6578] leading-[1.55] max-w-[460px] mb-6">
+                  <p className="text-[12.5px] sm:text-[13.5px] text-[#5A6578] leading-[1.55] max-w-[460px] mb-5 sm:mb-6">
                     Claim your free profile to showcase your services, display your work, and connect with homeowners looking for trusted professionals.
                   </p>
-                  <div className="flex flex-wrap items-center gap-3.5">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                     <EButton
                       type="button"
                       variant="primary"
                       size="xl"
                       onClick={() => setQuoteModalOpen(true)}
                       iconRight={<ArrowRight className="w-4 h-4 stroke-[2.2]" />}
+                      className="w-full sm:w-auto justify-center"
                     >
                       Claim Your Free Profile
                     </EButton>
@@ -1315,6 +1554,7 @@ export default function Home() {
                       href="/contractors"
                       variant="secondary"
                       size="xl"
+                      className="w-full sm:w-auto justify-center"
                     >
                       Learn More
                     </EButton>
@@ -1324,44 +1564,47 @@ export default function Home() {
                 {/* Right Column: Business Profile Card + 3D Bar Chart Floating Cluster */}
                 <div className="lg:col-span-3 px-6 pb-8 lg:px-4 lg:py-8 lg:mr-8 flex justify-center lg:justify-end relative">
                   {/* Soft mint circular backdrop disc */}
-                  <div className="w-52 h-52 sm:w-60 sm:h-60 rounded-full bg-[#EBF5F0] border border-[#DEEAE2]/70 absolute -right-2 sm:right-0 top-1/2 -translate-y-1/2 pointer-events-none opacity-80" />
+                  <div className="w-48 h-48 sm:w-60 sm:h-60 rounded-full bg-[#EBF5F0] border border-[#DEEAE2]/70 absolute -right-2 sm:right-0 top-1/2 -translate-y-1/2 pointer-events-none opacity-80" />
 
-                  {/* Main Business Profile Card */}
-                  <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-[0_10px_30px_rgba(0,0,0,0.06)] relative z-10 w-[200px] sm:w-[215px]">
-                    <h3 className="font-bold text-[13.5px] sm:text-[14px] text-[#111827] tracking-tight mb-3.5">
-                      Your Business Profile
-                    </h3>
-                    <div className="space-y-2.5">
-                      {[
-                        'Manage Info',
-                        'Add Photos',
-                        'Showcase Services',
-                        'Get More Leads',
-                      ].map((item) => (
-                        <div key={item} className="flex items-center gap-2">
-                          <div className="w-4.5 h-4.5 rounded-full bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center shrink-0">
-                            <Check className="w-2.8 h-2.8 stroke-[3]" />
+                  {/* Relative cluster container so floating items don't overflow the page */}
+                  <div className="relative">
+                    {/* Main Business Profile Card */}
+                    <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-[0_10px_30px_rgba(0,0,0,0.06)] relative z-10 w-[200px] sm:w-[215px]">
+                      <h3 className="font-bold text-[13px] sm:text-[14px] text-[#111827] tracking-tight mb-3 sm:mb-3.5">
+                        Your Business Profile
+                      </h3>
+                      <div className="space-y-2 sm:space-y-2.5">
+                        {[
+                          'Manage Info',
+                          'Add Photos',
+                          'Showcase Services',
+                          'Get More Leads',
+                        ].map((item) => (
+                          <div key={item} className="flex items-center gap-2">
+                            <div className="w-4.5 h-4.5 rounded-full bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center shrink-0">
+                              <Check className="w-2.8 h-2.8 stroke-[3]" />
+                            </div>
+                            <span className="font-bold text-[11px] sm:text-[12px] text-[#111827]">
+                              {item}
+                            </span>
                           </div>
-                          <span className="font-bold text-[11.5px] sm:text-[12px] text-[#111827]">
-                            {item}
-                          </span>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Overlapping Growth Bar Chart Card */}
-                  <div className="absolute -right-4 sm:-right-6 bottom-3 sm:bottom-5 bg-white rounded-2xl p-3 border border-gray-100 shadow-[0_12px_28px_rgba(0,0,0,0.09)] z-20 flex items-end gap-1.5 h-[84px] w-[88px] sm:w-[94px] justify-center">
-                    <div className="w-3 bg-[#A3D9BC] rounded-t-md h-7" />
-                    <div className="w-3 bg-[#52B788] rounded-t-md h-11" />
-                    <div className="w-3 bg-[#2D6A4F] rounded-t-md h-14" />
-                    <div className="w-3 bg-[#0B3B2C] rounded-t-md h-[68px]" />
-                  </div>
+                    {/* Overlapping Growth Bar Chart Card */}
+                    <div className="absolute -right-4 sm:-right-6 bottom-3 sm:bottom-5 bg-white rounded-2xl p-3 border border-gray-100 shadow-[0_12px_28px_rgba(0,0,0,0.09)] z-20 flex items-end gap-1.5 h-[84px] w-[88px] sm:w-[94px] justify-center">
+                      <div className="w-3 bg-[#A3D9BC] rounded-t-md h-7" />
+                      <div className="w-3 bg-[#52B788] rounded-t-md h-11" />
+                      <div className="w-3 bg-[#2D6A4F] rounded-t-md h-14" />
+                      <div className="w-3 bg-[#0B3B2C] rounded-t-md h-[68px]" />
+                    </div>
 
-                  {/* Small floating badge */}
-                  <div className="absolute -right-1 sm:-right-2 top-3 sm:top-5 bg-white rounded-xl p-2 border border-gray-100 shadow-sm z-15 flex items-center justify-center">
-                    <div className="w-6 h-6 rounded-lg bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center">
-                      <FileCheck2 className="w-3.5 h-3.5 stroke-[2.2]" />
+                    {/* Small floating badge */}
+                    <div className="absolute -right-1 sm:-right-2 top-3 sm:top-5 bg-white rounded-xl p-2 border border-gray-100 shadow-sm z-15 flex items-center justify-center">
+                      <div className="w-6 h-6 rounded-lg bg-[#EBF5F0] text-[#0B3B2C] flex items-center justify-center">
+                        <FileCheck2 className="w-3.5 h-3.5 stroke-[2.2]" />
+                      </div>
                     </div>
                   </div>
                 </div>

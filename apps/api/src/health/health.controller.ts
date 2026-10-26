@@ -22,7 +22,7 @@ export class HealthController {
 
     return {
       success: true,
-      message: 'FindYourExperts API is running smoothly',
+      message: 'Prosvetted API is running smoothly',
       data: {
         status: 'ok',
         uptime: process.uptime(),

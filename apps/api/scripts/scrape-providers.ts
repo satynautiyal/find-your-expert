@@ -30,7 +30,7 @@ interface ScrapedProvider {
   isVerified: boolean;
   subServices: string[];
   ratings: {
-    platform: 'GOOGLE' | 'YELP' | 'FACEBOOK';
+    platform: 'GOOGLE' | 'YELP' | 'HOUZZ' | 'FACEBOOK';
     rating: number;
     reviewCount: number;
     profileUrl: string;

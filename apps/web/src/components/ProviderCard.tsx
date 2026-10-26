@@ -24,27 +24,6 @@ export interface ProviderCardProps {
   onOpenCostGuide?: () => void;
 }
 
-const HOUSE_PROJECT_PHOTOS = [
-  '/roofing-hero-house.jpg',
-  '/services/roof-replacement.jpg',
-  '/services/roof-repair.jpg',
-  '/services/roof-inspection.jpg',
-  '/services/storm-damage.jpg',
-  '/services/shingle-roofing.jpg',
-  '/services/metal-roofing.jpg',
-];
-
-const CABINET_PROJECT_PHOTOS = [
-  '/categories/custom-cabinets.jpg',
-  'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80',
-  'https://images.unsplash.com/photo-1594026112284-02bb6f3352fe?auto=format&fit=crop&w=800&q=80',
-  'https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=800&q=80',
-  'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?auto=format&fit=crop&w=800&q=80',
-  'https://images.unsplash.com/photo-1556909212-d5b604d0c90d?auto=format&fit=crop&w=800&q=80',
-  'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80',
-  'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80',
-];
-
 export default function ProviderCard({
   provider,
   rank,
@@ -75,40 +54,33 @@ export default function ProviderCard({
       ? ['Custom Cabinets', 'Kitchen Cabinetry', 'Built-In Shelving']
       : ['Roof Installation', 'Repair', 'Waterproofing'];
 
-  // High-definition project showcase photo
-  const projectPhoto = (() => {
-    if (isCabinets) {
-      if (provider.imageUrl && (provider.imageUrl.includes('_16-') || provider.imageUrl.includes('_14-'))) {
-        return provider.imageUrl;
-      }
-      return CABINET_PROJECT_PHOTOS[(rank - 1) % CABINET_PROJECT_PHOTOS.length];
-    }
-    return provider.imageUrl || HOUSE_PROJECT_PHOTOS[(rank - 1) % HOUSE_PROJECT_PHOTOS.length];
-  })();
+  // Authentic scraped business logo from DB
+  const businessLogo = provider.imageUrl || '';
 
   // Web reviews data
   const googleRating = provider.reviews?.google?.rating || 4.8;
   const googleCount = provider.reviews?.google?.count || 89;
   const yelpRating = provider.reviews?.yelp?.rating || 4.6;
   const yelpCount = provider.reviews?.yelp?.count || 24;
-  const houzzRating = provider.reviews?.facebook?.rating || 4.7;
-  const houzzCount = provider.reviews?.facebook?.count || 13;
+  const houzzRating = provider.reviews?.houzz?.rating || provider.reviews?.facebook?.rating || 4.7;
+  const houzzCount = provider.reviews?.houzz?.count || provider.reviews?.facebook?.count || 13;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200/90 shadow-xs hover:shadow-md transition-all duration-200 overflow-hidden">
       {/* 1. Top Card Area */}
       <div className="p-4 sm:p-5">
         <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-start lg:items-center justify-between">
-          {/* Left Block: House Photo + Company Details */}
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start flex-1 min-w-0">
-            {/* Col 1: Real Project Photo with Rank Badge */}
-            <div className="relative w-full sm:w-44 md:w-48 lg:w-52 h-36 sm:h-34 rounded-xl overflow-hidden shrink-0 bg-gray-100 group border border-gray-200/60 shadow-xs">
+          {/* Left Block: Business Logo + Company Details */}
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start flex-1 min-w-0 w-full sm:w-auto">
+            {/* Col 1: Business Logo with Rank Badge */}
+            <div className="relative w-full sm:w-44 md:w-48 lg:w-52 h-44 xs:h-48 sm:h-34 rounded-xl overflow-hidden shrink-0 bg-white group border border-gray-200/80 shadow-xs flex items-center justify-center p-3">
               <SafeImage
-                src={projectPhoto}
-                alt={`${provider.name} Project`}
+                src={businessLogo}
+                alt={`${provider.name} Logo`}
                 fallbackCategory={isCabinets ? 'Custom Cabinets' : 'Roofing'}
                 fallbackTitle={provider.name}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                fallbackIcon="letter"
+                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
                 loading="lazy"
               />
 
@@ -116,10 +88,24 @@ export default function ProviderCard({
               <div className="absolute top-2 left-2 bg-[#0B3B2C] text-white text-[11px] font-bold px-2 py-0.5 rounded-md shadow-xs z-10">
                 #{rank}
               </div>
+
+              {/* Mobile Quick-Save Heart */}
+              <button
+                type="button"
+                onClick={() => onToggleCompare(provider.id)}
+                className="sm:hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-xs flex items-center justify-center shadow-xs border border-gray-100 z-10 cursor-pointer active:scale-90 transition-transform"
+                title={isCompared ? 'Saved' : 'Save'}
+              >
+                <Heart
+                  className={`w-4 h-4 text-[#DA5F2F] ${
+                    isCompared ? 'fill-[#DA5F2F]' : ''
+                  }`}
+                />
+              </button>
             </div>
 
             {/* Col 2: Business Info & Ratings */}
-            <div className="space-y-1.5 min-w-0 flex-1">
+            <div className="space-y-1.5 min-w-0 flex-1 w-full">
               {/* Company Logo + Name */}
               <div className="flex items-center gap-2.5">
                 {/* Logo from Cloudflare R2 / DB or fallback monogram */}
@@ -185,23 +171,23 @@ export default function ProviderCard({
               </div>
 
               {/* Metadata: Years in business + Location */}
-              <div className="flex flex-wrap items-center gap-4 text-xs text-[#5A6578] pt-1 font-normal">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-[#5A6578] pt-1 font-normal">
                 <div className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-gray-400" />
+                  <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                   <span>{provider.yearsInBusiness || 15}+ years in business</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                  <span>{provider.servesArea || (provider.borough && provider.borough !== 'All' ? `${provider.borough}, NY` : 'New York City + all 5 boroughs')}</span>
+                  <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  <span className="truncate">{provider.servesArea || (provider.borough && provider.borough !== 'All' ? `${provider.borough}, NY` : 'New York City + all 5 boroughs')}</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Right Block: Trust Score + Checklist + Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 pt-3 lg:pt-0 border-t lg:border-t-0 border-gray-100 w-full lg:w-auto shrink-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6 pt-3 lg:pt-0 border-t lg:border-t-0 border-gray-100 w-full lg:w-auto shrink-0">
             {/* Trust Score & Checklist */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between sm:justify-start gap-4">
               {/* Trust Score Box */}
               <div className="bg-[#EBF7F2] rounded-xl px-4 py-2.5 text-center shrink-0 min-w-[76px]">
                 <div className="text-[10px] font-bold text-[#0B3B2C]/75 capitalize tracking-tight">
@@ -231,26 +217,28 @@ export default function ProviderCard({
 
             {/* Action Buttons & Expand Chevron */}
             <div className="flex items-start gap-2 pl-0 sm:pl-4 border-l-0 sm:border-l border-gray-100 w-full sm:w-auto">
-              <div className="w-full sm:w-32 md:w-36 flex flex-col gap-2">
-                <Link href={`/contractors/${provider.slug}`} className="w-full">
-                  <EButton variant="secondary" size="md" className="w-full font-semibold">
-                    View Profile
-                  </EButton>
-                </Link>
-
+              {/* Mobile: 2-column grid side-by-side! Desktop: stacked vertical */}
+              <div className="w-full sm:w-32 md:w-36 grid grid-cols-2 sm:flex sm:flex-col gap-2">
                 <EButton
                   variant="primary"
                   size="md"
-                  className="w-full font-semibold"
+                  className="w-full font-semibold justify-center"
                   onClick={() => onOpenQuoteModal(provider)}
                 >
                   Get a Quote
                 </EButton>
 
+                <Link href={`/contractors/${provider.slug}`} className="w-full">
+                  <EButton variant="secondary" size="md" className="w-full font-semibold justify-center">
+                    View Profile
+                  </EButton>
+                </Link>
+
+                {/* Desktop Save Button (hidden on mobile, mobile has top-right heart) */}
                 <button
                   type="button"
                   onClick={() => onToggleCompare(provider.id)}
-                  className="inline-flex items-center justify-center gap-1.5 text-xs text-[#111827] hover:border-gray-300 border border-gray-200 bg-white rounded-lg py-1.5 px-3 transition-colors cursor-pointer font-medium shadow-2xs"
+                  className="hidden sm:inline-flex items-center justify-center gap-1.5 text-xs text-[#111827] hover:border-gray-300 border border-gray-200 bg-white rounded-lg py-1.5 px-3 transition-colors cursor-pointer font-medium shadow-2xs"
                 >
                   <Heart
                     className={`w-3.5 h-3.5 text-[#DA5F2F] ${
@@ -278,6 +266,20 @@ export default function ProviderCard({
           </div>
         </div>
       </div>
+
+      {/* Mobile Toggle Button for Details */}
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="sm:hidden w-full py-2 px-4 border-t border-gray-100 bg-gray-50/60 hover:bg-gray-100/60 flex items-center justify-center gap-1.5 text-xs text-gray-600 font-semibold transition-colors"
+      >
+        <span>{isExpanded ? 'Hide company details & reviews' : 'Show company details & reviews'}</span>
+        <ChevronDown
+          className={`w-3.5 h-3.5 transition-transform duration-200 ${
+            isExpanded ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
 
       {/* 2. Expandable Bottom Details: About, Address + Mini Map, Web Reviews */}
       {isExpanded && (

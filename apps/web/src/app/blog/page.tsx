@@ -17,14 +17,14 @@ import { fetchBlogs, fetchFeaturedBlog, fetchBlogCategories } from '@/lib/blogs-
 import type { BlogPost } from '@repo/types';
 
 export const metadata: Metadata = {
-  title: 'Roofing Guides, Cost Breakdowns & Expert Advice | FindYourExperts',
+  title: 'Roofing Guides, Cost Breakdowns & Expert Advice | Prosvetted',
   description:
     'Comprehensive guides, cost calculators, and contractor hiring advice for New York City property owners. Learn from certified building experts.',
   openGraph: {
-    title: 'Roofing Guides & Cost Breakdowns | FindYourExperts',
+    title: 'Roofing Guides & Cost Breakdowns | Prosvetted',
     description:
       'Expert advice and transparent pricing breakdown for roofing, gutters, and siding projects in NYC.',
-    url: 'https://findyourexperts.com/blog',
+    url: 'https://prosvetted.com/blog',
     type: 'website',
   },
 };
@@ -68,7 +68,7 @@ export default async function BlogIndexPage({
           <div className="max-w-3xl space-y-4">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/20 border border-primary/40 text-primary-light text-xs font-bold uppercase tracking-wider">
               <BookOpen className="w-3.5 h-3.5" />
-              <span>FindYourExperts Knowledge Hub</span>
+              <span>Prosvetted Knowledge Hub</span>
             </div>
             <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
               Roofing Guides, Real Costs & Contractor Advice

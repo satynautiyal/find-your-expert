@@ -181,7 +181,7 @@ export interface ScrapedReviewItemDto {
   rating: number;
   comment: string;
   reviewDate?: string;
-  platform: 'GOOGLE' | 'YELP' | 'FACEBOOK';
+  platform: 'GOOGLE' | 'YELP' | 'HOUZZ' | 'FACEBOOK';
   sourceUrl?: string;
 }
 
@@ -195,6 +195,7 @@ export interface SyncReviewsResult {
     platforms: {
       google?: { rating: number; totalReviews: number; reviews: ScrapedReviewItemDto[] };
       yelp?: { rating: number; totalReviews: number; reviews: ScrapedReviewItemDto[] };
+      houzz?: { rating: number; totalReviews: number; reviews: ScrapedReviewItemDto[] };
       facebook?: { rating: number; totalReviews: number; reviews: ScrapedReviewItemDto[] };
     };
     allReviews: ScrapedReviewItemDto[];

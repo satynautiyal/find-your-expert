@@ -37,7 +37,8 @@ export interface FormattedProvider {
   reviews: {
     google: { rating: number; count: number; url: string };
     yelp: { rating: number; count: number; url: string };
-    facebook: { rating: number; count: number; url: string };
+    houzz: { rating: number; count: number; url: string };
+    facebook?: { rating: number; count: number; url: string };
   };
   compositeRating: number;
   totalReviews: number;
@@ -82,6 +83,7 @@ export class ProvidersService {
   private async formatProvider(provider: any): Promise<FormattedProvider> {
     const google = provider.platformReviews?.find((p: any) => p.platform === 'GOOGLE');
     const yelp = provider.platformReviews?.find((p: any) => p.platform === 'YELP');
+    const houzz = provider.platformReviews?.find((p: any) => p.platform === 'HOUZZ');
     const facebook = provider.platformReviews?.find((p: any) => p.platform === 'FACEBOOK');
 
     const logoUrl = provider.logoUrl
@@ -99,9 +101,10 @@ export class ProvidersService {
 
     const allPhotos = provider.listings?.flatMap((l: any) => l.photos || []) || [];
     const firstPhoto = allPhotos[0];
-    const imageUrl = firstPhoto
-      ? await this.storageService.getPresignedUrl(firstPhoto.imageUrl)
-      : coverImageUrl || logoUrl;
+    const imageUrl =
+      logoUrl ||
+      coverImageUrl ||
+      (firstPhoto ? await this.storageService.getPresignedUrl(firstPhoto.imageUrl) : '');
 
     // Format saved scraped reviews
     const scrapedReviews = (provider.scrapedReviews || []).map((sr: any) => ({
@@ -155,10 +158,10 @@ export class ProvidersService {
           count: yelp ? yelp.reviewCount : 0,
           url: yelp ? yelp.profileUrl : '',
         },
-        facebook: {
-          rating: facebook ? Number(facebook.rating) : 0,
-          count: facebook ? facebook.reviewCount : 0,
-          url: facebook ? facebook.profileUrl : '',
+        houzz: {
+          rating: houzz ? Number(houzz.rating) : (facebook ? Number(facebook.rating) : 0),
+          count: houzz ? houzz.reviewCount : (facebook ? facebook.reviewCount : 0),
+          url: houzz ? houzz.profileUrl : (facebook ? facebook.profileUrl : ''),
         },
       },
       compositeRating: Number(provider.compositeRating) || 0,
@@ -458,9 +461,9 @@ export class ProvidersService {
 
     const googleUrl = profile.platformReviews.find((p) => p.platform === 'GOOGLE')?.profileUrl;
     const yelpUrl = profile.platformReviews.find((p) => p.platform === 'YELP')?.profileUrl;
-    const facebookUrl = profile.platformReviews.find((p) => p.platform === 'FACEBOOK')?.profileUrl;
+    const houzzUrl = profile.platformReviews.find((p) => p.platform === 'HOUZZ')?.profileUrl;
 
-    // Scrape live across platforms
+    // Scrape live across platforms (Google, Yelp, Houzz)
     const scrapedResult = await this.reviewsScraperService.scrapeAllPlatforms(
       {
         businessName: profile.businessName,
@@ -468,7 +471,7 @@ export class ProvidersService {
         city: profile.city || undefined,
         googleUrl,
         yelpUrl,
-        facebookUrl,
+        houzzUrl,
       },
       50
     );
@@ -530,27 +533,27 @@ export class ProvidersService {
       );
     }
 
-    if (scrapedResult.platforms.facebook && scrapedResult.platforms.facebook.totalReviews > 0) {
+    if (scrapedResult.platforms.houzz && scrapedResult.platforms.houzz.totalReviews > 0) {
       updates.push(
         this.prisma.platformReview.upsert({
           where: {
             providerProfileId_platform: {
               providerProfileId: profile.id,
-              platform: 'FACEBOOK',
+              platform: 'HOUZZ',
             },
           },
           update: {
-            rating: scrapedResult.platforms.facebook.rating,
-            reviewCount: scrapedResult.platforms.facebook.totalReviews,
-            profileUrl: scrapedResult.platforms.facebook.profileUrl,
+            rating: scrapedResult.platforms.houzz.rating,
+            reviewCount: scrapedResult.platforms.houzz.totalReviews,
+            profileUrl: scrapedResult.platforms.houzz.profileUrl,
             lastScrapedAt: new Date(),
           },
           create: {
             providerProfileId: profile.id,
-            platform: 'FACEBOOK',
-            rating: scrapedResult.platforms.facebook.rating,
-            reviewCount: scrapedResult.platforms.facebook.totalReviews,
-            profileUrl: scrapedResult.platforms.facebook.profileUrl,
+            platform: 'HOUZZ',
+            rating: scrapedResult.platforms.houzz.rating,
+            reviewCount: scrapedResult.platforms.houzz.totalReviews,
+            profileUrl: scrapedResult.platforms.houzz.profileUrl,
             lastScrapedAt: new Date(),
           },
         })

@@ -1,4 +1,4 @@
-export type ReviewPlatformType = 'GOOGLE' | 'YELP' | 'FACEBOOK';
+export type ReviewPlatformType = 'GOOGLE' | 'YELP' | 'HOUZZ' | 'FACEBOOK';
 
 export interface ScrapedReviewItem {
   id?: string;
@@ -33,6 +33,7 @@ export interface MultiPlatformScrapeResult {
   platforms: {
     google?: PlatformScrapedResult;
     yelp?: PlatformScrapedResult;
+    houzz?: PlatformScrapedResult;
     facebook?: PlatformScrapedResult;
   };
   allReviews: ScrapedReviewItem[];

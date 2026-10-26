@@ -91,9 +91,9 @@ export default function EvaluationAndCostSection({
   return (
     <section className="space-y-10 pt-6 pb-2">
       {/* 1. How We Evaluate Companies Banner */}
-      <div className="bg-[#FAFBF9] border border-gray-200/80 rounded-2xl p-6 sm:p-7 shadow-xs">
+      <div className="bg-[#FAFBF9] border border-gray-200/80 rounded-2xl p-5 sm:p-7 shadow-xs">
         {/* Banner Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
           <div className="max-w-2xl">
             <h2 className="text-xl sm:text-2xl font-bold text-[#111827] tracking-tight leading-tight">
               How We Evaluate {currentService} Companies in {currentLocation}
@@ -108,14 +108,14 @@ export default function EvaluationAndCostSection({
             variant="outline"
             size="sm"
             onClick={onOpenCostGuide}
-            className="text-xs font-semibold text-[#111827] border-gray-200 hover:border-gray-300 self-start sm:self-end shrink-0"
+            className="text-xs font-semibold text-[#111827] border-gray-200 hover:border-gray-300 self-start sm:self-end shrink-0 w-full sm:w-auto justify-center"
           >
             <span>Learn About Our Methodology</span>
           </EButton>
         </div>
 
         {/* 4 Methodology Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
           {methodologyCards.map((card, idx) => {
             const Icon = card.icon;
             return (
@@ -139,13 +139,13 @@ export default function EvaluationAndCostSection({
       </div>
 
       {/* 2. Side-by-Side: 7 Steps to Hire + NYC Cost Guide */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 items-start">
         {/* Left Column: 7 Steps to Hire */}
-        <div className="lg:col-span-6 bg-white border border-gray-200/80 rounded-2xl p-6 sm:p-7 shadow-xs">
+        <div className="lg:col-span-6 bg-white border border-gray-200/80 rounded-2xl p-5 sm:p-7 shadow-xs">
           <h2 className="text-lg sm:text-xl font-bold text-[#111827] tracking-tight mb-2">
             7 Steps to Hire a {isCabinets ? 'Custom Cabinet Maker' : 'Roofer'} in {currentLocation}
           </h2>
-          <p className="text-xs sm:text-[13px] text-[#5A6578] font-normal mb-5 leading-relaxed">
+          <p className="text-xs sm:text-[13px] text-[#5A6578] font-normal mb-4 sm:mb-5 leading-relaxed">
             Follow this checklist before signing any contract with a New York professional.
           </p>
 
@@ -164,7 +164,7 @@ export default function EvaluationAndCostSection({
         </div>
 
         {/* Right Column: NYC Cost Guide */}
-        <div className="lg:col-span-6 bg-white border border-gray-200/80 rounded-2xl p-6 sm:p-7 shadow-xs">
+        <div className="lg:col-span-6 bg-white border border-gray-200/80 rounded-2xl p-5 sm:p-7 shadow-xs">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg sm:text-xl font-bold text-[#111827] tracking-tight">
               {currentService} Cost Guide in {currentLocation}
@@ -177,7 +177,7 @@ export default function EvaluationAndCostSection({
               View Full Guide
             </button>
           </div>
-          <p className="text-xs sm:text-[13px] text-[#5A6578] font-normal mb-5 leading-relaxed">
+          <p className="text-xs sm:text-[13px] text-[#5A6578] font-normal mb-4 sm:mb-5 leading-relaxed">
             Estimated market pricing based on verified NYC homeowner invoices and material costs.
           </p>
 
@@ -185,19 +185,19 @@ export default function EvaluationAndCostSection({
             {costItems.map((item, idx) => (
               <div
                 key={idx}
-                className="py-3 flex items-center justify-between gap-4 text-xs sm:text-[13px]"
+                className="py-3 flex items-center justify-between gap-3 text-xs sm:text-[13px]"
               >
-                <span className="text-gray-700 font-medium">
+                <span className="text-gray-700 font-medium leading-snug">
                   {item.project}
                 </span>
-                <span className="font-bold text-gray-900 shrink-0 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">
+                <span className="font-bold text-gray-900 shrink-0 bg-gray-50 px-2 py-0.5 rounded border border-gray-100 whitespace-nowrap">
                   {item.cost}
                 </span>
               </div>
             ))}
           </div>
 
-          <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between">
+          <div className="mt-5 pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
             <span className="text-[11px] text-gray-400">
               Updated for NYC Market 2026
             </span>
@@ -206,7 +206,7 @@ export default function EvaluationAndCostSection({
               variant="outline"
               size="sm"
               onClick={onOpenCostGuide}
-              className="text-xs font-semibold"
+              className="text-xs font-semibold w-full sm:w-auto justify-center"
             >
               Request Custom Estimate
             </EButton>

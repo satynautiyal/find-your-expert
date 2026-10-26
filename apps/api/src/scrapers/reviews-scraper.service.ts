@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleReviewsScraperService } from './google/google-reviews-scraper.service';
 import { YelpReviewsScraperService } from './yelp/yelp-reviews-scraper.service';
-import { FacebookReviewsScraperService } from './facebook/facebook-reviews-scraper.service';
+import { HouzzReviewsScraperService } from './houzz/houzz-reviews-scraper.service';
 import {
   MultiPlatformScrapeResult,
   PlatformScrapedResult,
@@ -14,7 +14,7 @@ export interface ProviderScrapeTarget {
   borough?: string;
   googleUrl?: string;
   yelpUrl?: string;
-  facebookUrl?: string;
+  houzzUrl?: string;
 }
 
 @Injectable()
@@ -24,7 +24,7 @@ export class ReviewsScraperService {
   constructor(
     public readonly googleScraper: GoogleReviewsScraperService,
     public readonly yelpScraper: YelpReviewsScraperService,
-    public readonly facebookScraper: FacebookReviewsScraperService
+    public readonly houzzScraper: HouzzReviewsScraperService
   ) {}
 
   /**
@@ -42,20 +42,20 @@ export class ReviewsScraperService {
   }
 
   /**
-   * Scrapes Facebook recommendations and reviews directly
+   * Scrapes Houzz recommendations and reviews directly
    */
-  async scrapeFacebook(urlOrHandle: string, maxReviews = 100): Promise<PlatformScrapedResult> {
-    return this.facebookScraper.scrapeReviews(urlOrHandle, maxReviews);
+  async scrapeHouzz(urlOrSlug: string, maxReviews = 100): Promise<PlatformScrapedResult> {
+    return this.houzzScraper.scrapeReviews(urlOrSlug, maxReviews);
   }
 
   /**
-   * Scrapes all available platforms (Google, Yelp, Facebook) for a provider in parallel
+   * Scrapes all available platforms (Google, Yelp, Houzz) for a provider in parallel
    */
   async scrapeAllPlatforms(
     target: ProviderScrapeTarget,
     maxPerPlatform = 50
   ): Promise<MultiPlatformScrapeResult> {
-    const { businessName, city, borough, googleUrl, yelpUrl, facebookUrl } = target;
+    const { businessName, city, borough, googleUrl, yelpUrl, houzzUrl } = target;
     const locationStr = borough || city || 'New York';
 
     this.logger.log(`🚀 [All-Scraper] Initiating multi-platform review sync for: "${businessName}"`);
@@ -63,12 +63,12 @@ export class ReviewsScraperService {
     // Prioritize direct Maps place query for highest extraction success
     const googleQuery = `${businessName} ${locationStr} NY`;
     const yelpTarget = yelpUrl || `${businessName} ${locationStr}`;
-    const facebookTarget = facebookUrl || businessName;
+    const houzzTarget = houzzUrl || businessName;
 
-    const [googleRes, yelpRes, fbRes] = await Promise.allSettled([
+    const [googleRes, yelpRes, houzzRes] = await Promise.allSettled([
       this.googleScraper.scrapeReviews(googleQuery, maxPerPlatform),
       yelpUrl ? this.yelpScraper.scrapeReviews(yelpTarget, maxPerPlatform) : Promise.resolve(null),
-      facebookUrl ? this.facebookScraper.scrapeReviews(facebookTarget, maxPerPlatform) : Promise.resolve(null),
+      houzzUrl ? this.houzzScraper.scrapeReviews(houzzTarget, maxPerPlatform) : Promise.resolve(null),
     ]);
 
     const result: MultiPlatformScrapeResult = {
@@ -103,14 +103,14 @@ export class ReviewsScraperService {
       result.allReviews.push(...(yelpRes.value.reviews || []));
     }
 
-    // 3. Process Facebook
-    if (fbRes.status === 'fulfilled' && fbRes.value) {
-      result.platforms.facebook = fbRes.value;
-      if (fbRes.value.success && fbRes.value.totalReviews > 0) {
-        totalScore += fbRes.value.rating * fbRes.value.totalReviews;
-        totalCount += fbRes.value.totalReviews;
+    // 3. Process Houzz
+    if (houzzRes.status === 'fulfilled' && houzzRes.value) {
+      result.platforms.houzz = houzzRes.value;
+      if (houzzRes.value.success && houzzRes.value.totalReviews > 0) {
+        totalScore += houzzRes.value.rating * houzzRes.value.totalReviews;
+        totalCount += houzzRes.value.totalReviews;
       }
-      result.allReviews.push(...(fbRes.value.reviews || []));
+      result.allReviews.push(...(houzzRes.value.reviews || []));
     }
 
     // Calculate overall composite rating

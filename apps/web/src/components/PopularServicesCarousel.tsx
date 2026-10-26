@@ -247,7 +247,7 @@ export default function PopularServicesCarousel({
   };
 
   return (
-    <section 
+    <section
       className="py-14 sm:py-16 bg-[#F9FAFB] border-t border-gray-200/60 overflow-hidden"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -264,27 +264,27 @@ export default function PopularServicesCarousel({
             </h2>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link
               href={viewAllHref}
-              className="hidden sm:inline-flex items-center gap-1 text-xs font-bold text-[#DA5F2F] hover:text-[#C44D29] hover:underline transition-colors"
+              className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold text-[#DA5F2F] hover:text-[#C44D29] hover:underline transition-colors shrink-0"
             >
-              <span>View all services</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline sm:inline">View all services</span>
+              <span className="xs:hidden">View all</span>
+              <ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </Link>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 sm:gap-1.5">
               <EButton
                 type="button"
                 variant="outline"
                 size="iconRound"
                 onClick={() => handleScrollStep('left')}
                 disabled={!canScrollLeft}
-                className={`transition-all duration-200 active:scale-90 ${
-                  !canScrollLeft
-                    ? 'opacity-30 cursor-not-allowed border-gray-200 text-gray-300'
-                    : 'hover:scale-105 hover:border-[#0F3E35] hover:text-[#0F3E35] hover:shadow-xs'
-                }`}
+                className={`transition-all duration-200 active:scale-90 ${!canScrollLeft
+                  ? 'opacity-30 cursor-not-allowed border-gray-200 text-gray-300'
+                  : 'hover:scale-105 hover:border-[#0F3E35] hover:text-[#0F3E35] hover:shadow-xs'
+                  }`}
                 aria-label="Previous services"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -295,11 +295,10 @@ export default function PopularServicesCarousel({
                 size="iconRound"
                 onClick={() => handleScrollStep('right')}
                 disabled={!canScrollRight}
-                className={`transition-all duration-200 active:scale-90 ${
-                  !canScrollRight
-                    ? 'opacity-30 cursor-not-allowed border-gray-200 text-gray-300'
-                    : 'hover:scale-105 hover:border-[#0F3E35] hover:text-[#0F3E35] hover:shadow-xs'
-                }`}
+                className={`transition-all duration-200 active:scale-90 ${!canScrollRight
+                  ? 'opacity-30 cursor-not-allowed border-gray-200 text-gray-300'
+                  : 'hover:scale-105 hover:border-[#0F3E35] hover:text-[#0F3E35] hover:shadow-xs'
+                  }`}
                 aria-label="Next services"
               >
                 <ChevronRight className="w-4 h-4" />
@@ -318,9 +317,8 @@ export default function PopularServicesCarousel({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUpOrLeave}
             onPointerLeave={handlePointerUpOrLeave}
-            className={`flex items-start gap-6 sm:gap-8 overflow-x-auto pb-4 pt-2 no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden overscroll-x-contain select-none focus:outline-none transition-[cursor] ${
-              isDragging ? 'cursor-grabbing' : 'cursor-grab'
-            }`}
+            className={`flex items-start gap-4 sm:gap-8 overflow-x-auto pb-4 pt-2 no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden overscroll-x-contain select-none focus:outline-none transition-[cursor] ${isDragging ? 'cursor-grabbing' : 'cursor-grab'
+              }`}
             style={{
               WebkitOverflowScrolling: 'touch',
               touchAction: 'pan-y pinch-zoom',
@@ -331,11 +329,11 @@ export default function PopularServicesCarousel({
               Array.from({ length: 8 }).map((_, idx) => (
                 <div
                   key={`skeleton-${idx}`}
-                  className="flex flex-col items-center shrink-0 w-24 sm:w-28 text-center animate-pulse"
+                  className="flex flex-col items-center shrink-0 w-20 xs:w-24 sm:w-28 text-center animate-pulse"
                 >
-                  <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gray-200 shadow-inner" />
-                  <div className="w-16 h-3.5 bg-gray-200 rounded mt-3" />
-                  <div className="w-12 h-2.5 bg-gray-100 rounded mt-1.5" />
+                  <div className="w-18 h-18 xs:w-20 xs:h-20 sm:w-24 sm:h-24 rounded-full bg-gray-200 shadow-inner" />
+                  <div className="w-14 xs:w-16 h-3.5 bg-gray-200 rounded mt-3" />
+                  <div className="w-10 xs:w-12 h-2.5 bg-gray-100 rounded mt-1.5" />
                 </div>
               ))
             ) : (
@@ -345,9 +343,9 @@ export default function PopularServicesCarousel({
                   href={`/contractors?service=${encodeURIComponent(service.name)}`}
                   onClickCapture={handleItemClick}
                   data-carousel-item
-                  className="flex flex-col items-center group shrink-0 w-24 sm:w-28 text-center select-none transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none"
+                  className="flex flex-col items-center group shrink-0 !w-20 xs:!w-24 sm:!w-28 text-center select-none transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none"
                 >
-                  <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-white shadow-md group-hover:shadow-xl group-hover:scale-105 transition-all duration-300 ring-2 ring-transparent group-hover:ring-[#0F3E35]/40 bg-gray-100">
+                  <div className="relative !w-[4.5rem] !h-[4.5rem] xs:!w-20 xs:!h-20 sm:!w-24 sm:!h-24 !rounded-full overflow-hidden border-2 border-white shadow-md group-hover:shadow-xl group-hover:scale-105 transition-all duration-300 ring-2 ring-transparent group-hover:ring-[#0F3E35]/40 bg-gray-100">
                     <SafeImage
                       src={service.image}
                       alt={service.name}
@@ -358,15 +356,15 @@ export default function PopularServicesCarousel({
                       loading="lazy"
                     />
                   </div>
-                  <span className="font-bold text-xs sm:text-[13px] text-gray-800 group-hover:text-[#0F3E35] transition-colors mt-3 leading-snug line-clamp-2">
+                  <span className="font-bold text-[11px] xs:text-xs sm:text-[13px] text-gray-800 group-hover:text-[#0F3E35] transition-colors mt-2 sm:mt-3 leading-snug line-clamp-2 px-0.5">
                     {service.name}
                   </span>
                   {service.providerCount !== undefined && service.providerCount > 0 ? (
-                    <span className="mt-1 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-2xs">
+                    <span className="mt-1 inline-flex items-center px-1.5 xs:px-2 py-0.5 rounded-full text-[9px] xs:text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-2xs">
                       {service.providerCount} Pros
                     </span>
                   ) : (
-                    <span className="mt-1 text-[10px] text-gray-400 font-medium">
+                    <span className="mt-1 text-[9px] xs:text-[10px] text-gray-400 font-medium">
                       Verified Pros
                     </span>
                   )}

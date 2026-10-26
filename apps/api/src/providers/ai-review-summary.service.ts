@@ -55,8 +55,8 @@ export class AiReviewSummaryService {
               headers: {
                 Authorization: `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://findyourexperts.com',
-                'X-Title': 'FindYourExperts AI Summary',
+                'HTTP-Referer': 'https://prosvetted.com',
+                'X-Title': 'Prosvetted AI Summary',
               },
             },
             (res) => {

@@ -1,6 +1,6 @@
 import { YelpReviewsScraperService } from '../src/scrapers/yelp/yelp-reviews-scraper.service';
 import { GoogleReviewsScraperService } from '../src/scrapers/google/google-reviews-scraper.service';
-import { FacebookReviewsScraperService } from '../src/scrapers/facebook/facebook-reviews-scraper.service';
+import { HouzzReviewsScraperService } from '../src/scrapers/houzz/houzz-reviews-scraper.service';
 import { ReviewsScraperService } from '../src/scrapers/reviews-scraper.service';
 
 async function testScrapers() {
@@ -10,15 +10,15 @@ async function testScrapers() {
 
   const yelpScraper = new YelpReviewsScraperService();
   const googleScraper = new GoogleReviewsScraperService();
-  const fbScraper = new FacebookReviewsScraperService();
-  const orchestrator = new ReviewsScraperService(googleScraper, yelpScraper, fbScraper);
+  const houzzScraper = new HouzzReviewsScraperService();
+  const orchestrator = new ReviewsScraperService(googleScraper, yelpScraper, houzzScraper);
 
-  // 1. Test Yelp Scraper
-  console.log('--- 1. Testing Yelp Scraper ---');
-  const yelpResult = await yelpScraper.scrapeReviews('b-and-b-contracting-staten-island', 5);
-  console.log(`Yelp Success: ${yelpResult.success} | Rating: ${yelpResult.rating} | Total: ${yelpResult.totalReviews} | Reviews Extracted: ${yelpResult.reviews.length}`);
-  if (yelpResult.reviews.length > 0) {
-    console.log('Sample Review:', yelpResult.reviews[0]);
+  // 1. Test Houzz Scraper
+  console.log('--- 1. Testing Houzz Scraper ---');
+  const houzzResult = await houzzScraper.scrapeReviews('https://www.houzz.com/professionals/general-contractors/evolution-group-pfvwus-pf~1766049999', 5);
+  console.log(`Houzz Success: ${houzzResult.success} | Rating: ${houzzResult.rating} | Total: ${houzzResult.totalReviews} | Reviews Extracted: ${houzzResult.reviews.length}`);
+  if (houzzResult.reviews.length > 0) {
+    console.log('Sample Houzz Review:', houzzResult.reviews[0]);
   }
 
   // 2. Test Google Scraper
@@ -32,15 +32,16 @@ async function testScrapers() {
   // 3. Test Multi-platform Orchestrator
   console.log('\n--- 3. Testing Orchestrator (Multi-Platform) ---');
   const multiResult = await orchestrator.scrapeAllPlatforms({
-    businessName: 'B&B Contracting Corp.',
-    borough: 'Staten Island',
-    yelpUrl: 'https://www.yelp.com/biz/b-and-b-contracting-staten-island',
+    businessName: 'Evolution Group',
+    city: 'New York',
+    houzzUrl: 'https://www.houzz.com/professionals/general-contractors/evolution-group-pfvwus-pf~1766049999',
   }, 10);
 
   console.log(`\nMulti-Platform Result:`);
   console.log(`- Business: ${multiResult.businessName}`);
   console.log(`- Composite Rating: ${multiResult.compositeRating}`);
   console.log(`- Total Reviews: ${multiResult.totalReviews}`);
+  console.log(`- Houzz Rating: ${multiResult.platforms.houzz?.rating} (${multiResult.platforms.houzz?.totalReviews})`);
   console.log(`- Total Reviews Collected: ${multiResult.allReviews.length}`);
   console.log('\n🎉 Scraper test completed successfully!');
 }

@@ -26,7 +26,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 4000;
   await app.listen(port);
-  logger.log(`🚀 FindYourExperts API is running on: http://localhost:${port}/api`);
+  logger.log(`🚀 Prosvetted API is running on: http://localhost:${port}/api`);
   logger.log(`🩺 Health check endpoint: http://localhost:${port}/api/health`);
 }
 

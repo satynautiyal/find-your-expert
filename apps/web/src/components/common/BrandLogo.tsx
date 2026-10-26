@@ -10,42 +10,46 @@ export interface BrandLogoProps {
 }
 
 /**
- * Click Sailors Icon: Geometric twin sails / roofline peaks in signature orange
+ * Prosvetted Icon: Geometric "P" mark in deep forest green (#144E35) with warm orange pillar (#F1A14A)
  */
-export function ClickSailorsIcon({
-  className = 'w-7 h-5 sm:w-8 sm:h-6',
-  color = '#EA580C',
+export function ProsvettedIcon({
+  className = 'w-6 h-7 sm:w-7 sm:h-8',
+  primaryColor = '#144E35',
+  accentColor = '#F1A14A',
 }: {
   className?: string;
-  color?: string;
+  primaryColor?: string;
+  accentColor?: string;
 }) {
   return (
     <svg
-      viewBox="0 0 32 24"
+      viewBox="0 0 144 171"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
       aria-hidden="true"
     >
-      {/* Left Chevron Roof / Sail */}
+      {/* Upper Block & Rounded Bowl of P */}
       <path
-        d="M2.5 20.5L10 4.5C10.5 3.5 11.9 3.5 12.4 4.5L18.5 17.5"
-        stroke={color}
-        strokeWidth="3.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M0 0H82A62 62 0 0 1 82 124H38L71 86H83.5A23.5 23.5 0 0 0 83.5 39H38V86H0V0Z"
+        fill={primaryColor}
       />
-      {/* Right Chevron Roof / Sail */}
+      {/* Lower Curved Stem of P */}
       <path
-        d="M13.5 17.5L19.6 4.5C20.1 3.5 21.5 3.5 22 4.5L29.5 20.5"
-        stroke={color}
-        strokeWidth="3.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M38 86A38 38 0 0 0 0 124V171H38V86Z"
+        fill={primaryColor}
+      />
+      {/* Inner Orange Vertical Pillar with Diagonal Cut */}
+      <path
+        d="M38 39H71V86L38 124V39Z"
+        fill={accentColor}
       />
     </svg>
   );
 }
+
+// Keep alias for backward compatibility
+export const ClickSailorsIcon = ProsvettedIcon;
 
 export default function BrandLogo({
   variant = 'light',
@@ -58,38 +62,42 @@ export default function BrandLogo({
 
   const sizeClasses = {
     sm: {
-      icon: 'w-6 h-4',
-      text: 'text-base',
+      icon: 'w-5 h-6',
+      text: 'text-lg',
+      gap: 'gap-2',
     },
     md: {
-      icon: 'w-7 h-5 sm:w-8 sm:h-6',
-      text: 'text-lg sm:text-xl',
+      icon: 'w-6 h-7 sm:w-7 sm:h-8',
+      text: 'text-xl sm:text-[22px]',
+      gap: 'gap-2.5',
     },
     lg: {
-      icon: 'w-9 h-6 sm:w-10 sm:h-7',
+      icon: 'w-8 h-9 sm:w-9 sm:h-11',
       text: 'text-2xl sm:text-3xl',
+      gap: 'gap-3',
     },
   }[size];
 
   const content = (
-    <div className={`inline-flex items-center gap-2 group transition-transform ${className}`}>
-      {/* Orange Twin-Sail / Roof Icon */}
-      <div className="shrink-0 transition-transform duration-200 group-hover:scale-105">
-        <ClickSailorsIcon className={sizeClasses.icon} />
+    <div className={`inline-flex items-center ${sizeClasses.gap} group transition-transform ${className}`}>
+      {/* Prosvetted Geometric P Icon */}
+      <div className="shrink-0 transition-transform duration-200 group-hover:scale-105 flex items-center">
+        <ProsvettedIcon
+          className={sizeClasses.icon}
+          primaryColor={isDark ? '#FFFFFF' : '#144E35'}
+          accentColor="#F1A14A"
+        />
       </div>
 
       {/* Brand Typography */}
       {showText && (
-        <div
-          className={`flex items-baseline font-black tracking-tight leading-none ${sizeClasses.text} ${
-            isDark ? 'text-white' : 'text-gray-950'
+        <span
+          className={`font-bold tracking-[-0.025em] leading-none -mt-0.5 ${sizeClasses.text} ${
+            isDark ? 'text-white' : 'text-[#0D3421]'
           }`}
         >
-          <span>Click</span>
-          <span className={`font-semibold ml-1 ${isDark ? 'text-white/90' : 'text-gray-900'}`}>
-            Sailors
-          </span>
-        </div>
+          Prosvetted
+        </span>
       )}
     </div>
   );

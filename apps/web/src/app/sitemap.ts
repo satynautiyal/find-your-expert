@@ -3,7 +3,7 @@ import { fetchBlogs } from '@/lib/blogs-api';
 import type { BlogPost } from '@repo/types';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = 'https://findyourexperts.com';
+  const baseUrl = 'https://prosvetted.com';
 
   // Base static routes
   const staticRoutes: MetadataRoute.Sitemap = [

@@ -3,12 +3,10 @@
 import React from 'react';
 import {
   ChevronDown,
-  Layers,
   Home,
   Star,
   Award,
   ShieldCheck,
-  MapPin,
   X,
   Sparkles,
 } from 'lucide-react';
@@ -61,29 +59,6 @@ export default function ContractorFilterToolbar({
     currentService.toLowerCase().includes('vanit') ||
     currentService.toLowerCase().includes('closet');
 
-  // Dynamic Service Dropdown Options
-  const serviceOptions = dynamicServices && dynamicServices.length > 0
-    ? ['All Services', ...dynamicServices.filter(s => s !== 'All Services' && s !== 'All')]
-    : isCabinets
-    ? [
-        'All Services',
-        'Custom Cabinets',
-        'Kitchen Cabinetry',
-        'Built-In Shelving',
-        'Bathroom Vanities',
-        'Custom Closets',
-        'Architectural Millwork',
-      ]
-    : [
-        'All Services',
-        'Roof Installation',
-        'Repair',
-        'Flat Roof Systems',
-        'Waterproofing',
-        'Gutter Installation',
-        'Inspection',
-      ];
-
   // Dynamic Project Type Options based on trade
   const projectTypeOptions = isCabinets
     ? [
@@ -106,9 +81,9 @@ export default function ContractorFilterToolbar({
   return (
     <div className="space-y-4">
       {/* Title & Subtitle + Sort by Dropdown */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-2xl sm:text-[26px] md:text-[28px] font-bold text-[#111827] tracking-tight leading-tight">
+          <h2 className="text-xl sm:text-[26px] md:text-[28px] font-bold text-[#111827] tracking-tight leading-tight">
             {currentService} in {currentLocation}
           </h2>
           <p className="mt-1 text-xs sm:text-[13px] text-[#5A6578] font-normal">
@@ -135,36 +110,15 @@ export default function ContractorFilterToolbar({
         </div>
       </div>
 
-      {/* Filter Dropdown Pills Row */}
-      <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 pt-1">
-        {/* Filter 1: Services */}
-        <div className="relative">
-          <select
-            value={selectedService === 'All' ? 'All Services' : selectedService}
-            onChange={(e) => {
-              const val = e.target.value;
-              onSelectService(val);
-            }}
-            aria-label="Filter by service"
-            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
-          >
-            {serviceOptions.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          <Layers className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-        </div>
-
-        {/* Filter 2: Project / Material Type (Context-Aware) */}
-        <div className="relative">
+      {/* Filter Dropdown Pills Row (Horizontal swipe rail on mobile, flex-wrap on desktop) */}
+      <div className="flex items-center gap-2 sm:gap-2.5 pt-1 overflow-x-auto no-scrollbar pb-1 sm:pb-0 sm:flex-wrap">
+        {/* Filter 1: Project / Material Type (Context-Aware) */}
+        <div className="relative shrink-0">
           <select
             value={projectType}
             onChange={(e) => onProjectTypeChange(e.target.value)}
             aria-label="Filter by project type"
-            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
+            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35] whitespace-nowrap"
           >
             {projectTypeOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -180,13 +134,13 @@ export default function ContractorFilterToolbar({
           <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
-        {/* Filter 3: Rating */}
-        <div className="relative">
+        {/* Filter 2: Rating */}
+        <div className="relative shrink-0">
           <select
             value={minRating}
             onChange={(e) => onMinRatingChange(Number(e.target.value))}
             aria-label="Filter by rating"
-            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
+            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35] whitespace-nowrap"
           >
             <option value={0}>Any Rating</option>
             <option value={4.0}>4.0+ Stars</option>
@@ -197,13 +151,13 @@ export default function ContractorFilterToolbar({
           <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
-        {/* Filter 4: Experience */}
-        <div className="relative">
+        {/* Filter 3: Experience */}
+        <div className="relative shrink-0">
           <select
             value={minExperience}
             onChange={(e) => onMinExperienceChange(Number(e.target.value))}
             aria-label="Filter by experience"
-            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
+            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35] whitespace-nowrap"
           >
             <option value={0}>Any Experience</option>
             <option value={5}>5+ Years in Business</option>
@@ -215,13 +169,13 @@ export default function ContractorFilterToolbar({
           <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
-        {/* Filter 5: Verified Status */}
-        <div className="relative">
+        {/* Filter 4: Verified Status */}
+        <div className="relative shrink-0">
           <select
             value={verifiedOnly ? 'true' : 'false'}
             onChange={(e) => onVerifiedOnlyChange(e.target.value === 'true')}
             aria-label="Filter by verification status"
-            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
+            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35] whitespace-nowrap"
           >
             <option value="false">All Contractors</option>
             <option value="true">100% Verified Only</option>
@@ -230,29 +184,12 @@ export default function ContractorFilterToolbar({
           <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
 
-        {/* Filter 6: Distance / NYC Coverage */}
-        <div className="relative">
-          <select
-            value={distance}
-            onChange={(e) => onDistanceChange(e.target.value)}
-            aria-label="Filter by coverage distance"
-            className="appearance-none bg-white border border-gray-200 hover:border-gray-300 rounded-lg pl-8 pr-7 py-1.5 text-xs font-medium text-[#374151] shadow-2xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0F3E35]/20 focus:border-[#0F3E35]"
-          >
-            <option value="All Areas">All 5 NYC Boroughs</option>
-            <option value="Within 5 miles">Within 5 miles</option>
-            <option value="Within 10 miles">Within 10 miles</option>
-            <option value="Within 25 miles">Within 25 miles</option>
-          </select>
-          <MapPin className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-        </div>
-
         {/* Reset Filters Pill (if any filter is active) */}
         {hasActiveFilters && (
           <button
             type="button"
             onClick={onResetFilters}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#DA5F2F] hover:bg-[#DA5F2F]/10 border border-[#DA5F2F]/30 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#DA5F2F] hover:bg-[#DA5F2F]/10 border border-[#DA5F2F]/30 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
           >
             <X className="w-3.5 h-3.5" />
             <span>Reset Filters</span>

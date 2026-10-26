@@ -397,7 +397,7 @@ export class BlogsService {
         content: dto.content,
         coverImageUrl,
         coverImageAlt: dto.coverImageAlt || dto.title,
-        authorName: dto.authorName || 'FindYourExperts Editorial',
+        authorName: dto.authorName || 'Prosvetted Editorial',
         authorAvatar,
         authorRole: dto.authorRole || 'Content Editor',
         category: dto.category || 'General',

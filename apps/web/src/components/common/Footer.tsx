@@ -22,10 +22,10 @@ export default function Footer() {
   return (
     <footer className="bg-[#0B3B2C] text-gray-300 text-xs pt-16 pb-10 border-t border-[#0F4C39]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-        {/* Top 6-column Grid matching screenshot */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-6">
+        {/* Top 6-column Grid matching screenshot on desktop, 2-column on mobile */}
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-12 gap-x-5 gap-y-8 lg:gap-6">
           {/* Column 1: Brand Info & Socials */}
-          <div className="lg:col-span-3 space-y-4">
+          <div className="col-span-2 md:col-span-2 lg:col-span-3 space-y-4">
             <BrandLogo variant="dark" size="md" />
             <p className="text-xs text-emerald-100/70 max-w-sm leading-relaxed">
               Your guide to trusted home improvement professionals.
@@ -97,7 +97,7 @@ export default function Footer() {
           </div>
 
           {/* Column 2: Popular Services */}
-          <div className="lg:col-span-2 space-y-3">
+          <div className="col-span-1 lg:col-span-2 space-y-3">
             <h4 className="font-bold text-white uppercase text-[11px] tracking-wider">
               Popular Services
             </h4>
@@ -141,7 +141,7 @@ export default function Footer() {
           </div>
 
           {/* Column 3: Browse by State */}
-          <div className="lg:col-span-2 space-y-3">
+          <div className="col-span-1 lg:col-span-2 space-y-3">
             <h4 className="font-bold text-white uppercase text-[11px] tracking-wider">
               Browse by State
             </h4>
@@ -185,7 +185,7 @@ export default function Footer() {
           </div>
 
           {/* Column 4: About */}
-          <div className="lg:col-span-1 space-y-3">
+          <div className="col-span-1 lg:col-span-1 space-y-3">
             <h4 className="font-bold text-white uppercase text-[11px] tracking-wider">
               About
             </h4>
@@ -229,7 +229,7 @@ export default function Footer() {
           </div>
 
           {/* Column 5: For Contractors */}
-          <div className="lg:col-span-2 space-y-3">
+          <div className="col-span-1 lg:col-span-2 space-y-3">
             <h4 className="font-bold text-white uppercase text-[11px] tracking-wider">
               For Contractors
             </h4>
@@ -258,7 +258,7 @@ export default function Footer() {
           </div>
 
           {/* Column 6: Stay Updated */}
-          <div className="lg:col-span-2 space-y-3">
+          <div className="col-span-2 md:col-span-2 lg:col-span-2 space-y-3">
             <h4 className="font-bold text-white uppercase text-[11px] tracking-wider">
               Stay Updated
             </h4>
@@ -292,7 +292,7 @@ export default function Footer() {
 
         {/* Bottom Sub-footer */}
         <div className="pt-8 border-t border-[#0F4C39] flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-emerald-100/60">
-          <p>&copy; 2026 Click Sailors. All rights reserved.</p>
+          <p>&copy; 2026 Prosvetted. All rights reserved.</p>
           <div className="flex flex-wrap items-center gap-4 sm:gap-6">
             <a href="#" className="hover:text-white transition-colors">
               Terms of Use

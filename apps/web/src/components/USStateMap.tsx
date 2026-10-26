@@ -24,7 +24,7 @@ export default function USStateMap() {
   const [hoveredState, setHoveredState] = useState<StatePin | null>(null);
 
   return (
-    <div className="relative w-full aspect-[16/11] max-w-[560px] mx-auto flex items-center justify-center select-none">
+    <div className="relative w-full aspect-[16/11] max-w-[560px] mx-auto flex items-center justify-center select-none overflow-hidden rounded-2xl bg-white/40 sm:bg-transparent p-1 sm:p-0">
       {/* Continental US SVG Map */}
       <svg
         viewBox="30 15 910 575"
@@ -219,6 +219,8 @@ export default function USStateMap() {
           {/* Tooltip Card */}
           <div
             className={`absolute bottom-full mb-2 whitespace-nowrap bg-gray-900 text-white text-[11px] font-medium px-2.5 py-1 rounded-md shadow-lg transition-all duration-150 pointer-events-none ${
+              pin.id === 'ny' ? 'right-0 sm:left-1/2 sm:-translate-x-1/2' : 'left-1/2 -translate-x-1/2'
+            } ${
               hoveredState?.id === pin.id
                 ? 'opacity-100 translate-y-0 scale-100'
                 : 'opacity-0 translate-y-1 scale-95'
@@ -230,7 +232,11 @@ export default function USStateMap() {
             ) : (
               <span className="text-amber-400 ml-1.5 font-semibold">(Coming Soon)</span>
             )}
-            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+            <div
+              className={`absolute top-full border-4 border-transparent border-t-gray-900 ${
+                pin.id === 'ny' ? 'right-4 sm:left-1/2 sm:-translate-x-1/2' : 'left-1/2 -translate-x-1/2'
+              }`}
+            />
           </div>
 
           {/* Code Badge above pin */}

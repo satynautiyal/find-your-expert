@@ -46,30 +46,30 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { slug } = await params;
   try {
     const { blog } = await fetchBlogBySlug(slug);
-    if (!blog) return { title: 'Article Not Found | FindYourExperts' };
+    if (!blog) return { title: 'Article Not Found | Prosvetted' };
 
-    const title = blog.metaTitle || `${blog.title} | FindYourExperts`;
+    const title = blog.metaTitle || `${blog.title} | Prosvetted`;
     const description =
       blog.metaDescription ||
       blog.excerpt ||
-      'Read in-depth roofing analysis, cost breakdowns, and contractor tips from FindYourExperts NYC.';
+      'Read in-depth roofing analysis, cost breakdowns, and contractor tips from Prosvetted NYC.';
     const ogImage =
       blog.ogImageUrl ||
       blog.coverImageUrl ||
-      'https://findyourexperts.com/og-default.jpg';
+      'https://prosvetted.com/og-default.jpg';
 
     return {
       title,
       description,
       alternates: {
-        canonical: blog.canonicalUrl || `https://findyourexperts.com/blog/${blog.slug}`,
+        canonical: blog.canonicalUrl || `https://prosvetted.com/blog/${blog.slug}`,
       },
       openGraph: {
         title,
         description,
         type: 'article',
         publishedTime: blog.publishedAt ? new Date(blog.publishedAt).toISOString() : undefined,
-        authors: [blog.authorName || 'FindYourExperts'],
+        authors: [blog.authorName || 'Prosvetted'],
         images: [
           {
             url: ogImage,
@@ -88,7 +88,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   } catch {
     return {
-      title: 'Article | FindYourExperts',
+      title: 'Article | Prosvetted',
     };
   }
 }
@@ -122,20 +122,20 @@ export default async function BlogDetailPage({ params }: PageProps) {
     dateModified: blog.updatedAt ? new Date(blog.updatedAt).toISOString() : undefined,
     author: {
       '@type': 'Person',
-      name: blog.authorName || 'FindYourExperts Editorial',
+      name: blog.authorName || 'Prosvetted Editorial',
       jobTitle: blog.authorRole || 'Content Editor',
     },
     publisher: {
       '@type': 'Organization',
-      name: 'FindYourExperts',
+      name: 'Prosvetted',
       logo: {
         '@type': 'ImageObject',
-        url: 'https://findyourexperts.com/logo.png',
+        url: 'https://prosvetted.com/logo.svg',
       },
     },
     mainEntityOfPage: {
       '@type': 'WebPage',
-      '@id': `https://findyourexperts.com/blog/${blog.slug}`,
+      '@id': `https://prosvetted.com/blog/${blog.slug}`,
     },
   };
 
@@ -197,7 +197,7 @@ export default async function BlogDetailPage({ params }: PageProps) {
             </div>
             <div>
               <div className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                <span>{blog.authorName || 'FindYourExperts Editorial'}</span>
+                <span>{blog.authorName || 'Prosvetted Editorial'}</span>
                 <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
                   <ShieldCheck className="w-3 h-3" />
                   Verified Author
@@ -211,7 +211,7 @@ export default async function BlogDetailPage({ params }: PageProps) {
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-gray-400 hidden sm:inline">Share:</span>
             <a
-              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(blog.title)}&url=https://findyourexperts.com/blog/${blog.slug}`}
+              href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(blog.title)}&url=https://prosvetted.com/blog/${blog.slug}`}
               target="_blank"
               rel="noreferrer"
               className="w-8 h-8 rounded-full bg-gray-100 hover:bg-black hover:text-white text-gray-600 flex items-center justify-center text-xs transition-colors"
@@ -220,7 +220,7 @@ export default async function BlogDetailPage({ params }: PageProps) {
               𝕏
             </a>
             <a
-              href={`https://www.linkedin.com/sharing/share-offsite/?url=https://findyourexperts.com/blog/${blog.slug}`}
+              href={`https://www.linkedin.com/sharing/share-offsite/?url=https://prosvetted.com/blog/${blog.slug}`}
               target="_blank"
               rel="noreferrer"
               className="w-8 h-8 rounded-full bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-600 flex items-center justify-center text-xs transition-colors"
@@ -229,7 +229,7 @@ export default async function BlogDetailPage({ params }: PageProps) {
               in
             </a>
             <a
-              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(blog.title + ' - https://findyourexperts.com/blog/' + blog.slug)}`}
+              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(blog.title + ' - https://prosvetted.com/blog/' + blog.slug)}`}
               target="_blank"
               rel="noreferrer"
               className="w-8 h-8 rounded-full bg-gray-100 hover:bg-emerald-600 hover:text-white text-gray-600 flex items-center justify-center text-xs transition-colors"
@@ -302,11 +302,11 @@ export default async function BlogDetailPage({ params }: PageProps) {
           </div>
           <div className="space-y-1.5 text-center sm:text-left">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <h4 className="font-bold text-gray-950 text-sm">{blog.authorName || 'FindYourExperts Editorial'}</h4>
+              <h4 className="font-bold text-gray-950 text-sm">{blog.authorName || 'Prosvetted Editorial'}</h4>
               <span className="text-xs text-primary font-semibold">{blog.authorRole || 'Content Editor'}</span>
             </div>
             <p className="text-xs text-gray-600 leading-relaxed">
-              Published by the editorial team at FindYourExperts. All cost analyses and contractor guidelines are reviewed against current New York City Department of Buildings codes and market standards.
+              Published by the editorial team at Prosvetted. All cost analyses and contractor guidelines are reviewed against current New York City Department of Buildings codes and market standards.
             </p>
           </div>
         </div>

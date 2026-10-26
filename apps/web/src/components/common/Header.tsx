@@ -200,7 +200,7 @@ export default function Header({ onOpenQuoteModal, savedCount = 0 }: HeaderProps
                       className="block px-3 py-1.5 text-xs text-gray-700 hover:bg-primary-light hover:text-primary transition-colors"
                       onClick={() => setAboutDropdownOpen(false)}
                     >
-                      About Click Sailors
+                      About Prosvetted
                     </a>
                     <a
                       href="/#contractors"
@@ -267,51 +267,85 @@ export default function Header({ onOpenQuoteModal, savedCount = 0 }: HeaderProps
 
       {/* Mobile menu */}
       {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-gray-200 bg-white px-4 py-3 space-y-2 text-xs font-semibold text-gray-800 animate-in fade-in duration-150">
+        <div className="lg:hidden border-t border-gray-200 bg-white px-4 py-4 space-y-2.5 text-xs font-semibold text-gray-800 animate-in fade-in slide-in-from-top-2 duration-150 shadow-lg">
           <Link
             href="/contractors"
             onClick={() => setMobileMenuOpen(false)}
-            className="block py-2 hover:text-primary"
+            className="flex items-center justify-between py-2 text-gray-800 hover:text-primary border-b border-gray-100"
           >
-            Find Services
+            <span>Find Services</span>
+            <ChevronDown className="w-3.5 h-3.5 -rotate-90 text-gray-400" />
           </Link>
           <a
             href="/#states"
             onClick={() => setMobileMenuOpen(false)}
-            className="block py-2 hover:text-primary"
+            className="flex items-center justify-between py-2 text-gray-800 hover:text-primary border-b border-gray-100"
           >
-            States
+            <span>States</span>
+            <ChevronDown className="w-3.5 h-3.5 -rotate-90 text-gray-400" />
           </a>
           <a
             href="/#how-it-works"
             onClick={() => setMobileMenuOpen(false)}
-            className="block py-2 hover:text-primary"
+            className="flex items-center justify-between py-2 text-gray-800 hover:text-primary border-b border-gray-100"
           >
-            How It Works
+            <span>How It Works</span>
+            <ChevronDown className="w-3.5 h-3.5 -rotate-90 text-gray-400" />
           </a>
           <Link
             href="/blog"
             onClick={() => setMobileMenuOpen(false)}
-            className="block py-2 hover:text-primary"
+            className="flex items-center justify-between py-2 text-gray-800 hover:text-primary border-b border-gray-100"
           >
-            Resources & Blog
+            <span>Resources & Blog</span>
+            <ChevronDown className="w-3.5 h-3.5 -rotate-90 text-gray-400" />
           </Link>
           <a
             href="/#about"
             onClick={() => setMobileMenuOpen(false)}
-            className="block py-2 hover:text-primary"
+            className="flex items-center justify-between py-2 text-gray-800 hover:text-primary border-b border-gray-100"
           >
-            About Us
+            <span>About Us</span>
+            <ChevronDown className="w-3.5 h-3.5 -rotate-90 text-gray-400" />
           </a>
-          <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-            <span className="text-gray-500">Saved ({savedCount})</span>
-            <Link
-              href="/admin/blogs"
-              onClick={() => setMobileMenuOpen(false)}
-              className="px-4 py-1.5 rounded-lg bg-primary text-white font-bold text-xs"
-            >
-              Sign In
-            </Link>
+
+          {/* Mobile CTA Button & Saved bar */}
+          <div className="pt-3 space-y-2.5">
+            {onOpenQuoteModal ? (
+              <EButton
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenQuoteModal();
+                }}
+                variant="primary"
+                size="md"
+                className="w-full justify-center shadow-sm"
+              >
+                Find a Pro
+              </EButton>
+            ) : (
+              <EButton
+                href="/contractors"
+                onClick={() => setMobileMenuOpen(false)}
+                variant="primary"
+                size="md"
+                className="w-full justify-center shadow-sm"
+              >
+                Find a Pro
+              </EButton>
+            )}
+
+            <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+              <span className="text-gray-500 font-medium">Saved ({savedCount})</span>
+              <Link
+                href="/admin/blogs"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-primary font-bold hover:underline"
+              >
+                Admin Portal &rarr;
+              </Link>
+            </div>
           </div>
         </div>
       )}

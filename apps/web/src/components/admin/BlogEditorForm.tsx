@@ -802,7 +802,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                             type="text"
                             value={authorName}
                             onChange={(e) => setAuthorName(e.target.value)}
-                            placeholder="Author name (default: FindYourExperts Editorial)"
+                            placeholder="Author name (default: Prosvetted Editorial)"
                             className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-200 rounded-lg outline-none focus:border-[#007cba]"
                           />
                           <input
@@ -1320,10 +1320,10 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                       /* Google Search Snippet Preview */
                       <div className="p-3 bg-white border border-gray-200 rounded-lg shadow-xs space-y-1">
                         <div className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                          <div className="w-3.5 h-3.5 rounded-full bg-[#007cba] text-white text-[8px] font-black flex items-center justify-center">
-                            F
+                          <div className="w-3.5 h-3.5 rounded-full bg-[#144E35] text-white text-[8px] font-black flex items-center justify-center">
+                            P
                           </div>
-                          <span className="text-gray-800 font-medium">FindYourExperts</span>
+                          <span className="text-gray-800 font-medium">Prosvetted</span>
                           <span className="text-gray-400">› blog › {slug || 'article'}</span>
                         </div>
                         <h4 className="text-xs font-semibold text-[#1a0dab] line-clamp-1 hover:underline cursor-pointer">
@@ -1351,7 +1351,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                           )}
                         </div>
                         <div className="p-2.5 space-y-1 bg-gray-50">
-                          <div className="text-[10px] uppercase font-bold text-gray-400">FINDYOUREXPERTS.COM</div>
+                          <div className="text-[10px] uppercase font-bold text-gray-400">PROSVETTED.COM</div>
                           <div className="text-xs font-bold text-gray-900 line-clamp-1">{activeMetaTitle || <span className="text-gray-300">Add a title</span>}</div>
                           <div className="text-[11px] text-gray-500 line-clamp-2">{activeMetaDescription}</div>
                         </div>
@@ -1368,7 +1368,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                         type="text"
                         value={canonicalUrl}
                         onChange={(e) => setCanonicalUrl(e.target.value)}
-                        placeholder={`https://findyourexperts.com/blog/${slug || 'slug'}`}
+                        placeholder={`https://prosvetted.com/blog/${slug || 'slug'}`}
                         className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-300 rounded-lg outline-none focus:border-[#007cba]"
                       />
                     </div>
@@ -1492,10 +1492,10 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
               {/* Author Attribution */}
               <div className="flex items-center gap-3 py-3 border-y border-gray-100 mb-6">
                 <div className="w-9 h-9 rounded-full bg-blue-50 text-[#007cba] font-bold flex items-center justify-center text-xs">
-                  {(authorName || 'FindYourExperts Editorial')[0]}
+                  {(authorName || 'Prosvetted Editorial')[0]}
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-gray-900">{authorName || 'FindYourExperts Editorial'}</div>
+                  <div className="text-xs font-bold text-gray-900">{authorName || 'Prosvetted Editorial'}</div>
                   {authorRole && <div className="text-[11px] text-gray-500">{authorRole}</div>}
                 </div>
               </div>

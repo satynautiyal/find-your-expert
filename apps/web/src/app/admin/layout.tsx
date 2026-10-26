@@ -104,7 +104,7 @@ export default function AdminLayout({
               <span>Admin Access Control</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              FindYourExperts CMS
+              Prosvetted CMS
             </h1>
             <p className="text-slate-400 text-xs sm:text-sm">
               Sign in with your administrator credentials to manage blogs, SEO, and content.
@@ -190,7 +190,7 @@ export default function AdminLayout({
               href="/"
               className="text-xs font-semibold text-slate-400 hover:text-white transition-colors"
             >
-              &larr; Return to FindYourExperts Homepage
+              &larr; Return to Prosvetted Homepage
             </Link>
           </div>
         </div>

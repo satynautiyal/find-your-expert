@@ -41,8 +41,8 @@ export default function CompareModal({
         </div>
 
         {/* Comparison Table */}
-        <div className="overflow-x-auto p-5 flex-1">
-          <table className="w-full text-left border-collapse text-xs">
+        <div className="overflow-x-auto p-3.5 sm:p-5 flex-1">
+          <table className="w-full min-w-[480px] text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="p-3 font-bold text-gray-500 uppercase text-[10px] w-40">
@@ -95,10 +95,10 @@ export default function CompareModal({
 
               {/* Facebook Reviews */}
               <tr>
-                <td className="p-3 font-bold text-gray-500">Facebook Rating</td>
+                <td className="p-3 font-bold text-gray-500">Houzz Rating</td>
                 {providers.map((p) => (
                   <td key={p.id} className="p-3 font-semibold text-indigo-700">
-                    {p.reviews.facebook.rating} ★ ({p.reviews.facebook.count})
+                    {(p.reviews.houzz || p.reviews.facebook)?.rating || 4.8} ★ ({(p.reviews.houzz || p.reviews.facebook)?.count || 24})
                   </td>
                 ))}
               </tr>

@@ -35,7 +35,8 @@ export interface RooferProvider {
   reviews: {
     google: PlatformReviewData;
     yelp: PlatformReviewData;
-    facebook: PlatformReviewData;
+    houzz: PlatformReviewData;
+    facebook?: PlatformReviewData;
   };
   compositeRating: number;
   totalReviews: number;
@@ -49,7 +50,7 @@ export interface RooferProvider {
     rating: number;
     comment: string;
     reviewDate?: string;
-    platform: 'GOOGLE' | 'YELP' | 'FACEBOOK' | string;
+    platform: 'GOOGLE' | 'YELP' | 'HOUZZ' | 'FACEBOOK' | string;
     sourceUrl?: string;
   }>;
 }
@@ -122,6 +123,7 @@ export const MOCK_NYC_ROOFERS: RooferProvider[] = [
     reviews: {
       google: { rating: 4.8, count: 273, url: 'https://google.com' },
       yelp: { rating: 4.7, count: 120, url: 'https://yelp.com' },
+      houzz: { rating: 4.6, count: 65, url: 'https://www.houzz.com' },
       facebook: { rating: 4.6, count: 65, url: 'https://facebook.com' },
     },
     compositeRating: 4.9,
@@ -167,6 +169,7 @@ export const MOCK_NYC_ROOFERS: RooferProvider[] = [
     reviews: {
       google: { rating: 4.7, count: 351, url: 'https://google.com' },
       yelp: { rating: 4.6, count: 50, url: 'https://yelp.com' },
+      houzz: { rating: 4.5, count: 93, url: 'https://www.houzz.com' },
       facebook: { rating: 4.5, count: 93, url: 'https://facebook.com' },
     },
     compositeRating: 4.8,
@@ -212,6 +215,7 @@ export const MOCK_NYC_ROOFERS: RooferProvider[] = [
     reviews: {
       google: { rating: 4.7, count: 345, url: 'https://google.com' },
       yelp: { rating: 4.5, count: 28, url: 'https://yelp.com' },
+      houzz: { rating: 4.4, count: 39, url: 'https://www.houzz.com' },
       facebook: { rating: 4.4, count: 39, url: 'https://facebook.com' },
     },
     compositeRating: 4.8,
@@ -257,6 +261,7 @@ export const MOCK_NYC_ROOFERS: RooferProvider[] = [
     reviews: {
       google: { rating: 4.6, count: 117, url: 'https://google.com' },
       yelp: { rating: 4.5, count: 95, url: 'https://yelp.com' },
+      houzz: { rating: 4.2, count: 52, url: 'https://www.houzz.com' },
       facebook: { rating: 4.2, count: 52, url: 'https://facebook.com' },
     },
     compositeRating: 4.7,
@@ -302,6 +307,7 @@ export const MOCK_NYC_ROOFERS: RooferProvider[] = [
     reviews: {
       google: { rating: 4.6, count: 214, url: 'https://google.com' },
       yelp: { rating: 4.5, count: 61, url: 'https://yelp.com' },
+      houzz: { rating: 4.1, count: 40, url: 'https://www.houzz.com' },
       facebook: { rating: 4.1, count: 40, url: 'https://facebook.com' },
     },
     compositeRating: 4.7,
