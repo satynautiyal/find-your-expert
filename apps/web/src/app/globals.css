@@ -75,23 +75,26 @@
   scrollbar-width: none !important; /* Firefox */
 }
 
-/* Rich Text Editor (Tiptap / ProseMirror) Styling */
+/* Rich Text Editor (Tiptap / ProseMirror) & Published Blog Prose Styling */
 .tiptap-content,
 .ProseMirror {
   outline: none;
   min-height: 380px;
 }
 
-.ProseMirror p {
+.ProseMirror p,
+.prose p {
   margin-bottom: 1rem;
   line-height: 1.75;
 }
 
-.ProseMirror p:last-child {
+.ProseMirror p:last-child,
+.prose p:last-child {
   margin-bottom: 0;
 }
 
-.ProseMirror h2 {
+.ProseMirror h2,
+.prose h2 {
   font-size: 1.5rem;
   font-weight: 800;
   color: #0f172a;
@@ -100,7 +103,8 @@
   line-height: 1.3;
 }
 
-.ProseMirror h3 {
+.ProseMirror h3,
+.prose h3 {
   font-size: 1.25rem;
   font-weight: 700;
   color: #1e293b;
@@ -109,7 +113,8 @@
   line-height: 1.35;
 }
 
-.ProseMirror h4 {
+.ProseMirror h4,
+.prose h4 {
   font-size: 1.1rem;
   font-weight: 600;
   color: #334155;
@@ -117,29 +122,34 @@
   margin-bottom: 0.5rem;
 }
 
-.ProseMirror ul {
+.ProseMirror ul,
+.prose ul {
   list-style-type: disc !important;
   padding-left: 1.5rem !important;
   margin-top: 0.5rem;
   margin-bottom: 1rem;
 }
 
-.ProseMirror ol {
+.ProseMirror ol,
+.prose ol {
   list-style-type: decimal !important;
   padding-left: 1.5rem !important;
   margin-top: 0.5rem;
   margin-bottom: 1rem;
 }
 
-.ProseMirror li {
+.ProseMirror li,
+.prose li {
   margin-bottom: 0.35rem;
 }
 
-.ProseMirror li p {
+.ProseMirror li p,
+.prose li p {
   margin-bottom: 0.25rem;
 }
 
-.ProseMirror blockquote {
+.ProseMirror blockquote,
+.prose blockquote {
   border-left: 4px solid var(--primary, #F15A24);
   background-color: #FFF8F5;
   padding: 0.75rem 1rem;
@@ -149,13 +159,15 @@
   font-style: italic;
 }
 
-.ProseMirror hr {
+.ProseMirror hr,
+.prose hr {
   border: none;
   border-top: 2px solid #E2E8F0;
   margin: 2rem 0;
 }
 
-.ProseMirror code {
+.ProseMirror code,
+.prose code {
   background-color: #F1F5F9;
   padding: 0.2rem 0.4rem;
   border-radius: 0.25rem;
@@ -164,7 +176,8 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-.ProseMirror pre {
+.ProseMirror pre,
+.prose pre {
   background-color: #0F172A;
   color: #F8FAFC;
   padding: 1rem;
@@ -173,18 +186,119 @@
   overflow-x: auto;
 }
 
-.ProseMirror pre code {
+.ProseMirror pre code,
+.prose pre code {
   background: transparent;
   color: inherit;
   padding: 0;
 }
 
-.ProseMirror img {
+.ProseMirror img,
+.prose img {
   max-width: 100%;
   height: auto;
   border-radius: 0.75rem;
   margin: 1.5rem auto;
   display: block;
+}
+
+/* Table Styling for CMS Editor, Live Preview & Published Blog Posts */
+.ProseMirror .tableWrapper,
+.prose .tableWrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  border-radius: 0.5rem;
+}
+
+.ProseMirror table,
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  border: 1px solid #CBD5E1;
+  background-color: #FFFFFF;
+}
+
+.ProseMirror .tableWrapper table,
+.prose .tableWrapper table {
+  margin: 0;
+}
+
+.ProseMirror th,
+.ProseMirror td,
+.prose th,
+.prose td {
+  border: 1px solid #CBD5E1;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  vertical-align: top;
+  min-width: 100px;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.ProseMirror th,
+.prose th {
+  background-color: #F1F5F9;
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.ProseMirror tbody tr:nth-child(even) td,
+.prose tbody tr:nth-child(even) td {
+  background-color: #F8FAFC;
+}
+
+.ProseMirror th p,
+.ProseMirror td p,
+.prose th p,
+.prose td p {
+  margin: 0 0 0.35rem 0;
+  line-height: 1.5;
+}
+
+.ProseMirror th p:last-child,
+.ProseMirror td p:last-child,
+.prose th p:last-child,
+.prose td p:last-child {
+  margin-bottom: 0;
+}
+
+.ProseMirror .selectedCell::after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 124, 186, 0.14);
+  pointer-events: none;
+}
+
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background-color: #007cba;
+  pointer-events: none;
+}
+
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
+}
+
+@media (max-width: 640px) {
+  .prose table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {

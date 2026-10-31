@@ -5,6 +5,7 @@ import type { ChainedCommands } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
+import { TableKit } from '@tiptap/extension-table';
 import {
   Bold,
   Italic,
@@ -31,6 +32,8 @@ import {
   AlignLeft,
   FileText,
   HelpCircle,
+  Table2,
+  Trash2,
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { uploadImageToStorage } from '@/lib/blogs-api';
@@ -91,6 +94,9 @@ export default function TiptapEditor({
       }),
       Placeholder.configure({
         placeholder,
+      }),
+      TableKit.configure({
+        table: { resizable: true },
       }),
     ],
     content: content || '',
@@ -192,8 +198,16 @@ export default function TiptapEditor({
       .run();
   };
 
+  // Insert a 3x3 Table
+  const handleInsertOrConvertTable = () => {
+    setIsBlockMenuOpen(false);
+    setIsInserterOpen(false);
+    editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  };
+
   // Determine current active block label
   const getCurrentBlockLabel = () => {
+    if (editor.isActive('table')) return 'Table';
     if (editor.isActive('heading', { level: 2 })) return 'Heading 2';
     if (editor.isActive('heading', { level: 3 })) return 'Heading 3';
     if (editor.isActive('heading', { level: 4 })) return 'Heading 4';
@@ -307,6 +321,17 @@ export default function TiptapEditor({
                 <Quote className="w-3.5 h-3.5" />
                 <span>Quote</span>
               </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={handleInsertOrConvertTable}
+                className={`w-full px-3 py-1.5 text-xs text-left flex items-center gap-2 hover:bg-gray-50 cursor-pointer ${
+                  editor.isActive('table') ? 'font-bold text-[#007cba] bg-blue-50/50' : 'text-gray-700'
+                }`}
+              >
+                <Table2 className="w-3.5 h-3.5" />
+                <span>Table</span>
+              </button>
             </div>
           )}
         </div>
@@ -387,7 +412,7 @@ export default function TiptapEditor({
 
         <div className="h-4 w-px bg-gray-200 mx-1" />
 
-        {/* Quick Inserter: Image, Pro Tip, Divider */}
+        {/* Quick Inserter: Image, Table, Pro Tip, Divider */}
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
@@ -406,6 +431,21 @@ export default function TiptapEditor({
           onChange={handleInlineImageUpload}
           className="hidden"
         />
+
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={handleInsertOrConvertTable}
+          className={`p-1.5 rounded flex items-center gap-1 text-xs font-semibold transition-colors cursor-pointer ${
+            editor.isActive('table')
+              ? 'bg-blue-50 text-[#007cba] border border-blue-200'
+              : 'hover:bg-gray-100 text-gray-700'
+          }`}
+          title="Insert Table (or convert selected lines to Table)"
+        >
+          <Table2 className="w-4 h-4 text-[#007cba]" />
+          <span className="hidden sm:inline">Table</span>
+        </button>
 
         <button
           type="button"
@@ -439,6 +479,97 @@ export default function TiptapEditor({
           <RemoveFormatting className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Contextual Table Controls Bar (visible when cursor is inside a table) */}
+      {editor.isActive('table') && (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 mb-4 flex flex-wrap items-center gap-1.5 text-xs text-slate-700 select-none animate-in fade-in">
+          <span className="font-bold text-[#007cba] flex items-center gap-1 mr-1">
+            <Table2 className="w-3.5 h-3.5" />
+            <span>Table:</span>
+          </span>
+
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor.chain().focus().addRowBefore().run()}
+            className="px-2 py-1 bg-white hover:bg-gray-100 border border-gray-200 rounded font-medium cursor-pointer"
+            title="Insert Row Above"
+          >
+            + Row Above
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor.chain().focus().addRowAfter().run()}
+            className="px-2 py-1 bg-white hover:bg-gray-100 border border-gray-200 rounded font-medium cursor-pointer"
+            title="Insert Row Below"
+          >
+            + Row Below
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor.chain().focus().deleteRow().run()}
+            className="px-2 py-1 bg-white hover:bg-rose-50 hover:text-rose-700 border border-gray-200 rounded font-medium cursor-pointer"
+            title="Delete Current Row"
+          >
+            − Row
+          </button>
+
+          <div className="h-3.5 w-px bg-gray-300 mx-0.5" />
+
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor.chain().focus().addColumnBefore().run()}
+            className="px-2 py-1 bg-white hover:bg-gray-100 border border-gray-200 rounded font-medium cursor-pointer"
+            title="Insert Column Left"
+          >
+            + Col Left
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor.chain().focus().addColumnAfter().run()}
+            className="px-2 py-1 bg-white hover:bg-gray-100 border border-gray-200 rounded font-medium cursor-pointer"
+            title="Insert Column Right"
+          >
+            + Col Right
+          </button>
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor.chain().focus().deleteColumn().run()}
+            className="px-2 py-1 bg-white hover:bg-rose-50 hover:text-rose-700 border border-gray-200 rounded font-medium cursor-pointer"
+            title="Delete Current Column"
+          >
+            − Col
+          </button>
+
+          <div className="h-3.5 w-px bg-gray-300 mx-0.5" />
+
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor.chain().focus().toggleHeaderRow().run()}
+            className="px-2 py-1 bg-white hover:bg-gray-100 border border-gray-200 rounded font-medium cursor-pointer"
+            title="Toggle Header Row"
+          >
+            Header Row
+          </button>
+
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => editor.chain().focus().deleteTable().run()}
+            className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded font-semibold flex items-center gap-1 ml-auto cursor-pointer"
+            title="Delete Entire Table"
+          >
+            <Trash2 className="w-3 h-3" />
+            <span>Delete Table</span>
+          </button>
+        </div>
+      )}
 
       {isUploadingImage && (
         <div className="bg-blue-50 text-[#007cba] text-xs font-semibold px-4 py-2 rounded-lg border border-blue-100 flex items-center gap-2 mb-4 animate-pulse">

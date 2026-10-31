@@ -490,6 +490,22 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                   <button
                     type="button"
                     onClick={() => {
+                      editorInstance
+                        ?.chain()
+                        .focus()
+                        .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+                        .run();
+                      setIsInserterOpen(false);
+                    }}
+                    className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 text-left text-xs font-semibold text-gray-800 col-span-2 cursor-pointer"
+                  >
+                    <span className="font-bold text-xs w-4">⊞</span>
+                    <span>Table (3×3 Grid)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
                       editorInstance?.chain().focus().insertContent(
                         '<blockquote><p><strong>💡 Pro Tip:</strong> </p></blockquote><p></p>'
                       ).run();
