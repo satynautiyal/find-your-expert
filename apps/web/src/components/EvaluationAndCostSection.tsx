@@ -17,12 +17,21 @@ export interface EvaluationAndCostSectionProps {
   currentService: string;
   currentLocation: string;
   onOpenCostGuide?: () => void;
+  costBenchmarks?: Array<{
+    id: string;
+    roofType: string;
+    footprint?: string | null;
+    description?: string | null;
+    minCost: number;
+    maxCost: number;
+  }>;
 }
 
 export default function EvaluationAndCostSection({
   currentService,
   currentLocation,
   onOpenCostGuide,
+  costBenchmarks,
 }: EvaluationAndCostSectionProps) {
   const isCabinets = currentService.toLowerCase().includes('cabinet') ||
     currentService.toLowerCase().includes('shelv') ||
@@ -72,7 +81,7 @@ export default function EvaluationAndCostSection({
         { step: 7, text: 'Never select a roofer on lowest price alone' },
       ];
 
-  const costItems = isCabinets
+  const fallbackCostItems = isCabinets
     ? [
         { project: 'Custom Bathroom Vanity (Single/Double)', cost: '$1,800 – $4,500' },
         { project: 'Built-In Bookcases & Media Wall', cost: '$3,500 – $9,000' },
@@ -87,6 +96,14 @@ export default function EvaluationAndCostSection({
         { project: 'Asphalt Shingle Roof Replacement', cost: '$7,500 – $16,000' },
         { project: 'Full Commercial Flat Roof System', cost: '$12,000 – $35,000+' },
       ];
+
+  const costItems =
+    costBenchmarks && costBenchmarks.length > 0
+      ? costBenchmarks.map((cb) => ({
+          project: cb.footprint ? `${cb.roofType} (${cb.footprint})` : cb.roofType,
+          cost: `$${cb.minCost.toLocaleString()} – $${cb.maxCost.toLocaleString()}`,
+        }))
+      : fallbackCostItems;
 
   return (
     <section className="space-y-10 pt-6 pb-2">

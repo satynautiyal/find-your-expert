@@ -1,13 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Check } from 'lucide-react';
+import { fetchCategories, type CategoryItem } from '@/lib/api';
 import BrandLogo from './BrandLogo';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [dbCategories, setDbCategories] = useState<CategoryItem[]>([]);
+
+  useEffect(() => {
+    fetchCategories()
+      .then((cats) => {
+        if (cats && cats.length > 0) setDbCategories(cats);
+      })
+      .catch(() => {});
+  }, []);
+
+  const footerServiceLinks = dbCategories
+    .flatMap((cat) => [
+      { name: cat.name, href: `/contractors?category=${encodeURIComponent(cat.name)}` },
+      ...(cat.subServices || []).slice(0, 3).map((sub) => ({
+        name: sub.name,
+        href: `/contractors?category=${encodeURIComponent(cat.name)}&service=${encodeURIComponent(sub.name)}`,
+      })),
+    ])
+    .slice(0, 6);
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,36 +122,13 @@ export default function Footer() {
               Popular Services
             </h4>
             <ul className="space-y-2 text-xs text-emerald-100/70">
-              <li>
-                <Link href="/contractors?service=Countertops" className="hover:text-white transition-colors">
-                  Countertops
-                </Link>
-              </li>
-              <li>
-                <Link href="/contractors?service=Kitchen+Remodeling" className="hover:text-white transition-colors">
-                  Kitchen Remodeling
-                </Link>
-              </li>
-              <li>
-                <Link href="/contractors?service=Bathroom+Remodeling" className="hover:text-white transition-colors">
-                  Bathroom Remodeling
-                </Link>
-              </li>
-              <li>
-                <Link href="/contractors?service=Roofing" className="hover:text-white transition-colors">
-                  Roofing
-                </Link>
-              </li>
-              <li>
-                <Link href="/contractors?service=HVAC" className="hover:text-white transition-colors">
-                  HVAC
-                </Link>
-              </li>
-              <li>
-                <Link href="/contractors?service=Flooring" className="hover:text-white transition-colors">
-                  Flooring
-                </Link>
-              </li>
+              {footerServiceLinks.map((service) => (
+                <li key={service.name}>
+                  <Link href={service.href} className="hover:text-white transition-colors">
+                    {service.name}
+                  </Link>
+                </li>
+              ))}
               <li>
                 <Link href="/contractors" className="hover:text-emerald-400 font-semibold transition-colors">
                   View all services &rarr;

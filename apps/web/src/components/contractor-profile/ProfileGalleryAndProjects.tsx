@@ -18,16 +18,20 @@ export default function ProfileGalleryAndProjects({
   const isRoofing = provider.services?.some((s) => /Roof/i.test(s)) ?? true;
   const borough = provider.borough && provider.borough !== 'All' ? provider.borough : 'Manhattan';
 
-  // Photos for gallery
-  const photos = [
-    provider.imageUrl && !provider.imageUrl.includes('placeholder')
-      ? provider.imageUrl
-      : '/roofing-hero-house.jpg',
-    '/contractor-hero-house.png',
-    '/contractor-hero-brick-house.png',
-    '/about-house.jpg',
-    '/hero-kitchen.jpg',
-  ];
+  // Photos for gallery from DB ListingPhoto when available
+  const dbPhotos = (provider.photos || []).map((p) => p.url).filter(Boolean);
+  const photos =
+    dbPhotos.length > 0
+      ? dbPhotos
+      : [
+          provider.imageUrl && !provider.imageUrl.includes('placeholder')
+            ? provider.imageUrl
+            : '/roofing-hero-house.jpg',
+          '/contractor-hero-house.png',
+          '/contractor-hero-brick-house.png',
+          '/about-house.jpg',
+          '/hero-kitchen.jpg',
+        ];
 
   // 3 Recent Projects
   const roofingProjects = [

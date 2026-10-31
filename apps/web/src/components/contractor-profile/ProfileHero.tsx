@@ -39,34 +39,40 @@ export default function ProfileHero({
 
   // Dynamic Location & Category parsing for dynamic breadcrumbs
   const trade =
-    provider.services?.find((s) => /Roof/i.test(s)) ? 'Roofing' :
-    provider.services?.find((s) => /Cabinet|Millwork/i.test(s)) ? 'Custom Cabinets' :
-    provider.services?.[0] || 'Home Improvement';
+    provider.category ||
+    (provider.services?.find((s) => /Roof/i.test(s))
+      ? 'Roofing'
+      : provider.services?.find((s) => /Cabinet|Millwork/i.test(s))
+      ? 'Custom Cabinets'
+      : provider.services?.[0] || 'Contractors');
 
   // Parse state & city from address or borough
-  const boroughOrCity = provider.borough && provider.borough !== 'All' ? provider.borough : 'Manhattan';
-  const stateName =
-    provider.address?.includes(' AL ') ? 'Alabama' :
-    provider.address?.includes(' NY ') ? 'New York' :
-    provider.address?.includes(' CA ') ? 'California' :
-    provider.address?.includes(' TX ') ? 'Texas' : 'New York';
+  const boroughOrCity =
+    provider.borough && provider.borough !== 'All'
+      ? provider.borough
+      : provider.city || 'Manhattan';
+  const stateName = provider.state === 'NY' || !provider.state ? 'New York' : provider.state;
 
-  // Sample photos list for gallery
+  // Photos from DB or provider image
   const mainPhoto =
     provider.imageUrl && !provider.imageUrl.includes('placeholder')
       ? provider.imageUrl
       : '/roofing-hero-house.jpg';
 
-  const galleryPhotos = [
-    mainPhoto,
-    '/contractor-hero-house.png',
-    '/contractor-hero-brick-house.png',
-    '/about-house.jpg',
-    '/hero-kitchen.jpg',
-  ];
+  const dbPhotoUrls = (provider.photos || []).map((p) => p.url).filter(Boolean);
+  const galleryPhotos =
+    dbPhotoUrls.length > 0
+      ? dbPhotoUrls
+      : [
+          mainPhoto,
+          '/contractor-hero-house.png',
+          '/contractor-hero-brick-house.png',
+          '/about-house.jpg',
+          '/hero-kitchen.jpg',
+        ];
 
-  const photoCount = Math.max(provider.photoCount || 28, galleryPhotos.length);
-  const extraPhotosCount = Math.max(photoCount - 4, 24);
+  const photoCount = provider.photoCount > 0 ? provider.photoCount : galleryPhotos.length;
+  const extraPhotosCount = Math.max(photoCount - 4, 0);
 
   const handleShare = () => {
     if (typeof window !== 'undefined') {
@@ -249,29 +255,29 @@ export default function ProfileHero({
                 ))}
               </div>
               <span className="font-bold text-sm text-gray-900">
-                {(provider.compositeRating || 4.8).toFixed(1)}
+                {(provider.compositeRating || 0).toFixed(1)}
               </span>
               <button
                 onClick={onScrollToReviews}
                 className="text-xs font-semibold text-gray-500 hover:text-primary transition-colors cursor-pointer"
               >
-                ({provider.totalReviews || 126} reviews)
+                ({provider.totalReviews || 0} reviews)
               </button>
             </div>
 
             {/* Tagline / Summary */}
             <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
-              {provider.tagline ||
-                provider.description?.slice(0, 160) ||
-                `Quality ${trade.toLowerCase()} solutions for ${boroughOrCity} homes since ${provider.sinceYear || 2008}. Specializing in premium workmanship and reliable service.`}
+              {provider.tagline || provider.description?.slice(0, 160) || ''}
             </p>
 
             {/* 4-item Credential Grid (2x2) */}
             <div className="grid grid-cols-2 gap-2.5 pt-1 text-xs font-medium text-gray-700">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-500 shrink-0" />
-                <span>{provider.yearsInBusiness || 15}+ years in business</span>
-              </div>
+              {provider.yearsInBusiness > 0 && (
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-gray-500 shrink-0" />
+                  <span>{provider.yearsInBusiness}+ years in business</span>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>Licensed & Insured</span>
@@ -389,67 +395,73 @@ export default function ProfileHero({
 
               <div className="space-y-2.5 text-xs">
                 {/* Google */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <GoogleLogo className="w-4 h-4" />
-                    <span className="font-medium text-gray-700">Google</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="flex items-center text-amber-500">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                      ))}
+                {(provider.reviews.google?.count ?? 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <GoogleLogo className="w-4 h-4" />
+                      <span className="font-medium text-gray-700">Google</span>
                     </div>
-                    <span className="font-bold text-gray-900">
-                      {provider.reviews.google?.rating || 4.8}
-                    </span>
-                    <span className="text-gray-400">
-                      ({provider.reviews.google?.count || 89})
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex items-center text-amber-500">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                        ))}
+                      </div>
+                      <span className="font-bold text-gray-900">
+                        {provider.reviews.google.rating}
+                      </span>
+                      <span className="text-gray-400">
+                        ({provider.reviews.google.count})
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Yelp */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <YelpLogo className="w-4 h-4" />
-                    <span className="font-medium text-gray-700">Yelp</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="flex items-center text-amber-500">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                      ))}
+                {(provider.reviews.yelp?.count ?? 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <YelpLogo className="w-4 h-4" />
+                      <span className="font-medium text-gray-700">Yelp</span>
                     </div>
-                    <span className="font-bold text-gray-900">
-                      {provider.reviews.yelp?.rating || 4.6}
-                    </span>
-                    <span className="text-gray-400">
-                      ({provider.reviews.yelp?.count || 24})
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex items-center text-amber-500">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                        ))}
+                      </div>
+                      <span className="font-bold text-gray-900">
+                        {provider.reviews.yelp.rating}
+                      </span>
+                      <span className="text-gray-400">
+                        ({provider.reviews.yelp.count})
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Houzz */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <HouzzLogo className="w-4 h-4" />
-                    <span className="font-medium text-gray-700">Houzz</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="flex items-center text-amber-500">
-                      {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                      ))}
+                {((provider.reviews.houzz?.count || provider.reviews.facebook?.count) ?? 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <HouzzLogo className="w-4 h-4" />
+                      <span className="font-medium text-gray-700">Houzz</span>
                     </div>
-                    <span className="font-bold text-gray-900">
-                      {provider.reviews.houzz?.rating || provider.reviews.facebook?.rating || 4.7}
-                    </span>
-                    <span className="text-gray-400">
-                      ({provider.reviews.houzz?.count || provider.reviews.facebook?.count || 13})
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex items-center text-amber-500">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                        ))}
+                      </div>
+                      <span className="font-bold text-gray-900">
+                        {provider.reviews.houzz?.rating || provider.reviews.facebook?.rating}
+                      </span>
+                      <span className="text-gray-400">
+                        ({provider.reviews.houzz?.count || provider.reviews.facebook?.count})
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Footer link to jump to reviews section */}

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Param } from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { GetProvidersQueryDto } from './dto/get-providers.dto';
 
@@ -88,6 +88,21 @@ export class ProvidersController {
       success: true,
       data: result,
       message: 'AI Review summary generated and saved successfully.',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/quotes
+   * Persist customer quote request to QuoteRequest table in PostgreSQL
+   */
+  @Post('quotes')
+  async createQuoteRequest(@Body() body: any) {
+    const result = await this.providersService.createQuoteRequest(body);
+    return {
+      success: true,
+      data: result,
+      message: 'Quote request submitted successfully.',
       timestamp: new Date().toISOString(),
     };
   }

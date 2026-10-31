@@ -23,8 +23,8 @@ export class GetProvidersQueryDto {
   topPickCategory?: string;
 
   @IsOptional()
-  @IsIn(['rating', 'reviews', 'experience'])
-  sortBy?: 'rating' | 'reviews' | 'experience' = 'rating';
+  @IsIn(['rating', 'reviews', 'experience', 'fast-response'])
+  sortBy?: 'rating' | 'reviews' | 'experience' | 'fast-response' = 'rating';
 
   @IsOptional()
   @Type(() => Number)

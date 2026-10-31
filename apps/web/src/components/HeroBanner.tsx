@@ -60,24 +60,10 @@ export default function HeroBanner({
     currentService.toLowerCase().includes('closet') ||
     currentService.toLowerCase().includes('millwork');
 
-  // Popular search suggestions dynamically adapted to trade
-  const popularServices = isCabinets
-    ? [
-        'Custom Cabinets',
-        'Kitchen Cabinetry',
-        'Built-In Shelving',
-        'Bathroom Vanities',
-        'Custom Closets',
-        'Architectural Millwork',
-      ]
-    : [
-        'Roof Installation',
-        'Repair',
-        'Flat Roof Systems',
-        'Waterproofing',
-        'Gutter Installation',
-        'Inspection',
-      ];
+  // Popular search suggestions directly from DB sub-services
+  const popularServices = (dynamicServices || []).filter(
+    (s) => s && s !== 'All Services' && s !== 'All'
+  );
 
   // Strictly New York, NY / NYC Boroughs
   const currentLocation =
@@ -104,10 +90,8 @@ export default function HeroBanner({
       ? companiesCount
       : stats?.totalProviders
       ? stats.totalProviders
-      : isCabinets
-      ? 10
-      : 14;
-  const displayRating = stats?.avgRating ? `${stats.avgRating}/5` : '4.9/5';
+      : 0;
+  const displayRating = stats?.avgRating ? `${stats.avgRating}/5` : '';
 
   return (
     <div className="bg-[#FAFBF9] border-b border-gray-200/80">
@@ -489,10 +473,10 @@ export default function HeroBanner({
               </div>
               <div className="min-w-0">
                 <div className="text-sm sm:text-lg font-bold text-[#111827] leading-tight tracking-tight truncate">
-                  {companiesCount > 0 ? `${companiesCount} Verified` : stats?.totalProviders ? `${stats.totalProviders} Active` : '24 Active'}
+                  {companiesCount > 0 ? `${companiesCount} Verified` : stats?.totalProviders ? `${stats.totalProviders} Active` : 'Verified'}
                 </div>
                 <div className="text-[10.5px] sm:text-xs text-[#5A6578] font-medium leading-tight mt-0.5 truncate">
-                  {isCabinets ? 'Cabinet Makers' : 'Roofing Pros'} in NYC
+                  {currentService} Pros in NYC
                 </div>
               </div>
             </div>
@@ -504,7 +488,7 @@ export default function HeroBanner({
               </div>
               <div className="min-w-0">
                 <div className="text-sm sm:text-lg font-bold text-[#111827] leading-tight tracking-tight truncate">
-                  {stats?.avgRating ? `${stats.avgRating}/5` : '4.9/5'}
+                  {stats?.avgRating ? `${stats.avgRating}/5` : '—'}
                 </div>
                 <div className="text-[10.5px] sm:text-xs text-[#5A6578] font-medium leading-tight mt-0.5 truncate">
                   Average Composite Score
@@ -519,7 +503,7 @@ export default function HeroBanner({
               </div>
               <div className="min-w-0">
                 <div className="text-sm sm:text-lg font-bold text-[#111827] leading-tight tracking-tight truncate">
-                  {stats?.totalReviews ? `${stats.totalReviews.toLocaleString()}+` : '1,270+'}
+                  {stats?.totalReviews ? `${stats.totalReviews.toLocaleString()}+` : '0'}
                 </div>
                 <div className="text-[10.5px] sm:text-xs text-[#5A6578] font-medium leading-tight mt-0.5 truncate">
                   Cross-Platform Reviews

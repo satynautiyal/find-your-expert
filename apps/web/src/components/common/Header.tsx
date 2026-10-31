@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ChevronDown, Heart, Menu, X, Building2, MapPin, Sparkles, BookOpen } from 'lucide-react';
 import { EButton } from '@/components/EComponents';
+import { fetchCategories, type CategoryItem } from '@/lib/api';
 import BrandLogo from './BrandLogo';
 
 export interface HeaderProps {
@@ -17,17 +18,23 @@ export default function Header({ onOpenQuoteModal, savedCount = 0 }: HeaderProps
   const [statesDropdownOpen, setStatesDropdownOpen] = useState(false);
   const [resourcesDropdownOpen, setResourcesDropdownOpen] = useState(false);
   const [aboutDropdownOpen, setAboutDropdownOpen] = useState(false);
+  const [dbCategories, setDbCategories] = useState<CategoryItem[]>([]);
 
-  const popularServices = [
-    { name: 'Countertops', href: '/contractors?service=Countertops' },
-    { name: 'Kitchen Remodeling', href: '/contractors?service=Kitchen+Remodeling' },
-    { name: 'Bathroom Remodeling', href: '/contractors?service=Bathroom+Remodeling' },
-    { name: 'Roofing', href: '/contractors?service=Roofing' },
-    { name: 'HVAC', href: '/contractors?service=HVAC' },
-    { name: 'Flooring', href: '/contractors?service=Flooring' },
-    { name: 'Windows & Doors', href: '/contractors?service=Windows+%26+Doors' },
-    { name: 'Painting', href: '/contractors?service=Painting' },
-  ];
+  useEffect(() => {
+    fetchCategories()
+      .then((cats) => {
+        if (cats && cats.length > 0) setDbCategories(cats);
+      })
+      .catch(() => {});
+  }, []);
+
+  const popularServices = dbCategories.flatMap((cat) => [
+    { name: cat.name, href: `/contractors?category=${encodeURIComponent(cat.name)}` },
+    ...(cat.subServices || []).slice(0, 3).map((sub) => ({
+      name: sub.name,
+      href: `/contractors?category=${encodeURIComponent(cat.name)}&service=${encodeURIComponent(sub.name)}`,
+    })),
+  ]);
 
   const popularStates = [
     { name: 'Texas', href: '/contractors?state=Texas' },

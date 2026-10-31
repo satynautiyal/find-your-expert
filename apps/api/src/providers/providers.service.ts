@@ -13,12 +13,24 @@ export interface FormattedProvider {
   tagline: string;
   badge: string;
   topPickCategory: string;
+  category?: string;
+  categorySlug?: string;
   logoText: string;
   imageUrl: string;
   photoCount: number;
+  photos?: Array<{
+    id: string;
+    url: string;
+    caption?: string;
+    category?: string;
+  }>;
   borough: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
   address: string;
   servesArea: string;
+  serviceAreas?: string[];
   phone: string;
   displayPhone: string;
   website: string;
@@ -99,12 +111,43 @@ export class ProvidersService {
     ) || [];
     const uniqueServices = [...new Set<string>(allServices)];
 
-    const allPhotos = provider.listings?.flatMap((l: any) => l.photos || []) || [];
-    const firstPhoto = allPhotos[0];
-    const imageUrl =
-      logoUrl ||
-      coverImageUrl ||
-      (firstPhoto ? await this.storageService.getPresignedUrl(firstPhoto.imageUrl) : '');
+    const primaryCategory = provider.listings?.[0]?.category?.name || '';
+    const primaryCategorySlug = provider.listings?.[0]?.category?.slug || '';
+
+    const rawPhotos = provider.listings?.flatMap((l: any) => l.photos || []) || [];
+    const formattedPhotos = await Promise.all(
+      rawPhotos.map(async (photo: any) => ({
+        id: photo.id,
+        url: await this.storageService.getPresignedUrl(photo.imageUrl),
+        caption: photo.caption || undefined,
+        category: photo.category || undefined,
+      }))
+    );
+
+    const firstPhotoUrl = formattedPhotos[0]?.url || '';
+    const imageUrl = logoUrl || coverImageUrl || firstPhotoUrl;
+
+    const rawServiceAreas =
+      provider.listings?.flatMap(
+        (l: any) => l.serviceAreas?.map((sa: any) => sa.areaName) || []
+      ) || [];
+    const uniqueServiceAreas = [...new Set<string>(rawServiceAreas)];
+    const computedServesArea =
+      provider.servesArea ||
+      (uniqueServiceAreas.length > 0
+        ? uniqueServiceAreas.join(', ')
+        : [provider.borough, provider.city, provider.state].filter(Boolean).join(', '));
+
+    const firstListingWithPrice = provider.listings?.find(
+      (l: any) => l.minPrice != null || l.maxPrice != null
+    );
+    const computedPriceRange =
+      provider.typicalPriceRange ||
+      (firstListingWithPrice
+        ? `$${Number(firstListingWithPrice.minPrice || 0).toLocaleString()} – $${Number(
+            firstListingWithPrice.maxPrice || 0
+          ).toLocaleString()}`
+        : '');
 
     // Format saved scraped reviews
     const scrapedReviews = (provider.scrapedReviews || []).map((sr: any) => ({
@@ -124,12 +167,19 @@ export class ProvidersService {
       tagline: provider.tagline || '',
       badge: provider.badge || '',
       topPickCategory: provider.topPickCategory || '',
+      category: primaryCategory || undefined,
+      categorySlug: primaryCategorySlug || undefined,
       logoText: provider.logoText || provider.businessName.charAt(0),
       imageUrl,
-      photoCount: allPhotos.length,
+      photoCount: formattedPhotos.length,
+      photos: formattedPhotos,
       borough: provider.borough || '',
+      city: provider.city || undefined,
+      state: provider.state || undefined,
+      zipCode: provider.zipCode || undefined,
       address: provider.address || '',
-      servesArea: provider.servesArea || '',
+      servesArea: computedServesArea,
+      serviceAreas: uniqueServiceAreas,
       phone: provider.phone || '',
       displayPhone: this.formatDisplayPhone(provider.phone || ''),
       website: provider.websiteUrl || '',
@@ -144,7 +194,7 @@ export class ProvidersService {
       hasWarranty: provider.hasWarranty ?? false,
       financingAvailable: provider.financingAvailable ?? false,
       emergencyService: provider.emergencyService ?? false,
-      typicalPriceRange: provider.typicalPriceRange || '',
+      typicalPriceRange: computedPriceRange,
       description: provider.description || '',
       services: uniqueServices,
       reviews: {
@@ -178,11 +228,15 @@ export class ProvidersService {
    * Search, filter, sort and paginate providers from PostgreSQL
    */
   async findAll(query: GetProvidersQueryDto) {
-    const { search, borough, service, category, sortBy, page = 1, limit = 12 } = query;
+    const { search, borough, service, category, topPickCategory, sortBy, page = 1, limit = 12 } = query;
 
     const where: Prisma.ProviderProfileWhereInput = {
       isActive: true,
     };
+
+    if (topPickCategory && topPickCategory !== 'ALL') {
+      where.topPickCategory = topPickCategory as any;
+    }
 
     if (search) {
       where.OR = [
@@ -293,12 +347,16 @@ export class ProvidersService {
         include: {
           listings: {
             include: {
+              category: true,
               subServices: {
                 include: {
                   subService: true,
                 },
               },
-              photos: true,
+              photos: {
+                orderBy: { orderIndex: 'asc' },
+              },
+              serviceAreas: true,
             },
           },
           platformReviews: true,
@@ -383,7 +441,7 @@ export class ProvidersService {
     const rawCategories = await this.prisma.serviceCategory.findMany({
       include: {
         subServices: {
-          select: { id: true, name: true, slug: true, isPopular: true },
+          select: { id: true, name: true, slug: true, isPopular: true, description: true },
           orderBy: { name: 'asc' },
         },
         listings: {
@@ -391,21 +449,49 @@ export class ProvidersService {
           select: { providerProfileId: true },
           distinct: ['providerProfileId'],
         },
+        costBenchmarks: {
+          orderBy: { orderIndex: 'asc' },
+        },
       },
       orderBy: { name: 'asc' },
     });
 
-    return rawCategories.map((cat) => ({
-      id: cat.id,
-      name: cat.name,
-      slug: cat.slug,
-      description: cat.description,
-      icon: cat.icon,
-      metaTitle: cat.metaTitle,
-      metaDescription: cat.metaDescription,
-      providerCount: cat.listings.length,
-      subServices: cat.subServices,
-    }));
+    const mapped = await Promise.all(
+      rawCategories.map(async (cat) => {
+        const image =
+          cat.icon && (cat.icon.includes('/') || cat.icon.endsWith('.jpg') || cat.icon.endsWith('.png') || cat.icon.endsWith('.webp'))
+            ? await this.storageService.getPresignedUrl(cat.icon)
+            : '';
+
+        return {
+          id: cat.id,
+          name: cat.name,
+          slug: cat.slug,
+          description: cat.description,
+          icon: cat.icon,
+          image,
+          metaTitle: cat.metaTitle,
+          metaDescription: cat.metaDescription,
+          providerCount: cat.listings.length,
+          subServices: cat.subServices,
+          costBenchmarks: cat.costBenchmarks.map((cb) => ({
+            id: cb.id,
+            roofType: cb.roofType,
+            footprint: cb.footprint,
+            description: cb.description,
+            minCost: Number(cb.minCost),
+            maxCost: Number(cb.maxCost),
+          })),
+        };
+      })
+    );
+
+    return mapped.sort((a, b) => {
+      const aActive = a.providerCount > 0 ? 1 : 0;
+      const bActive = b.providerCount > 0 ? 1 : 0;
+      if (bActive !== aActive) return bActive - aActive;
+      return a.name.localeCompare(b.name);
+    });
   }
 
   /**
@@ -417,12 +503,16 @@ export class ProvidersService {
       include: {
         listings: {
           include: {
+            category: true,
             subServices: {
               include: {
                 subService: true,
               },
             },
-            photos: true,
+            photos: {
+              orderBy: { orderIndex: 'asc' },
+            },
+            serviceAreas: true,
           },
         },
         platformReviews: true,
@@ -682,4 +772,38 @@ export class ProvidersService {
     };
   }
 
+  /**
+   * Create and persist a quote request in PostgreSQL
+   */
+  async createQuoteRequest(payload: {
+    providerProfileId?: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+    borough?: string;
+    zipCode?: string;
+    serviceType: string;
+    projectNotes?: string;
+  }) {
+    const trackingNumber = `PV-${Date.now().toString(36).toUpperCase()}-${Math.random()
+      .toString(36)
+      .substring(2, 6)
+      .toUpperCase()}`;
+
+    const quote = await this.prisma.quoteRequest.create({
+      data: {
+        trackingNumber,
+        providerProfileId: payload.providerProfileId || null,
+        customerName: payload.customerName,
+        customerEmail: payload.customerEmail,
+        customerPhone: payload.customerPhone,
+        borough: payload.borough || null,
+        zipCode: payload.zipCode || '10001',
+        serviceType: payload.serviceType,
+        projectNotes: payload.projectNotes || null,
+      },
+    });
+
+    return quote;
+  }
 }

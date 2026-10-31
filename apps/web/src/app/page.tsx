@@ -8,7 +8,7 @@ import {
   Footer,
   QuoteModal,
 } from '@/components/common';
-import { fetchCategories, CategoryItem, DEFAULT_CATEGORIES } from '@/lib/api';
+import { fetchCategories, CategoryItem } from '@/lib/api';
 import { EButton } from '@/components/EComponents';
 import USStateMap from '@/components/USStateMap';
 import PopularServicesCarousel from '@/components/PopularServicesCarousel';
@@ -62,7 +62,7 @@ export default function Home() {
   const blogsScrollRef = useRef<HTMLDivElement>(null);
 
   // Dynamic categories state loaded from backend API / database
-  const [categories, setCategories] = useState<CategoryItem[]>(DEFAULT_CATEGORIES);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
 
   useEffect(() => {
@@ -96,6 +96,14 @@ export default function Home() {
   const handlePopularSearch = (service: string) => {
     router.push(`/contractors?service=${encodeURIComponent(service)}`);
   };
+
+  // Derive popular search chips directly from DB categories & subServices
+  const popularSearchItems = Array.from(
+    new Set([
+      ...categories.map((c) => c.name),
+      ...categories.flatMap((c) => (c.subServices || []).map((s) => s.name)),
+    ])
+  ).slice(0, 6);
 
   const toggleFaq = (index: number) => {
     setOpenFaqIndices((prev) =>
@@ -331,42 +339,24 @@ export default function Home() {
           </div>
 
           {/* Popular Row (Under kitchen image, clean white strip) */}
-          <div className="px-4 py-3 bg-[#FAFBF9] border-y border-gray-100">
-            <div className="flex items-center gap-2 text-xs overflow-x-auto no-scrollbar">
-              <span className="font-bold text-[#111827] text-xs shrink-0 mr-0.5">Popular:</span>
-              <button
-                type="button"
-                onClick={() => handlePopularSearch('Custom Cabinets')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-700 font-medium text-xs hover:border-gray-300 hover:bg-gray-50 transition-colors shrink-0 shadow-2xs"
-              >
-                <svg className="w-3.5 h-3.5 text-[#0F3E35]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="4" y="3" width="16" height="18" rx="2" />
-                  <line x1="12" y1="3" x2="12" y2="21" />
-                  <circle cx="8" cy="12" r="1" fill="currentColor" />
-                  <circle cx="16" cy="12" r="1" fill="currentColor" />
-                </svg>
-                <span>Custom Cabinets</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handlePopularSearch('Roofing')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-700 font-medium text-xs hover:border-gray-300 hover:bg-gray-50 transition-colors shrink-0 shadow-2xs"
-              >
-                <HomeIcon className="w-3.5 h-3.5 text-[#0F3E35]" />
-                <span>Roofing</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handlePopularSearch('Kitchen Remodeling')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-700 font-medium text-xs hover:border-gray-300 hover:bg-gray-50 transition-colors shrink-0 shadow-2xs"
-              >
-                <Hammer className="w-3.5 h-3.5 text-[#0F3E35]" />
-                <span>Kitchen Remodel</span>
-              </button>
+          {popularSearchItems.length > 0 && (
+            <div className="px-4 py-3 bg-[#FAFBF9] border-y border-gray-100">
+              <div className="flex items-center gap-2 text-xs overflow-x-auto no-scrollbar">
+                <span className="font-bold text-[#111827] text-xs shrink-0 mr-0.5">Popular:</span>
+                {popularSearchItems.slice(0, 4).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => handlePopularSearch(item)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-gray-200 text-gray-700 font-medium text-xs hover:border-gray-300 hover:bg-gray-50 transition-colors shrink-0 shadow-2xs"
+                  >
+                    <Hammer className="w-3.5 h-3.5 text-[#0F3E35]" />
+                    <span>{item}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </section>
 
         {/* DESKTOP HERO VIEW (lg+) - 100% UNTOUCHED ORIGINAL DESKTOP */}
@@ -500,33 +490,25 @@ export default function Home() {
               </form>
 
               {/* Popular Searches / Quick Filter Chips */}
-              <div className="mt-4 flex items-center gap-2 text-xs max-w-3xl flex-wrap">
-                <span className="text-[#111827] font-bold mr-1 shrink-0">
-                  Popular:
-                </span>
-                {(categories.length > 0
-                  ? categories.slice(0, 6).map((c) => c.name)
-                  : [
-                    'Custom Cabinets',
-                    'Roofing',
-                    'Kitchen Remodeling',
-                    'Bathroom Remodeling',
-                    'Countertops',
-                    'HVAC',
-                  ]
-                ).map((item) => (
-                  <EButton
-                    key={item}
-                    type="button"
-                    variant="pill"
-                    size="sm"
-                    className="shrink-0 whitespace-nowrap"
-                    onClick={() => handlePopularSearch(item)}
-                  >
-                    {item}
-                  </EButton>
-                ))}
-              </div>
+              {popularSearchItems.length > 0 && (
+                <div className="mt-4 flex items-center gap-2 text-xs max-w-3xl flex-wrap">
+                  <span className="text-[#111827] font-bold mr-1 shrink-0">
+                    Popular:
+                  </span>
+                  {popularSearchItems.map((item) => (
+                    <EButton
+                      key={item}
+                      type="button"
+                      variant="pill"
+                      size="sm"
+                      className="shrink-0 whitespace-nowrap"
+                      onClick={() => handlePopularSearch(item)}
+                    >
+                      {item}
+                    </EButton>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </section>

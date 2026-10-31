@@ -17,40 +17,23 @@ export default function ProfileServiceAreasAndFaq({
   const borough = provider.borough && provider.borough !== 'All' ? provider.borough : 'Manhattan';
   const isRoofing = provider.services?.some((s) => /Roof/i.test(s)) ?? true;
 
-  // Dynamic Service Areas
+  // Dynamic Service Areas from DB (ListingServiceArea / servesArea) with NYC fallback
+  const dbAreas =
+    provider.serviceAreas && provider.serviceAreas.length > 0
+      ? provider.serviceAreas
+      : provider.servesArea
+      ? provider.servesArea
+          .split(',')
+          .map((a) => a.trim())
+          .filter(Boolean)
+      : [];
+
   const nycAreas = [
-    'Manhattan',
-    'Brooklyn',
-    'Queens',
-    'Staten Island',
-    'Bronx',
-    'Upper East Side',
-    'Williamsburg',
-    'Astoria',
-    'Tribeca',
-    'SoHo',
-    'Greenwich Village',
-    'Long Island City',
-    'Park Slope',
-    'DUMBO',
+    borough,
+    ...['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'].filter((b) => b !== borough),
   ];
 
-  const birminghamAreas = [
-    'Birmingham',
-    'Hoover',
-    'Homewood',
-    'Mountain Brook',
-    'Vestavia Hills',
-    'Trussville',
-    'Irondale',
-    'Pelham',
-    'Leeds',
-    'Chelsea',
-    'Helena',
-    'Alabaster',
-  ];
-
-  const allAreas = provider.address?.includes(' AL ') ? birminghamAreas : nycAreas;
+  const allAreas = dbAreas.length > 0 ? dbAreas : nycAreas;
   const initialAreas = allAreas.slice(0, 10);
   const remainingAreas = allAreas.slice(10);
 

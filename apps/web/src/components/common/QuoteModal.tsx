@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   X,
   CheckCircle2,
@@ -9,7 +9,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
-import { NYC_BOROUGHS } from '@/data/mockRoofers';
+import { fetchProviderFilters, submitQuoteRequest } from '@/lib/api';
 import { EButton, EInput } from '@/components/EComponents';
 
 export interface QuoteModalProps {
@@ -25,11 +25,14 @@ export default function QuoteModal({
 }: QuoteModalProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [boroughOptions, setBoroughOptions] = useState<string[]>([]);
+  const [serviceOptions, setServiceOptions] = useState<string[]>([]);
   const [formData, setFormData] = useState({
-    serviceType: 'Emergency Leak Repair',
+    serviceType: selectedProvider?.services?.[0] || '',
     propertyType: 'Residential',
     urgency: 'Within 48 hours',
-    borough: selectedProvider ? selectedProvider.borough : 'Queens',
+    borough: selectedProvider?.borough || '',
     zipCode: '',
     fullName: '',
     phone: '',
@@ -37,11 +40,52 @@ export default function QuoteModal({
     notes: '',
   });
 
+  useEffect(() => {
+    if (!isOpen) return;
+    fetchProviderFilters()
+      .then((meta) => {
+        const bList = (meta.boroughs || []).filter((b) => b !== 'All');
+        const sList =
+          selectedProvider?.services && selectedProvider.services.length > 0
+            ? selectedProvider.services
+            : (meta.services || []).filter((s) => s !== 'All Services' && s !== 'All');
+        setBoroughOptions(bList);
+        setServiceOptions(sList);
+        setFormData((prev) => ({
+          ...prev,
+          serviceType: prev.serviceType || sList[0] || 'General Consultation',
+          borough: selectedProvider?.borough || prev.borough || bList[0] || '',
+        }));
+      })
+      .catch(() => {
+        if (selectedProvider?.services?.length) {
+          setServiceOptions(selectedProvider.services);
+        }
+      });
+  }, [isOpen, selectedProvider]);
+
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitted(true);
+    setIsSubmitting(true);
+    try {
+      await submitQuoteRequest({
+        providerProfileId: selectedProvider?.id,
+        customerName: formData.fullName,
+        customerEmail: formData.email,
+        customerPhone: formData.phone,
+        borough: formData.borough,
+        zipCode: formData.zipCode,
+        serviceType: formData.serviceType,
+        projectNotes: formData.notes,
+      });
+    } catch (err) {
+      console.warn('Quote request submission warning:', err);
+    } finally {
+      setIsSubmitting(false);
+      setIsSubmitted(true);
+    }
   };
 
   const handleReset = () => {
@@ -77,7 +121,7 @@ export default function QuoteModal({
               <p className="text-xs text-gray-600 max-w-sm mx-auto">
                 {selectedProvider
                   ? `Sent directly to ${selectedProvider.name}. Typical response time is under 15 minutes.`
-                  : 'Matched with top-rated NYC roofing contractors in your borough.'}
+                  : 'Matched with top-rated verified contractors in your area.'}
               </p>
             </div>
 
@@ -86,16 +130,20 @@ export default function QuoteModal({
                 <span className="text-gray-500">Service:</span>
                 <span className="font-bold text-gray-900">{formData.serviceType}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Borough:</span>
-                <span className="font-bold text-gray-900">{formData.borough}, NYC</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Typical Range:</span>
-                <span className="font-bold text-primary-dark">
-                  {selectedProvider?.typicalPriceRange || '$4,500 – $15,000'}
-                </span>
-              </div>
+              {formData.borough && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Area:</span>
+                  <span className="font-bold text-gray-900">{formData.borough}</span>
+                </div>
+              )}
+              {selectedProvider?.typicalPriceRange && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Typical Range:</span>
+                  <span className="font-bold text-primary-dark">
+                    {selectedProvider.typicalPriceRange}
+                  </span>
+                </div>
+              )}
             </div>
 
             <EButton
@@ -118,9 +166,9 @@ export default function QuoteModal({
               <h3 className="text-lg font-black text-gray-950">
                 {selectedProvider
                   ? `Get Quote: ${selectedProvider.name}`
-                  : 'Get Quotes from Top NYC Roofing Contractors'}
+                  : 'Get Quotes from Top Verified Contractors'}
               </h3>
-              {selectedProvider && (
+              {selectedProvider?.typicalPriceRange && (
                 <div className="text-xs text-gray-500 mt-0.5">
                   Typical Project Range: <strong className="text-gray-900">{selectedProvider.typicalPriceRange}</strong>
                 </div>
@@ -139,25 +187,25 @@ export default function QuoteModal({
                       onChange={(e) => setFormData({ ...formData, serviceType: e.target.value })}
                       className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-gray-900"
                     >
-                      <option>Emergency Leak Repair</option>
-                      <option>Flat Roof Replacement</option>
-                      <option>Asphalt Shingle Repair</option>
-                      <option>Commercial Cool Roof</option>
-                      <option>Inspection &amp; Estimate</option>
+                      {serviceOptions.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
                     </select>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block font-bold text-gray-700 uppercase tracking-wider text-[10px] mb-1">
-                        Borough
+                        Borough / Area
                       </label>
                       <select
                         value={formData.borough}
-                        onChange={(e) => setFormData({ ...formData, borough: e.target.value as any })}
+                        onChange={(e) => setFormData({ ...formData, borough: e.target.value })}
                         className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-gray-900"
                       >
-                        {NYC_BOROUGHS.filter((b) => b !== 'All').map((b) => (
+                        {boroughOptions.map((b) => (
                           <option key={b} value={b}>
                             {b}
                           </option>
@@ -280,12 +328,13 @@ export default function QuoteModal({
                     </EButton>
                     <EButton
                       type="submit"
+                      disabled={isSubmitting}
                       variant="primary"
                       size="md"
                       className="flex-1 py-2.5"
                       iconRight={<ArrowRight className="w-3.5 h-3.5" />}
                     >
-                      Submit &amp; Get Free Quote
+                      {isSubmitting ? 'Submitting...' : 'Submit & Get Free Quote'}
                     </EButton>
                   </div>
                 </div>

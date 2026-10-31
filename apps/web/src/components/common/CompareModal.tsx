@@ -29,7 +29,7 @@ export default function CompareModal({
               SIDE-BY-SIDE EVALUATION
             </span>
             <h3 className="text-lg font-black text-gray-950">
-              Comparing {providers.length} NYC Roofing Contractors
+              Comparing {providers.length} Verified NYC Contractors
             </h3>
           </div>
           <button
@@ -93,14 +93,18 @@ export default function CompareModal({
                 ))}
               </tr>
 
-              {/* Facebook Reviews */}
+              {/* Houzz Reviews */}
               <tr>
                 <td className="p-3 font-bold text-gray-500">Houzz Rating</td>
-                {providers.map((p) => (
-                  <td key={p.id} className="p-3 font-semibold text-indigo-700">
-                    {(p.reviews.houzz || p.reviews.facebook)?.rating || 4.8} ★ ({(p.reviews.houzz || p.reviews.facebook)?.count || 24})
-                  </td>
-                ))}
+                {providers.map((p) => {
+                  const hRating = (p.reviews.houzz || p.reviews.facebook)?.rating ?? 0;
+                  const hCount = (p.reviews.houzz || p.reviews.facebook)?.count ?? 0;
+                  return (
+                    <td key={p.id} className="p-3 font-semibold text-indigo-700">
+                      {hCount > 0 ? `${hRating} ★ (${hCount})` : '—'}
+                    </td>
+                  );
+                })}
               </tr>
 
               {/* Price Range */}

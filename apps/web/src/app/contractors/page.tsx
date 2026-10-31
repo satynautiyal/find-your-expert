@@ -11,6 +11,7 @@ import {
   CompareDrawer,
   CompareModal,
 } from '@/components/common';
+import SafeImage from '@/components/common/SafeImage';
 import { EButton } from '@/components/EComponents';
 import HeroBanner from '@/components/HeroBanner';
 import ServiceCategoriesSection from '@/components/ServiceCategoriesSection';
@@ -79,7 +80,7 @@ function ContractorsDirectoryContent() {
   const [selectedBorough, setSelectedBorough] = useState(urlBorough);
   const [selectedCategory, setSelectedCategory] = useState(defaultCategory);
   const [selectedService, setSelectedService] = useState(defaultService);
-  const [sortBy, setSortBy] = useState<'rating' | 'reviews' | 'experience'>('rating');
+  const [sortBy, setSortBy] = useState<'rating' | 'reviews' | 'experience' | 'fast-response'>('rating');
 
   // Sub-filters
   const [projectType, setProjectType] = useState('All');
@@ -122,7 +123,29 @@ function ContractorsDirectoryContent() {
     Promise.all([fetchCategories(), fetchProviderFilters()])
       .then(([cats, meta]) => {
         if (!isMounted) return;
-        if (cats && cats.length > 0) setCategoriesList(cats);
+        const resolvedCats = cats && cats.length > 0 ? cats : meta?.categories || [];
+        if (resolvedCats.length > 0) {
+          setCategoriesList(resolvedCats);
+          if (urlService && !urlCategory) {
+            const lowerSvc = urlService.toLowerCase().trim();
+            const matchedCat = resolvedCats.find(
+              (c) =>
+                c.name.toLowerCase() === lowerSvc ||
+                c.slug.toLowerCase() === lowerSvc.replace(/\s+/g, '-') ||
+                c.subServices?.some(
+                  (ss) =>
+                    ss.name.toLowerCase() === lowerSvc ||
+                    ss.slug.toLowerCase() === lowerSvc.replace(/\s+/g, '-')
+                )
+            );
+            if (matchedCat) {
+              setSelectedCategory(matchedCat.name);
+              setSelectedService(
+                matchedCat.name.toLowerCase() === lowerSvc ? 'All Services' : urlService
+              );
+            }
+          }
+        }
         if (meta) setFilterMeta(meta);
       })
       .catch((err) => {
@@ -132,9 +155,9 @@ function ContractorsDirectoryContent() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [urlCategory, urlService]);
 
-  // Detect if selected state or category is outside active live scope (New York + Custom Cabinets / Roofing)
+  // Detect if selected state or category is outside active live DB categories
   const isUnlaunchedState = useMemo(() => {
     if (!selectedState || selectedState === 'All') return false;
     const s = selectedState.toLowerCase().trim();
@@ -143,9 +166,36 @@ function ContractorsDirectoryContent() {
 
   const isUnlaunchedCategory = useMemo(() => {
     if (!selectedCategory || selectedCategory === 'All') return false;
+    if (categoriesList.length === 0) return false;
     const c = selectedCategory.toLowerCase().trim();
-    return !c.includes('cabinet') && !c.includes('roof');
-  }, [selectedCategory]);
+    const matched = categoriesList.find(
+      (cat) =>
+        cat.name.toLowerCase() === c ||
+        cat.slug.toLowerCase() === c.replace(/\s+/g, '-') ||
+        cat.subServices?.some(
+          (ss) =>
+            ss.name.toLowerCase() === c ||
+            ss.slug.toLowerCase() === c.replace(/\s+/g, '-')
+        )
+    );
+    return !matched || matched.providerCount === 0;
+  }, [selectedCategory, categoriesList]);
+
+  const activeCategoryObj = useMemo(() => {
+    const c = (selectedCategory || '').toLowerCase().trim();
+    return categoriesList.find(
+      (cat) =>
+        cat.name.toLowerCase() === c ||
+        cat.slug.toLowerCase() === c.replace(/\s+/g, '-')
+    );
+  }, [selectedCategory, categoriesList]);
+
+  const activeCategorySubServices = useMemo(() => {
+    if (activeCategoryObj?.subServices && activeCategoryObj.subServices.length > 0) {
+      return activeCategoryObj.subServices.map((s) => s.name);
+    }
+    return filterMeta?.services || [];
+  }, [activeCategoryObj, filterMeta]);
 
   const isComingSoon = isUnlaunchedState || isUnlaunchedCategory;
 
@@ -166,7 +216,7 @@ function ContractorsDirectoryContent() {
         borough: selectedBorough !== 'All' ? selectedBorough : undefined,
         category: selectedCategory !== 'All' ? selectedCategory : undefined,
         service: selectedService !== 'All Services' && selectedService !== 'All' ? selectedService : undefined,
-        sortBy,
+        sortBy: sortBy === 'fast-response' ? 'rating' : sortBy,
         limit: 50,
       });
       setProviders(data.items);
@@ -288,7 +338,7 @@ function ContractorsDirectoryContent() {
         onSearchSubmit={handleScrollToListings}
         companiesCount={totalCount}
         dynamicBoroughs={filterMeta?.boroughs}
-        dynamicServices={filterMeta?.services}
+        dynamicServices={activeCategorySubServices}
         stats={filterMeta?.stats}
       />
 
@@ -319,7 +369,7 @@ function ContractorsDirectoryContent() {
           onSortByChange={setSortBy}
           selectedService={selectedService}
           onSelectService={setSelectedService}
-          dynamicServices={filterMeta?.services}
+          dynamicServices={activeCategorySubServices}
           projectType={projectType}
           onProjectTypeChange={setProjectType}
           minRating={minRating}
@@ -364,34 +414,31 @@ function ContractorsDirectoryContent() {
                 </p>
 
                 {/* Quick Access to Live Trades in New York */}
-                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedState('New York');
-                      setSelectedCategory('Custom Cabinets');
-                      setSelectedService('All Services');
-                      setSelectedBorough('All');
-                    }}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs bg-[#0F3E35] text-white hover:bg-[#0A2C25] transition-all cursor-pointer shadow-xs active:scale-95"
-                  >
-                    <span>View NYC Custom Cabinets (10 Pros)</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedState('New York');
-                      setSelectedCategory('Roofing');
-                      setSelectedService('All Services');
-                      setSelectedBorough('All');
-                    }}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs bg-white border border-gray-200 text-gray-800 hover:border-gray-300 hover:bg-gray-50 transition-all cursor-pointer shadow-2xs active:scale-95"
-                  >
-                    <span>View NYC Roofing (14 Pros)</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3 flex-wrap">
+                  {categoriesList
+                    .filter((cat) => cat.providerCount > 0)
+                    .map((cat, idx) => (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedState('New York');
+                          setSelectedCategory(cat.name);
+                          setSelectedService('All Services');
+                          setSelectedBorough('All');
+                        }}
+                        className={
+                          idx === 0
+                            ? 'w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs bg-[#0F3E35] text-white hover:bg-[#0A2C25] transition-all cursor-pointer shadow-xs active:scale-95'
+                            : 'w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs bg-white border border-gray-200 text-gray-800 hover:border-gray-300 hover:bg-gray-50 transition-all cursor-pointer shadow-2xs active:scale-95'
+                        }
+                      >
+                        <span>
+                          View NYC {cat.name} ({cat.providerCount} Pros)
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    ))}
                 </div>
 
                 {/* Email Notification Subscription */}
@@ -506,12 +553,50 @@ function ContractorsDirectoryContent() {
           )}
         </div>
 
+        {/* Prosvetted Contractor Get Listed Banner (Directly after all contractor listings) */}
+        {!isComingSoon && (
+          <div className="bg-[#0B3B2C] rounded-2xl px-5 py-5 sm:px-7 sm:py-6 shadow-sm border border-[#0F3E35] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6">
+            <div className="flex items-center gap-4 sm:gap-5 min-w-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 bg-white/10 border border-white/15 shadow-xs">
+                <SafeImage
+                  src={activeCategoryObj?.image || '/categories/custom-cabinets.jpg'}
+                  alt={currentService}
+                  fallbackCategory={currentService}
+                  fallbackTitle={currentService}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="min-w-0">
+                <span className="inline-block text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.14em] text-emerald-300 mb-1">
+                  FOR CONTRACTORS • PROSVETTED VERIFIED NETWORK
+                </span>
+                <h3 className="text-base sm:text-lg md:text-[20px] font-bold text-white leading-snug tracking-tight">
+                  Are You a Licensed {currentService} Professional in {currentLocation}?
+                </h3>
+                <p className="text-xs sm:text-[13px] text-emerald-100/75 mt-1 font-normal leading-relaxed max-w-2xl">
+                  Join Prosvetted&apos;s verified directory to showcase your project portfolio, highlight your Trust Score, and connect directly with high-intent homeowners.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleOpenQuote()}
+              className="bg-[#DA5F2F] hover:bg-[#C44D29] text-white rounded-xl px-5 py-3 text-xs sm:text-[13px] font-bold leading-tight text-center shrink-0 transition-all cursor-pointer w-full sm:w-auto inline-flex items-center justify-center gap-2 shadow-xs"
+            >
+              <span>Get Listed on Prosvetted</span>
+              <ArrowRight className="w-3.5 h-3.5 stroke-[2.4]" />
+            </button>
+          </div>
+        )}
+
         {/* 5. Evaluation & Cost Guide (Dynamically adapts to Custom Cabinets or Roofing in NY) */}
         {!isComingSoon && (
           <EvaluationAndCostSection
             currentService={currentService}
             currentLocation={currentLocation}
             onOpenCostGuide={() => setCostGuideOpen(true)}
+            costBenchmarks={activeCategoryObj?.costBenchmarks}
           />
         )}
       </main>

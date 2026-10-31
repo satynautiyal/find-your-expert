@@ -3,10 +3,10 @@
 import React from 'react';
 import {
   ChevronDown,
-  Home,
   Star,
   Award,
   ShieldCheck,
+  Home,
   X,
   Sparkles,
 } from 'lucide-react';
@@ -15,7 +15,7 @@ export interface ContractorFilterToolbarProps {
   currentService: string;
   currentLocation: string;
   sortBy: string;
-  onSortByChange: (sort: 'rating' | 'reviews' | 'experience') => void;
+  onSortByChange: (sort: 'rating' | 'reviews' | 'experience' | 'fast-response') => void;
   selectedService: string;
   onSelectService: (service: string) => void;
   dynamicServices?: string[];
@@ -38,8 +38,6 @@ export default function ContractorFilterToolbar({
   currentLocation,
   sortBy,
   onSortByChange,
-  selectedService,
-  onSelectService,
   dynamicServices,
   projectType,
   onProjectTypeChange,
@@ -49,34 +47,23 @@ export default function ContractorFilterToolbar({
   onMinExperienceChange,
   verifiedOnly,
   onVerifiedOnlyChange,
-  distance,
-  onDistanceChange,
   onResetFilters,
   hasActiveFilters,
 }: ContractorFilterToolbarProps) {
-  const isCabinets = currentService.toLowerCase().includes('cabinet') ||
+  const isCabinets =
+    currentService.toLowerCase().includes('cabinet') ||
     currentService.toLowerCase().includes('shelv') ||
     currentService.toLowerCase().includes('vanit') ||
-    currentService.toLowerCase().includes('closet');
+    currentService.toLowerCase().includes('closet') ||
+    currentService.toLowerCase().includes('millwork');
 
-  // Dynamic Project Type Options based on trade
-  const projectTypeOptions = isCabinets
-    ? [
-        { label: 'All Cabinet Types', value: 'All' },
-        { label: 'Kitchen Cabinets', value: 'Kitchen' },
-        { label: 'Built-In Shelving', value: 'Shelving' },
-        { label: 'Bathroom Vanities', value: 'Vanities' },
-        { label: 'Custom Closets', value: 'Closet' },
-        { label: 'Architectural Millwork', value: 'Millwork' },
-      ]
-    : [
-        { label: 'All Roof Types', value: 'All' },
-        { label: 'Flat Roof Systems', value: 'Flat' },
-        { label: 'Asphalt Shingle', value: 'Shingle' },
-        { label: 'Waterproofing', value: 'Waterproof' },
-        { label: 'Metal Roofing', value: 'Metal' },
-        { label: 'Gutter Systems', value: 'Gutter' },
-      ];
+  const cleanDynamicServices = (dynamicServices || []).filter(
+    (s) => s && s !== 'All Services' && s !== 'All'
+  );
+  const projectTypeOptions = [
+    { label: 'All Services', value: 'All' },
+    ...cleanDynamicServices.map((s) => ({ label: s, value: s })),
+  ];
 
   return (
     <div className="space-y-4">
@@ -104,6 +91,7 @@ export default function ContractorFilterToolbar({
               <option value="rating">Top Rated &amp; Recommended</option>
               <option value="reviews">Most Reviews</option>
               <option value="experience">Years in Business</option>
+              <option value="fast-response">Fast Response</option>
             </select>
             <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
@@ -112,7 +100,7 @@ export default function ContractorFilterToolbar({
 
       {/* Filter Dropdown Pills Row (Horizontal swipe rail on mobile, flex-wrap on desktop) */}
       <div className="flex items-center gap-2 sm:gap-2.5 pt-1 overflow-x-auto no-scrollbar pb-1 sm:pb-0 sm:flex-wrap">
-        {/* Filter 1: Project / Material Type (Context-Aware) */}
+        {/* Filter 1: Service / Project Type Dropdown */}
         <div className="relative shrink-0">
           <select
             value={projectType}

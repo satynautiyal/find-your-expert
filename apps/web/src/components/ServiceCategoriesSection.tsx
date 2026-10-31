@@ -16,45 +16,40 @@ export interface ServiceCategoriesSectionProps {
 export default function ServiceCategoriesSection({
   selectedCategory,
   selectedService,
-  companiesCount = 10,
+  categories,
+  companiesCount = 0,
   currentLocation = 'New York, NY',
 }: ServiceCategoriesSectionProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
+  const matchedCategory = categories?.find(
+    (c) =>
+      c.name.toLowerCase() === (selectedCategory || '').toLowerCase() ||
+      c.slug.toLowerCase() === (selectedCategory || '').toLowerCase().replace(/\s+/g, '-')
+  );
+
   const activeService =
     selectedService && selectedService !== 'All Services' && selectedService !== 'All'
       ? selectedService
-      : selectedCategory || 'Custom Cabinets';
-
-  const isCabinets =
-    !activeService ||
-    activeService.toLowerCase().includes('cabinet') ||
-    activeService.toLowerCase().includes('shelv') ||
-    activeService.toLowerCase().includes('vanit') ||
-    activeService.toLowerCase().includes('closet') ||
-    activeService.toLowerCase().includes('millwork');
-
-  const isRoofing = activeService.toLowerCase().includes('roof');
+      : matchedCategory?.name || selectedCategory || categories?.[0]?.name || 'Contractors';
 
   const displayServiceTitle =
     selectedService && selectedService !== 'All Services' && selectedService !== 'All'
-      ? `${selectedService} Fabricator and Installer`
-      : isCabinets
-      ? 'Custom Cabinet Fabricator and Installer'
-      : isRoofing
-      ? 'Roofing and Waterproofing Contractor'
-      : `${activeService} Fabricator and Installer`;
+      ? `${selectedService} Contractor`
+      : matchedCategory?.metaTitle
+      ? matchedCategory.metaTitle.replace(/\s*\|.*$/, '')
+      : `${activeService} Contractor`;
 
   const rawCity = currentLocation.split(',')[0].trim();
   const displayCity =
     rawCity === 'New York' || rawCity === 'All' ? 'New York City' : `${rawCity}, New York City`;
 
-  const displayCount = companiesCount > 0 ? companiesCount : isCabinets ? 10 : 14;
+  const displayCount = companiesCount > 0 ? companiesCount : matchedCategory?.providerCount || 0;
 
   return (
     <section className="pt-6 sm:pt-8 pb-2">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-2xl border border-gray-200/80 p-5 sm:p-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
+        <div className="bg-white rounded-2xl border border-gray-300/90 p-5 sm:p-7 shadow-[0_2px_12px_rgba(0,0,0,0.03)]">
           {/* SEO Ranking Headline */}
           <h2 className="text-lg sm:text-xl md:text-[22px] font-bold text-[#0F291E] tracking-[-0.015em] leading-[1.32]">
             Top {displayCount} {displayServiceTitle} Companies: {displayCity} – 2025-2026 Ranking

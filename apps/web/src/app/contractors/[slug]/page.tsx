@@ -5,7 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Header, Footer, QuoteModal, CostGuideModal } from '@/components/common';
 import type { RooferProvider } from '@/data/mockRoofers';
-import { MOCK_NYC_ROOFERS } from '@/data/mockRoofers';
 import { fetchProviderBySlug, type ScrapedReviewItemDto } from '@/lib/api';
 import {
   ProfileHero,
@@ -39,12 +38,6 @@ export default function ContractorProfilePage() {
     setIsLoading(true);
     setError(null);
 
-    // Check mock roofers first as instant cache/fallback
-    const localMock = MOCK_NYC_ROOFERS.find((r: RooferProvider) => r.slug === slug);
-    if (localMock) {
-      setProvider(localMock);
-    }
-
     fetchProviderBySlug(slug)
       .then((data) => {
         setProvider(data);
@@ -54,10 +47,7 @@ export default function ContractorProfilePage() {
       })
       .catch((err) => {
         console.error('Failed to fetch provider profile:', err);
-        // If we don't have localMock, set error
-        if (!localMock) {
-          setError(err.message || 'Contractor profile not found.');
-        }
+        setError(err.message || 'Contractor profile not found.');
       })
       .finally(() => {
         setIsLoading(false);
@@ -139,8 +129,8 @@ export default function ContractorProfilePage() {
         <ProfileNavTabs
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          reviewCount={provider.totalReviews || 126}
-          projectCount={provider.photoCount || 28}
+          reviewCount={provider.totalReviews || 0}
+          projectCount={provider.photoCount || 0}
         />
 
         {/* Section Blocks Container */}

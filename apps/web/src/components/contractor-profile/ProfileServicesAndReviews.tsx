@@ -74,60 +74,57 @@ export default function ProfileServicesAndReviews({
     { name: 'Restoration & Repair', icon: ShieldAlert },
   ];
 
-  const displayServices = isCabinets ? cabinetServicesList : roofingServicesList;
-
-  // Rating & review distributions
-  const rating = provider.compositeRating || 4.8;
-  const totalReviews = provider.totalReviews || 126;
-
-  // Star breakdown calculation
-  const distribution = [
-    { stars: 5, pct: 78, count: Math.round(totalReviews * 0.78) },
-    { stars: 4, pct: 16, count: Math.round(totalReviews * 0.16) },
-    { stars: 3, pct: 4, count: Math.round(totalReviews * 0.04) },
-    { stars: 2, pct: 1, count: Math.round(totalReviews * 0.01) },
-    { stars: 1, pct: 1, count: Math.round(totalReviews * 0.01) },
+  const serviceIcons = [
+    Home,
+    Wrench,
+    Layers,
+    Grid,
+    Hammer,
+    Box,
+    Sparkles,
+    CheckCircle2,
+    Building2,
+    Search,
+    Compass,
+    ShieldAlert,
   ];
 
-  // Default reviews matching screenshot
-  const defaultReviews = [
-    {
-      authorName: 'Sarah M.',
-      platform: 'GOOGLE',
-      rating: 5,
-      date: '2 weeks ago',
-      comment:
-        'Excellent service from start to finish. The team was professional, on time and kept us informed throughout the entire project.',
-    },
-    {
-      authorName: 'Mike R.',
-      platform: 'YELP',
-      rating: 5,
-      date: '1 month ago',
-      comment:
-        'Great communication and high quality workmanship. Our new installation looks amazing and was completed right on schedule.',
-    },
-    {
-      authorName: 'Emily T.',
-      platform: 'HOUZZ',
-      rating: 5,
-      date: '2 months ago',
-      comment:
-        'They handled everything smoothly and completed the work on time. Would definitely recommend them to any homeowner in the area.',
-    },
-  ];
-
-  // Merge real scraped reviews if available
-  const allDisplayReviews =
-    scrapedReviews && scrapedReviews.length > 0
-      ? scrapedReviews.slice(0, 6).map((sr) => ({
-          authorName: sr.authorName || 'Verified Homeowner',
-          platform: sr.platform?.toUpperCase() || 'GOOGLE',
-          rating: sr.rating || 5,
-          date: sr.reviewDate || 'Recently',
-          comment: sr.comment,
+  const fallbackServicesList = isCabinets ? cabinetServicesList : roofingServicesList;
+  const displayServices =
+    provider.services && provider.services.length > 0
+      ? provider.services.map((name, idx) => ({
+          name,
+          icon: serviceIcons[idx % serviceIcons.length],
         }))
-      : defaultReviews;
+      : fallbackServicesList;
+
+  // Rating & review distributions from DB
+  const rating = provider.compositeRating || 0;
+  const totalReviews = provider.totalReviews || scrapedReviews.length || 0;
+
+  // Star breakdown calculation (computed from real scrapedReviews when present)
+  const distribution = [5, 4, 3, 2, 1].map((stars) => {
+    if (scrapedReviews && scrapedReviews.length > 0) {
+      const count = scrapedReviews.filter((r) => Math.round(r.rating || 5) === stars).length;
+      const pct = Math.round((count / scrapedReviews.length) * 100);
+      return { stars, pct, count };
+    }
+    const defaultPct = stars === 5 ? 78 : stars === 4 ? 16 : stars === 3 ? 4 : 1;
+    return {
+      stars,
+      pct: totalReviews > 0 ? defaultPct : 0,
+      count: Math.round((totalReviews * defaultPct) / 100),
+    };
+  });
+
+  // Real scraped reviews from DB
+  const allDisplayReviews = (scrapedReviews || []).map((sr) => ({
+    authorName: sr.authorName || 'Verified Homeowner',
+    platform: sr.platform?.toUpperCase() || 'GOOGLE',
+    rating: sr.rating || 5,
+    date: sr.reviewDate || 'Verified Review',
+    comment: sr.comment,
+  }));
 
   const renderPlatformIcon = (platform: string) => {
     switch (platform) {

@@ -157,7 +157,7 @@ Please generate an engaging, structured review breakdown covering:
 2. **Key Strengths**: Highlight craftsmanship, punctuality, speed of response, and cleanup.
 3. **Pricing & Transparency**: Value for money, estimate accuracy, fair costs.
 4. **Areas of Caution / Notes**: Any recurring complaints or things to verify (if none, highlight consistently positive feedback).
-5. **Best Suited For**: Specific roofing and exterior tasks customers recommend them for.`;
+5. **Best Suited For**: Specific project types and services customers recommend them for.`;
 
         currentSummary = await this.callOpenRouter(prompt, systemPrompt);
       } else {
