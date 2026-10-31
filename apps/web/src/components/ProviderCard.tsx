@@ -154,7 +154,7 @@ export default function ProviderCard({
               <button
                 type="button"
                 onClick={() => onToggleCompare(provider.id)}
-                className="sm:hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-xs flex items-center justify-center shadow-xs border border-gray-100 z-10 cursor-pointer active:scale-90 transition-transform"
+                className="sm:hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-white/95 backdrop-blur-xs flex items-center justify-center shadow-xs border border-gray-200 z-10 cursor-pointer active:scale-90 transition-transform"
                 title={isCompared ? 'Saved' : 'Save'}
               >
                 <Heart
@@ -285,7 +285,7 @@ export default function ProviderCard({
             </div>
 
             {/* Action Buttons & Expand Chevron */}
-            <div className="flex items-start gap-2 pl-0 sm:pl-4 border-l-0 sm:border-l border-gray-200 w-full sm:w-auto">
+            <div className="flex items-start gap-2 pt-3 sm:pt-0 pl-0 sm:pl-4 border-t sm:border-t-0 sm:border-l border-gray-200 w-full sm:w-auto">
               <div className="w-full sm:w-32 md:w-36 grid grid-cols-2 sm:flex sm:flex-col gap-2">
                 <EButton
                   variant="primary"
@@ -341,7 +341,7 @@ export default function ProviderCard({
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded)}
-        className="sm:hidden w-full py-2 px-4 border-t border-gray-100 bg-gray-50/60 hover:bg-gray-100/60 flex items-center justify-center gap-1.5 text-xs text-gray-600 font-semibold transition-colors"
+        className="sm:hidden w-full py-2.5 px-4 border-t border-gray-200 bg-gray-50/80 hover:bg-gray-100/70 flex items-center justify-center gap-1.5 text-xs text-gray-700 font-semibold transition-colors"
       >
         <span>
           {isExpanded
@@ -357,9 +357,9 @@ export default function ProviderCard({
       {/* 2. Expandable Bottom Details: About, Address + Mini Map, Web Reviews */}
       {isExpanded && (
         <div className="border-t border-gray-200 bg-[#FCFDFB] p-4 sm:p-5">
-          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-200 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
             {/* Col 1: About the Contractor */}
-            <div className="space-y-1.5 pr-0 md:pr-4">
+            <div className="space-y-1.5 pb-4 md:pb-0 pr-0 md:pr-5 border-b md:border-b-0 md:border-r border-gray-200">
               <h3 className="text-xs font-bold text-[#111827]">
                 About {provider.name}
               </h3>
@@ -378,14 +378,14 @@ export default function ProviderCard({
             </div>
 
             {/* Col 2: Address & Realistic Mini Map Graphic */}
-            <div className="space-y-1.5 pt-3 md:pt-0 px-0 md:px-4">
+            <div className="space-y-1.5 pb-4 md:pb-0 px-0 md:px-2 md:pr-5 border-b md:border-b-0 md:border-r border-gray-200">
               <h3 className="text-xs font-bold text-[#111827]">Address</h3>
               <div className="flex items-start gap-1.5 text-[11px] sm:text-xs text-[#5A6578]">
                 <MapPin className="w-3.5 h-3.5 text-[#DA5F2F] shrink-0 mt-0.5" />
                 <span className="break-words leading-snug">{fullAddress}</span>
               </div>
 
-              <div className="h-16 w-full max-w-[220px] rounded-xl overflow-hidden relative border border-gray-200/80 bg-[#EAE9E6] shadow-2xs">
+              <div className="h-16 w-full max-w-[220px] rounded-xl overflow-hidden relative border border-gray-200 bg-[#EAE9E6] shadow-2xs">
                 <img
                   src="/mini-map-tile.svg"
                   alt="Location Map Preview"
@@ -395,7 +395,7 @@ export default function ProviderCard({
             </div>
 
             {/* Col 3: Reviews from around the web */}
-            <div className="space-y-2 pt-3 md:pt-0 pl-0 md:pl-4 flex flex-col justify-between">
+            <div className="space-y-2 pl-0 md:pl-1 flex flex-col justify-between">
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-bold text-[#111827]">

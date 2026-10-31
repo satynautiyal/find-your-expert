@@ -108,7 +108,7 @@ export default function EvaluationAndCostSection({
   return (
     <section className="space-y-10 pt-6 pb-2">
       {/* 1. How We Evaluate Companies Banner */}
-      <div className="bg-[#FAFBF9] border border-gray-200/80 rounded-2xl p-5 sm:p-7 shadow-xs">
+      <div className="bg-[#FAFBF9] border border-gray-300 rounded-2xl p-5 sm:p-7 shadow-xs">
         {/* Banner Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
           <div className="max-w-2xl">
@@ -125,7 +125,7 @@ export default function EvaluationAndCostSection({
             variant="outline"
             size="sm"
             onClick={onOpenCostGuide}
-            className="text-xs font-semibold text-[#111827] border-gray-200 hover:border-gray-300 self-start sm:self-end shrink-0 w-full sm:w-auto justify-center"
+            className="text-xs font-semibold text-[#111827] border-gray-300 hover:border-gray-400 self-start sm:self-end shrink-0 w-full sm:w-auto justify-center"
           >
             <span>Learn About Our Methodology</span>
           </EButton>
@@ -138,7 +138,7 @@ export default function EvaluationAndCostSection({
             return (
               <div
                 key={idx}
-                className="bg-white rounded-xl border border-gray-100 p-4 shadow-2xs hover:shadow-xs transition-shadow"
+                className="bg-white rounded-xl border border-gray-200 p-4 shadow-2xs hover:shadow-xs transition-shadow"
               >
                 <div className="w-8 h-8 rounded-lg bg-[#EBF3F1] text-[#0F3E35] flex items-center justify-center mb-3">
                   <Icon className="w-4 h-4 stroke-[2.2]" />
@@ -158,7 +158,7 @@ export default function EvaluationAndCostSection({
       {/* 2. Side-by-Side: 7 Steps to Hire + NYC Cost Guide */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 items-start">
         {/* Left Column: 7 Steps to Hire */}
-        <div className="lg:col-span-6 bg-white border border-gray-200/80 rounded-2xl p-5 sm:p-7 shadow-xs">
+        <div className="lg:col-span-6 bg-white border border-gray-300 rounded-2xl p-5 sm:p-7 shadow-xs">
           <h2 className="text-lg sm:text-xl font-bold text-[#111827] tracking-tight mb-2">
             7 Steps to Hire a {isCabinets ? 'Custom Cabinet Maker' : 'Roofer'} in {currentLocation}
           </h2>
@@ -181,7 +181,7 @@ export default function EvaluationAndCostSection({
         </div>
 
         {/* Right Column: NYC Cost Guide */}
-        <div className="lg:col-span-6 bg-white border border-gray-200/80 rounded-2xl p-5 sm:p-7 shadow-xs">
+        <div className="lg:col-span-6 bg-white border border-gray-300 rounded-2xl p-5 sm:p-7 shadow-xs">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg sm:text-xl font-bold text-[#111827] tracking-tight">
               {currentService} Cost Guide in {currentLocation}
