@@ -56,7 +56,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     const ogImage =
       blog.ogImageUrl ||
       blog.coverImageUrl ||
-      'https://prosvetted.com/og-default.jpg';
+      'https://prosvetted.com/website-share-image-1200x630.png';
 
     return {
       title,

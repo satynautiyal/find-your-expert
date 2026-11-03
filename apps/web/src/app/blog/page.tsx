@@ -21,11 +21,19 @@ export const metadata: Metadata = {
   description:
     'Comprehensive guides, cost calculators, and contractor hiring advice for New York City property owners. Learn from certified building experts.',
   openGraph: {
-    title: 'Roofing Guides & Cost Breakdowns | Prosvetted',
+    title: 'Roofing Guides & Cost Breakdowns | ProsVetted',
     description:
       'Expert advice and transparent pricing breakdown for roofing, gutters, and siding projects in NYC.',
     url: 'https://prosvetted.com/blog',
     type: 'website',
+    images: [
+      {
+        url: '/website-share-image-1200x630.png',
+        width: 1200,
+        height: 630,
+        alt: 'ProsVetted - We vet. You pick.',
+      },
+    ],
   },
 };
 

@@ -1,7 +1,0 @@
-<svg viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <g transform="translate(18, 4.5)">
-    <path d="M0 0H82A62 62 0 0 1 82 124H38L71 86H83.5A23.5 23.5 0 0 0 83.5 39H38V86H0V0Z" fill="#144E35"/>
-    <path d="M38 86A38 38 0 0 0 0 124V171H38V86Z" fill="#144E35"/>
-    <path d="M38 39H71V86L38 124V39Z" fill="#F1A14A"/>
-  </g>
-</svg>

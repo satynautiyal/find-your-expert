@@ -13,6 +13,7 @@ import {
   AlertCircle,
   LogOut,
 } from 'lucide-react';
+import BrandLogo from '@/components/common/BrandLogo';
 
 const ADMIN_USERNAME = 'admin1234';
 const ADMIN_PASSWORD = '12345678';
@@ -98,14 +99,14 @@ export default function AdminLayout({
 
         <div className="w-full max-w-md relative z-10">
           {/* Brand Header */}
-          <div className="text-center mb-8 space-y-2">
+          <div className="text-center mb-8 space-y-3">
+            <div className="flex justify-center">
+              <BrandLogo variant="dark" size="lg" />
+            </div>
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/15 text-primary-light text-xs font-bold uppercase tracking-wider backdrop-blur-md">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
               <span>Admin Access Control</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Prosvetted CMS
-            </h1>
             <p className="text-slate-400 text-xs sm:text-sm">
               Sign in with your administrator credentials to manage blogs, SEO, and content.
             </p>
