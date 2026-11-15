@@ -73,33 +73,36 @@ export function ProsvettedIcon({
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 64 64"
+      viewBox="0 0 64 57.5"
       className={className}
       role="img"
       aria-label="ProsVetted icon"
     >
-      <mask id={maskId} maskUnits="userSpaceOnUse" x="-10" y="-10" width="84" height="84">
-        <rect x="-10" y="-10" width="84" height="84" fill="white" />
-        <rect x="12" y="36" width="9" height="16" rx="1.5" fill="black" />
-        <circle cx="46" cy="42" r="18" fill="black" />
-        <path
-          d="M38 52L34 63L39.5 60.5L43 64L46 55Z M54 52L58 63L52.5 60.5L49 64L46 55Z"
-          fill="black"
-          stroke="black"
-          strokeWidth="3"
-          strokeLinejoin="round"
-        />
-      </mask>
-      <g mask={`url(#${maskId})`}>
-        <path
-          d="M4 30L26 11L48 30V52H4Z"
-          fill={primaryColor}
-          stroke={primaryColor}
-          strokeWidth="4"
-          strokeLinejoin="round"
-        />
+      <title>ProsVetted icon</title>
+      <g transform="translate(-1 -7.5)">
+        <mask id={maskId} maskUnits="userSpaceOnUse" x="-10" y="-10" width="84" height="84">
+          <rect x="-10" y="-10" width="84" height="84" fill="white" />
+          <rect x="12" y="36" width="9" height="16" rx="1.5" fill="black" />
+          <circle cx="46" cy="42" r="18" fill="black" />
+          <path
+            d="M38 52L34 63L39.5 60.5L43 64L46 55Z M54 52L58 63L52.5 60.5L49 64L46 55Z"
+            fill="black"
+            stroke="black"
+            strokeWidth="3"
+            strokeLinejoin="round"
+          />
+        </mask>
+        <g mask={`url(#${maskId})`}>
+          <path
+            d="M4 30L26 11L48 30V52H4Z"
+            fill={primaryColor}
+            stroke={primaryColor}
+            strokeWidth="4"
+            strokeLinejoin="round"
+          />
+        </g>
+        <RosetteBadgePaths />
       </g>
-      <RosetteBadgePaths />
     </svg>
   );
 }

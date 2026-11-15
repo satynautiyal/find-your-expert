@@ -9,14 +9,21 @@ dotenv.config();
 import { PrismaClient, ReviewPlatform } from '@prisma/client';
 import { GoogleReviewsScraperService } from '../src/scrapers/google/google-reviews-scraper.service';
 import { YelpReviewsScraperService } from '../src/scrapers/yelp/yelp-reviews-scraper.service';
+import { HomeAdvisorReviewsScraperService } from '../src/scrapers/homeadvisor/homeadvisor-reviews-scraper.service';
 import { HouzzReviewsScraperService } from '../src/scrapers/houzz/houzz-reviews-scraper.service';
 import { ReviewsScraperService } from '../src/scrapers/reviews-scraper.service';
 
 const prisma = new PrismaClient();
 const googleScraper = new GoogleReviewsScraperService();
 const yelpScraper = new YelpReviewsScraperService();
+const homeAdvisorScraper = new HomeAdvisorReviewsScraperService();
 const houzzScraper = new HouzzReviewsScraperService();
-const orchestrator = new ReviewsScraperService(googleScraper, yelpScraper, houzzScraper);
+const orchestrator = new ReviewsScraperService(
+  googleScraper,
+  yelpScraper,
+  homeAdvisorScraper,
+  houzzScraper,
+);
 
 async function syncSingleProvider(profile: any) {
   console.log(`\n===========================================================`);
@@ -26,6 +33,7 @@ async function syncSingleProvider(profile: any) {
 
   const googleUrl = profile.platformReviews?.find((p: any) => p.platform === 'GOOGLE')?.profileUrl;
   const yelpUrl = profile.platformReviews?.find((p: any) => p.platform === 'YELP')?.profileUrl;
+  const homeAdvisorUrl = profile.platformReviews?.find((p: any) => p.platform === 'HOMEADVISOR')?.profileUrl;
   const houzzUrl = profile.platformReviews?.find((p: any) => p.platform === 'HOUZZ')?.profileUrl;
 
   try {
@@ -36,6 +44,7 @@ async function syncSingleProvider(profile: any) {
         city: profile.city || undefined,
         googleUrl,
         yelpUrl,
+        homeAdvisorUrl,
         houzzUrl,
       },
       30
@@ -99,6 +108,32 @@ async function syncSingleProvider(profile: any) {
       console.log(`   ✓ Saved Yelp platform ratings`);
     }
 
+    if (scraped.platforms.homeadvisor && scraped.platforms.homeadvisor.totalReviews > 0) {
+      await prisma.platformReview.upsert({
+        where: {
+          providerProfileId_platform: {
+            providerProfileId: profile.id,
+            platform: 'HOMEADVISOR',
+          },
+        },
+        update: {
+          rating: scraped.platforms.homeadvisor.rating,
+          reviewCount: scraped.platforms.homeadvisor.totalReviews,
+          profileUrl: scraped.platforms.homeadvisor.profileUrl,
+          lastScrapedAt: new Date(),
+        },
+        create: {
+          providerProfileId: profile.id,
+          platform: 'HOMEADVISOR',
+          rating: scraped.platforms.homeadvisor.rating,
+          reviewCount: scraped.platforms.homeadvisor.totalReviews,
+          profileUrl: scraped.platforms.homeadvisor.profileUrl,
+          lastScrapedAt: new Date(),
+        },
+      });
+      console.log(`   ✓ Saved HomeAdvisor platform ratings`);
+    }
+
     if (scraped.platforms.houzz && scraped.platforms.houzz.totalReviews > 0) {
       await prisma.platformReview.upsert({
         where: {
@@ -127,9 +162,12 @@ async function syncSingleProvider(profile: any) {
 
     // 2. Save individual review comments
     let savedComments = 0;
-    for (const rev of scraped.allReviews) {
+    for (let idx = 0; idx < scraped.allReviews.length; idx++) {
+      const rev = scraped.allReviews[idx];
       if (!rev.comment || rev.comment.trim().length < 5) continue;
       const platformEnum = rev.platform as ReviewPlatform;
+      const intRating = Math.min(5, Math.max(1, Math.round(Number(rev.rating) || 5)));
+      const safeAuthorName = (rev.authorName || '').trim() || `Verified Reviewer #${idx + 1}`;
 
       try {
         await prisma.scrapedReview.upsert({
@@ -137,11 +175,12 @@ async function syncSingleProvider(profile: any) {
             providerProfileId_platform_authorName_rating: {
               providerProfileId: profile.id,
               platform: platformEnum,
-              authorName: rev.authorName || 'Reviewer',
-              rating: rev.rating || 5,
+              authorName: safeAuthorName,
+              rating: intRating,
             },
           },
           update: {
+            comment: rev.comment,
             authorAvatarUrl: rev.authorAvatarUrl || null,
             reviewDate: rev.reviewDate || null,
             sourceUrl: rev.sourceUrl || null,
@@ -149,9 +188,9 @@ async function syncSingleProvider(profile: any) {
           create: {
             providerProfileId: profile.id,
             platform: platformEnum,
-            authorName: rev.authorName || 'Reviewer',
+            authorName: safeAuthorName,
             authorAvatarUrl: rev.authorAvatarUrl || null,
-            rating: rev.rating || 5,
+            rating: intRating,
             comment: rev.comment,
             reviewDate: rev.reviewDate || null,
             sourceUrl: rev.sourceUrl || null,

@@ -42,7 +42,7 @@ export default function EvaluationAndCostSection({
     {
       icon: Star,
       title: 'Reputation & Reviews',
-      description: 'Review sentiment & rating volume across Google, Yelp, and Houzz.',
+      description: 'Review sentiment & rating volume across Google, Yelp, HomeAdvisor, and Houzz.',
     },
     {
       icon: Clock,

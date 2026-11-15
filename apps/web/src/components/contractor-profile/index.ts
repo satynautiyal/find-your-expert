@@ -6,4 +6,6 @@ export { default as ProfileGalleryAndProjects } from './ProfileGalleryAndProject
 export { default as ProfileServiceAreasAndFaq } from './ProfileServiceAreasAndFaq';
 export { default as ProfileBottomCta } from './ProfileBottomCta';
 export { default as PhotoLightboxModal } from './PhotoLightboxModal';
+export { default as ProfilePhotoCarousel } from './ProfilePhotoCarousel';
+export { default as ReviewsModal } from './ReviewsModal';
 export * from './PlatformLogos';

@@ -78,7 +78,9 @@ export default function CompareModal({
                 <td className="p-3 font-bold text-gray-500">Google Rating</td>
                 {providers.map((p) => (
                   <td key={p.id} className="p-3 font-semibold text-blue-700">
-                    {p.reviews.google.rating} ★ ({p.reviews.google.count})
+                    {p.reviews.google?.count > 0
+                      ? `${p.reviews.google.rating.toFixed(1)} ★ (${p.reviews.google.count})`
+                      : '—'}
                   </td>
                 ))}
               </tr>
@@ -88,9 +90,25 @@ export default function CompareModal({
                 <td className="p-3 font-bold text-gray-500">Yelp Rating</td>
                 {providers.map((p) => (
                   <td key={p.id} className="p-3 font-semibold text-red-600">
-                    {p.reviews.yelp.rating} ★ ({p.reviews.yelp.count})
+                    {p.reviews.yelp?.count > 0
+                      ? `${p.reviews.yelp.rating.toFixed(1)} ★ (${p.reviews.yelp.count})`
+                      : '—'}
                   </td>
                 ))}
+              </tr>
+
+              {/* HomeAdvisor Reviews */}
+              <tr>
+                <td className="p-3 font-bold text-gray-500">HomeAdvisor Rating</td>
+                {providers.map((p) => {
+                  const haRating = p.reviews.homeadvisor?.rating ?? 0;
+                  const haCount = p.reviews.homeadvisor?.count ?? 0;
+                  return (
+                    <td key={p.id} className="p-3 font-semibold text-amber-600">
+                      {haCount > 0 ? `${haRating.toFixed(1)} ★ (${haCount})` : '—'}
+                    </td>
+                  );
+                })}
               </tr>
 
               {/* Houzz Reviews */}
@@ -100,8 +118,8 @@ export default function CompareModal({
                   const hRating = (p.reviews.houzz || p.reviews.facebook)?.rating ?? 0;
                   const hCount = (p.reviews.houzz || p.reviews.facebook)?.count ?? 0;
                   return (
-                    <td key={p.id} className="p-3 font-semibold text-indigo-700">
-                      {hCount > 0 ? `${hRating} ★ (${hCount})` : '—'}
+                    <td key={p.id} className="p-3 font-semibold text-emerald-700">
+                      {hCount > 0 ? `${hRating.toFixed(1)} ★ (${hCount})` : '—'}
                     </td>
                   );
                 })}

@@ -35,6 +35,22 @@ export function YelpLogo({ className = 'w-4 h-4' }: { className?: string }) {
   );
 }
 
+export function HomeAdvisorLogo({ className = 'w-4 h-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="24" height="24" rx="4" fill="#F68B1E" />
+      <path
+        d="M12 4.8L4.8 10.8h2.2v7.6h10v-7.6h2.2L12 4.8z"
+        fill="#FFFFFF"
+      />
+      <path
+        d="M10.8 14.9l-1.9-1.9-1.1 1.1 3 3 5.2-5.2-1.1-1.1-4.1 4.1z"
+        fill="#F68B1E"
+      />
+    </svg>
+  );
+}
+
 export function HouzzLogo({ className = 'w-4 h-4' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

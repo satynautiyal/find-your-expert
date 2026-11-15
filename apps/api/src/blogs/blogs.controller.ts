@@ -7,11 +7,14 @@ import {
   Query,
   Param,
   Body,
+  Header,
 } from '@nestjs/common';
 import { BlogsService } from './blogs.service';
 import { GetBlogsQueryDto } from './dto/get-blogs.dto';
 import { CreateBlogDto } from './dto/create-blog.dto';
 import { UpdateBlogDto } from './dto/update-blog.dto';
+
+const PUBLIC_CACHE_HEADER = 'public, max-age=0, s-maxage=60, stale-while-revalidate=300';
 
 @Controller('blogs')
 export class BlogsController {
@@ -26,6 +29,7 @@ export class BlogsController {
    * Paginated, searched & filtered published blog posts
    */
   @Get()
+  @Header('Cache-Control', PUBLIC_CACHE_HEADER)
   async getBlogs(@Query() query: GetBlogsQueryDto) {
     const result = await this.blogsService.findAll(query);
     return {
@@ -40,6 +44,7 @@ export class BlogsController {
    * Top featured post for the hero banner
    */
   @Get('featured')
+  @Header('Cache-Control', PUBLIC_CACHE_HEADER)
   async getFeaturedBlog() {
     const result = await this.blogsService.findFeatured();
     return {
@@ -54,6 +59,7 @@ export class BlogsController {
    * List of categories with post counts
    */
   @Get('categories')
+  @Header('Cache-Control', PUBLIC_CACHE_HEADER)
   async getCategories() {
     const result = await this.blogsService.getCategories();
     return {
@@ -148,6 +154,7 @@ export class BlogsController {
    * Fetch single blog post by slug + related posts
    */
   @Get(':slug')
+  @Header('Cache-Control', PUBLIC_CACHE_HEADER)
   async getBlogBySlug(@Param('slug') slug: string) {
     const result = await this.blogsService.findBySlug(slug);
     return {

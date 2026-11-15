@@ -6,38 +6,40 @@ import {
   Star,
   CheckCircle2,
   Calendar,
-  ShieldCheck,
   Award,
   FileText,
   Phone,
   Heart,
   Share2,
   Globe,
-  Camera,
-  ExternalLink,
+  MapPin,
   ChevronRight,
+  Clock,
 } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
-import { GoogleLogo, YelpLogo, HouzzLogo } from './PlatformLogos';
+import { GoogleLogo, YelpLogo, HomeAdvisorLogo, HouzzLogo } from './PlatformLogos';
 import PhotoLightboxModal from './PhotoLightboxModal';
+import ProfilePhotoCarousel from './ProfilePhotoCarousel';
 
 interface ProfileHeroProps {
   provider: RooferProvider;
   onOpenQuoteModal: () => void;
   onScrollToReviews?: () => void;
+  onOpenReviewsModal?: (initialPlatform?: string) => void;
 }
 
 export default function ProfileHero({
   provider,
   onOpenQuoteModal,
   onScrollToReviews,
+  onOpenReviewsModal,
 }: ProfileHeroProps) {
   const [isSaved, setIsSaved] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
 
-  // Dynamic Location & Category parsing for dynamic breadcrumbs
+  // Dynamic Location & Category parsing for breadcrumbs & subtitle
   const trade =
     provider.category ||
     (provider.services?.find((s) => /Roof/i.test(s))
@@ -46,33 +48,36 @@ export default function ProfileHero({
       ? 'Custom Cabinets'
       : provider.services?.[0] || 'Contractors');
 
-  // Parse state & city from address or borough
   const boroughOrCity =
     provider.borough && provider.borough !== 'All'
       ? provider.borough
       : provider.city || 'Manhattan';
   const stateName = provider.state === 'NY' || !provider.state ? 'New York' : provider.state;
+  const stateShort = provider.state || 'NY';
 
-  // Photos from DB or provider image
-  const mainPhoto =
+  // Real project photos from DB (provider.photos) — never fall back to static placeholder images
+  const businessLogo =
     provider.imageUrl && !provider.imageUrl.includes('placeholder')
       ? provider.imageUrl
-      : '/roofing-hero-house.jpg';
+      : '';
 
-  const dbPhotoUrls = (provider.photos || []).map((p) => p.url).filter(Boolean);
-  const galleryPhotos =
-    dbPhotoUrls.length > 0
-      ? dbPhotoUrls
-      : [
-          mainPhoto,
-          '/contractor-hero-house.png',
-          '/contractor-hero-brick-house.png',
-          '/about-house.jpg',
-          '/hero-kitchen.jpg',
-        ];
+  const dbPhotoUrls = (provider.photos || [])
+    .map((p) => p.url)
+    .filter((url) => Boolean(url) && url !== businessLogo);
 
-  const photoCount = provider.photoCount > 0 ? provider.photoCount : galleryPhotos.length;
-  const extraPhotosCount = Math.max(photoCount - 4, 0);
+  const hasProjectPhotos = dbPhotoUrls.length > 0;
+  const galleryPhotos = hasProjectPhotos ? dbPhotoUrls : businessLogo ? [businessLogo] : [];
+
+  const formattedReviewsUpdated = (() => {
+    if (!provider.reviewsLastUpdatedAt) return null;
+    const parsed = new Date(provider.reviewsLastUpdatedAt);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  })();
 
   const handleShare = () => {
     if (typeof window !== 'undefined') {
@@ -91,7 +96,14 @@ export default function ProfileHero({
     setLightboxOpen(true);
   };
 
-  // Dynamic Trust Score (90 - 98 range based on rating & credentials)
+  const establishedYear =
+    provider.sinceYear && provider.sinceYear > 0
+      ? provider.sinceYear
+      : provider.yearsInBusiness > 0
+      ? new Date().getFullYear() - provider.yearsInBusiness
+      : 0;
+
+  // Dynamic Vetted Score (88 - 99 range based on rating & credentials)
   const trustScore = Math.min(
     99,
     Math.max(
@@ -104,13 +116,15 @@ export default function ProfileHero({
     )
   );
 
+  const compositeRating = provider.compositeRating || 0;
+
   return (
     <>
       <div className="space-y-4">
         {/* Dynamic Breadcrumbs */}
         <nav
           aria-label="Breadcrumbs"
-          className="flex items-center flex-wrap gap-1.5 text-xs text-gray-500 font-medium py-2"
+          className="flex items-center flex-wrap gap-1.5 text-xs text-gray-500 font-medium py-1.5"
         >
           <Link href="/" className="hover:text-primary transition-colors">
             Home
@@ -146,341 +160,437 @@ export default function ProfileHero({
           </span>
         </nav>
 
-        {/* 3-Column Hero Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Balanced 2-Zone Desktop Hero Layout (5 Cols Media + 7 Cols Structured Profile Card) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           {/* ========================================================= */}
-          {/* COLUMN 1: PHOTO GALLERY (col-span-12 lg:col-span-4) */}
+          {/* LEFT ZONE: PHOTO CAROUSEL OR LOGO (col-span-12 lg:col-span-5) */}
           {/* ========================================================= */}
-          <div className="lg:col-span-4 space-y-2.5">
-            {/* Main Featured Photo */}
-            <div className="relative aspect-4/3 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm group">
-              <img
-                src={mainPhoto}
-                alt={provider.name}
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-102"
-              />
-
-              {/* Badges: #1 Top Rated */}
-              <div className="absolute top-3 left-3 flex flex-col gap-1 z-10">
-                <span className="bg-[#0B3B2C] text-white font-black text-xs px-2 py-0.5 rounded shadow-sm self-start">
-                  #1
-                </span>
-                <span className="bg-[#EA580C] text-white font-bold text-[11px] px-2 py-0.5 rounded shadow-sm self-start">
-                  Top Rated
-                </span>
-              </div>
-
-              {/* View All Photos Button Overlay */}
-              <button
-                type="button"
-                onClick={() => openLightbox(0)}
-                className="absolute bottom-3 left-3 bg-black/75 hover:bg-black text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 backdrop-blur-xs transition-colors cursor-pointer shadow-md"
-              >
-                <Camera className="w-3.5 h-3.5" />
-                <span>View All Photos ({photoCount})</span>
-              </button>
-            </div>
-
-            {/* Thumbnail Strip (4 images + 1 counter block) */}
-            <div className="grid grid-cols-5 gap-2">
-              {galleryPhotos.slice(0, 4).map((photo, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => openLightbox(idx)}
-                  className="aspect-square rounded-xl overflow-hidden border border-gray-200 hover:border-primary transition-all cursor-pointer bg-gray-50 group"
-                >
-                  <img
-                    src={photo}
-                    alt=""
-                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                  />
-                </button>
-              ))}
-
-              {/* +24 Photos Block */}
-              <button
-                type="button"
-                onClick={() => openLightbox(4)}
-                className="aspect-square rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 flex flex-col items-center justify-center text-slate-700 font-bold transition-all cursor-pointer"
-              >
-                <span className="text-xs font-black">+{extraPhotosCount}</span>
-                <span className="text-[10px] text-slate-500 font-semibold leading-none">Photos</span>
-              </button>
-            </div>
+          <div className="lg:col-span-5 flex flex-col">
+            <ProfilePhotoCarousel
+              photos={dbPhotoUrls}
+              businessLogo={businessLogo}
+              fallbackInitial={provider.logoText || provider.name.charAt(0)}
+              providerName={provider.name}
+              onOpenLightbox={openLightbox}
+            />
           </div>
 
           {/* ========================================================= */}
-          {/* COLUMN 2: CONTRACTOR IDENTITY & ACTIONS (lg:col-span-5) */}
+          {/* RIGHT ZONE: UNIFIED PROFILE HEADER, TRUST BENTO & CTAS (lg:col-span-7) */}
           {/* ========================================================= */}
-          <div className="lg:col-span-5 space-y-4">
-            {/* Header: Logo + Title */}
-            <div className="space-y-2">
-              {/* Stylized Twin-Roof / Contractor Mark */}
-              <div className="w-12 h-8 flex items-center">
-                <svg viewBox="0 0 32 24" fill="none" className="w-10 h-7">
-                  <path
-                    d="M2.5 20.5L10 4.5C10.5 3.5 11.9 3.5 12.4 4.5L18.5 17.5"
-                    stroke="#EA580C"
-                    strokeWidth="3.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M13.5 17.5L19.6 4.5C20.1 3.5 21.5 3.5 22 4.5L29.5 20.5"
-                    stroke="#EA580C"
-                    strokeWidth="3.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
+          <div className="lg:col-span-7 bg-white border border-gray-200/90 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col justify-between gap-4">
+            {/* 1. Top Identity Header + Utility Toolbar */}
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3.5">
+              {/* Left: Inline Company Logo + Title + Trust Pills */}
+              <div className="flex items-start gap-3.5 sm:gap-4 min-w-0">
+                {hasProjectPhotos && businessLogo ? (
+                  <div className="w-16 h-16 sm:w-[68px] sm:h-[68px] rounded-2xl bg-white border border-gray-200 shadow-xs p-2 flex items-center justify-center shrink-0">
+                    <img
+                      src={businessLogo}
+                      alt={`${provider.name} logo`}
+                      className="max-w-full max-h-full w-auto h-auto object-contain"
+                    />
+                  </div>
+                ) : null}
 
-              <h1 className="text-2xl sm:text-3xl font-black text-gray-950 tracking-tight leading-tight">
-                {provider.name}
-              </h1>
+                <div className="min-w-0 space-y-2">
+                  <h1 className="text-2xl sm:text-[28px] font-black text-gray-950 tracking-tight leading-tight">
+                    {provider.name}
+                  </h1>
 
-              {/* Verified Professional Pill */}
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-bold border border-emerald-200/80">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>Verified Professional</span>
-              </div>
-            </div>
+                  {/* Since Year (Left) + Verified Professional (Right) + Location */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {establishedYear > 0 && (
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-gray-700 text-xs font-semibold border border-gray-200/90">
+                        <Calendar className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                        <span>Since {establishedYear}</span>
+                      </div>
+                    )}
 
-            {/* Stars & Reviews Strip */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center text-amber-500">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
-                ))}
-              </div>
-              <span className="font-bold text-sm text-gray-900">
-                {(provider.compositeRating || 0).toFixed(1)}
-              </span>
-              <button
-                onClick={onScrollToReviews}
-                className="text-xs font-semibold text-gray-500 hover:text-primary transition-colors cursor-pointer"
-              >
-                ({provider.totalReviews || 0} reviews)
-              </button>
-            </div>
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-bold border border-emerald-200/80">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>Verified Professional</span>
+                    </div>
 
-            {/* Tagline / Summary */}
-            <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
-              {provider.tagline || provider.description?.slice(0, 160) || ''}
-            </p>
-
-            {/* 4-item Credential Grid (2x2) */}
-            <div className="grid grid-cols-2 gap-2.5 pt-1 text-xs font-medium text-gray-700">
-              {provider.yearsInBusiness > 0 && (
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-gray-500 shrink-0" />
-                  <span>{provider.yearsInBusiness}+ years in business</span>
+                    <div className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 pl-0.5">
+                      <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span>
+                        {boroughOrCity}, {stateShort}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              )}
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Licensed & Insured</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Award className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Warranty Available</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-blue-600 shrink-0" />
-                <span>Free Estimates</span>
-              </div>
-            </div>
 
-            {/* Action Buttons Row */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={onOpenQuoteModal}
-                className="flex-1 bg-[#EA580C] hover:bg-[#D94F0A] text-white font-bold text-sm py-3 px-6 rounded-xl shadow-md transition-all active:scale-[0.99] cursor-pointer text-center"
-              >
-                Get a Quote
-              </button>
-
-              <a
-                href={`tel:${provider.phone.replace(/\D/g, '')}`}
-                className="flex-1 bg-white hover:bg-gray-50 text-gray-900 border border-gray-300 font-bold text-sm py-3 px-4 rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2"
-              >
-                <Phone className="w-4 h-4 text-gray-600" />
-                <span>Call {provider.displayPhone || provider.phone}</span>
-              </a>
-            </div>
-
-            {/* Secondary Action Row: Save | Share | Visit Website */}
-            <div className="flex items-center gap-6 pt-1 text-xs font-semibold text-gray-600">
-              <button
-                type="button"
-                onClick={handleSaveToggle}
-                className="flex items-center gap-1.5 hover:text-gray-900 transition-colors cursor-pointer"
-              >
-                <Heart
-                  className={`w-4 h-4 ${
-                    isSaved ? 'fill-rose-500 text-rose-500' : 'text-gray-500'
+              {/* Right: Utility Action Pills (Save, Share, Website) */}
+              <div className="flex items-center gap-1.5 shrink-0 self-start">
+                <button
+                  type="button"
+                  onClick={handleSaveToggle}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+                    isSaved
+                      ? 'bg-rose-50 border-rose-200 text-rose-600'
+                      : 'bg-gray-50/80 hover:bg-gray-100 border-gray-200 text-gray-700'
                   }`}
-                />
-                <span>{isSaved ? 'Saved' : 'Save'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleShare}
-                className="flex items-center gap-1.5 hover:text-gray-900 transition-colors cursor-pointer"
-              >
-                <Share2 className="w-4 h-4 text-gray-500" />
-                <span>{copiedLink ? 'Copied Link!' : 'Share'}</span>
-              </button>
-
-              {provider.website && (
-                <a
-                  href={provider.website}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 hover:text-primary transition-colors"
                 >
-                  <Globe className="w-4 h-4 text-gray-500" />
-                  <span>Visit Website</span>
-                </a>
-              )}
-            </div>
-          </div>
+                  <Heart
+                    className={`w-3.5 h-3.5 ${
+                      isSaved ? 'fill-rose-500 text-rose-500' : 'text-gray-500'
+                    }`}
+                  />
+                  <span>{isSaved ? 'Saved' : 'Save'}</span>
+                </button>
 
-          {/* ========================================================= */}
-          {/* COLUMN 3: TRUST SCORE & CUSTOMER RATINGS (lg:col-span-3) */}
-          {/* ========================================================= */}
-          <div className="lg:col-span-3 space-y-3.5">
-            {/* Trust Score Card */}
-            <div className="bg-[#F8FAFC] border border-gray-200/90 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">
-                    Trust Score
-                  </span>
-                  <div className="w-16 h-12 rounded-xl bg-teal-50 border border-teal-200/70 flex items-center justify-center mt-1">
-                    <span className="text-2xl font-black text-[#0B3B2C] tracking-tight">
+                <button
+                  type="button"
+                  onClick={handleShare}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50/80 hover:bg-gray-100 text-xs font-semibold text-gray-700 transition-colors cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5 text-gray-500" />
+                  <span>{copiedLink ? 'Copied!' : 'Share'}</span>
+                </button>
+
+                {provider.website && (
+                  <a
+                    href={provider.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-gray-50/80 hover:bg-gray-100 hover:text-primary text-xs font-semibold text-gray-700 transition-colors"
+                  >
+                    <Globe className="w-3.5 h-3.5 text-gray-500" />
+                    <span>Website</span>
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* 2. Aggregate Rating + Warranty & Free Estimates Strip */}
+            <div className="flex flex-wrap items-center justify-between gap-3 py-2.5 border-y border-gray-100">
+              {/* Composite Star Rating */}
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-0.5 text-amber-500">
+                  {[...Array(5)].map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`w-4 h-4 ${
+                        i < Math.round(compositeRating)
+                          ? 'fill-amber-400 text-amber-400'
+                          : 'fill-gray-200 text-gray-200'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="font-black text-sm text-gray-950">
+                  {compositeRating.toFixed(1)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onOpenReviewsModal
+                      ? onOpenReviewsModal('ALL')
+                      : onScrollToReviews?.()
+                  }
+                  className="text-xs font-semibold text-gray-500 hover:text-primary hover:underline transition-colors cursor-pointer"
+                >
+                  ({provider.totalReviews || 0} verified reviews)
+                </button>
+              </div>
+
+              {/* Service Highlights: Warranty Available & Free Estimates */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50/70 border border-amber-200/60 text-xs font-semibold text-gray-800">
+                  <Award className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Warranty Available</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50/70 border border-blue-200/60 text-xs font-semibold text-gray-800">
+                  <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span>Free Estimates</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Symmetric 2-Column Trust & Ratings Bento Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-stretch">
+              {/* Left Sub-Card: Vetted Score */}
+              <div className="bg-[#F8FAFC] border border-gray-200/90 rounded-xl p-4 flex flex-col justify-between gap-3">
+                <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-gray-200/70">
+                  <div>
+                    <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block">
+                      Vetted Score
+                    </span>
+                    <span className="text-[11px] text-gray-500 font-medium">
+                      Prosvetted Audit
+                    </span>
+                  </div>
+                  <div className="px-3.5 py-1.5 rounded-xl bg-[#EBF7F2] border border-[#0B3B2C]/15 flex items-center justify-center shrink-0">
+                    <span className="text-2xl font-black text-[#0B3B2C] leading-none tracking-tight">
                       {trustScore}
                     </span>
                   </div>
                 </div>
 
-                {/* Checklist on the right */}
-                <div className="space-y-1.5 text-xs font-semibold text-gray-700">
-                  <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>License Verified</span>
+                {/* 4-Point Vetting Checklist (Tick placed after text) */}
+                <div className="space-y-2 text-xs font-semibold">
+                  <div className="flex items-center justify-between gap-2 text-gray-700">
+                    <span>Business confirmed</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Insurance Verified</span>
+                  <div className="flex items-center justify-between gap-2 text-gray-400 select-none">
+                    <span>License and insurance</span>
+                    <CheckCircle2 className="w-4 h-4 text-gray-300 shrink-0" />
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Business Verified</span>
+                  <div className="flex items-center justify-between gap-2 text-gray-700">
+                    <span>Reputation analyzed</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>Reviews Analyzed</span>
+                  <div className="flex items-center justify-between gap-2 text-gray-700">
+                    <span>Reviews analyzed</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   </div>
                 </div>
               </div>
+
+              {/* Right Sub-Card: Customer Ratings */}
+              <div className="bg-[#F8FAFC] border border-gray-200/90 rounded-xl p-4 flex flex-col justify-between gap-3">
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-gray-200/70">
+                    <div>
+                      <h3 className="font-bold text-xs sm:text-sm text-gray-900 leading-tight">
+                        Customer Ratings
+                      </h3>
+                      {formattedReviewsUpdated && (
+                        <p className="text-[11px] text-gray-500 font-medium flex items-center gap-1 mt-0.5">
+                          <Clock className="w-3 h-3 text-gray-400 shrink-0" />
+                          <span>Updated {formattedReviewsUpdated}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 text-xs">
+                    {/* 1. Google */}
+                    {(provider.reviews.google?.count ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenReviewsModal
+                            ? onOpenReviewsModal('GOOGLE')
+                            : onScrollToReviews?.()
+                        }
+                        className="w-full flex items-center justify-between gap-2 py-0.5 rounded-md hover:bg-white/80 transition-colors cursor-pointer text-left"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <GoogleLogo className="w-4 h-4 shrink-0" />
+                          <span className="font-medium text-gray-700 hover:text-primary truncate">
+                            Google
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="flex items-center text-amber-500">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`w-3 h-3 ${
+                                  i < Math.round(provider.reviews.google.rating)
+                                    ? 'fill-amber-400 text-amber-400'
+                                    : 'fill-gray-200 text-gray-200'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="font-bold text-gray-900">
+                            {provider.reviews.google.rating.toFixed(1)}
+                          </span>
+                          <span className="text-gray-400">
+                            ({provider.reviews.google.count})
+                          </span>
+                        </div>
+                      </button>
+                    )}
+
+                    {/* 2. Yelp */}
+                    {(provider.reviews.yelp?.count ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenReviewsModal
+                            ? onOpenReviewsModal('YELP')
+                            : onScrollToReviews?.()
+                        }
+                        className="w-full flex items-center justify-between gap-2 py-0.5 rounded-md hover:bg-white/80 transition-colors cursor-pointer text-left"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <YelpLogo className="w-4 h-4 shrink-0" />
+                          <span className="font-medium text-gray-700 hover:text-primary truncate">
+                            Yelp
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="flex items-center text-amber-500">
+                            {[...Array(5)].map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`w-3 h-3 ${
+                                  i < Math.round(provider.reviews.yelp.rating)
+                                    ? 'fill-amber-400 text-amber-400'
+                                    : 'fill-gray-200 text-gray-200'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="font-bold text-gray-900">
+                            {provider.reviews.yelp.rating.toFixed(1)}
+                          </span>
+                          <span className="text-gray-400">
+                            ({provider.reviews.yelp.count})
+                          </span>
+                        </div>
+                      </button>
+                    )}
+
+                    {/* 3. HomeAdvisor */}
+                    {(provider.reviews.homeadvisor?.count ?? 0) > 0 &&
+                      provider.reviews.homeadvisor && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onOpenReviewsModal
+                              ? onOpenReviewsModal('HOMEADVISOR')
+                              : onScrollToReviews?.()
+                          }
+                          className="w-full flex items-center justify-between gap-2 py-0.5 rounded-md hover:bg-white/80 transition-colors cursor-pointer text-left"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <HomeAdvisorLogo className="w-4 h-4 shrink-0" />
+                            <span className="font-medium text-gray-700 hover:text-primary truncate">
+                              HomeAdvisor
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="flex items-center text-amber-500">
+                              {[...Array(5)].map((_, i) => (
+                                <Star
+                                  key={i}
+                                  className={`w-3 h-3 ${
+                                    i < Math.round(provider.reviews.homeadvisor!.rating)
+                                      ? 'fill-amber-400 text-amber-400'
+                                      : 'fill-gray-200 text-gray-200'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <span className="font-bold text-gray-900">
+                              {provider.reviews.homeadvisor.rating.toFixed(1)}
+                            </span>
+                            <span className="text-gray-400">
+                              ({provider.reviews.homeadvisor.count})
+                            </span>
+                          </div>
+                        </button>
+                      )}
+
+                    {/* 4. Houzz */}
+                    {((provider.reviews.houzz?.count || provider.reviews.facebook?.count) ?? 0) >
+                      0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenReviewsModal
+                            ? onOpenReviewsModal('HOUZZ')
+                            : onScrollToReviews?.()
+                        }
+                        className="w-full flex items-center justify-between gap-2 py-0.5 rounded-md hover:bg-white/80 transition-colors cursor-pointer text-left"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <HouzzLogo className="w-4 h-4 shrink-0" />
+                          <span className="font-medium text-gray-700 hover:text-primary truncate">
+                            Houzz
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <div className="flex items-center text-amber-500">
+                            {[...Array(5)].map((_, i) => {
+                              const hRating =
+                                provider.reviews.houzz?.rating ||
+                                provider.reviews.facebook?.rating ||
+                                0;
+                              return (
+                                <Star
+                                  key={i}
+                                  className={`w-3 h-3 ${
+                                    i < Math.round(hRating)
+                                      ? 'fill-amber-400 text-amber-400'
+                                      : 'fill-gray-200 text-gray-200'
+                                  }`}
+                                />
+                              );
+                            })}
+                          </div>
+                          <span className="font-bold text-gray-900">
+                            {(
+                              provider.reviews.houzz?.rating ||
+                              provider.reviews.facebook?.rating ||
+                              0
+                            ).toFixed(1)}
+                          </span>
+                          <span className="text-gray-400">
+                            ({provider.reviews.houzz?.count || provider.reviews.facebook?.count})
+                          </span>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* See all reviews trigger — Opens In-App Reviews Modal */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onOpenReviewsModal
+                      ? onOpenReviewsModal('ALL')
+                      : onScrollToReviews?.()
+                  }
+                  className="text-xs font-bold text-[#EA580C] hover:text-[#D94F0A] flex items-center gap-0.5 pt-1 transition-colors cursor-pointer self-start"
+                >
+                  <span>See all reviews</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
-            {/* Customer Ratings Card */}
-            <div className="bg-white border border-gray-200/90 rounded-2xl p-4 space-y-3 shadow-xs">
-              <h3 className="font-bold text-xs sm:text-sm text-gray-900">Customer Ratings</h3>
+            {/* 4. Primary Conversion CTA Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-0.5">
+              <button
+                type="button"
+                onClick={onOpenQuoteModal}
+                className="h-12 bg-[#EA580C] hover:bg-[#D94F0A] text-white font-bold text-sm px-6 rounded-xl shadow-md transition-all active:scale-[0.99] cursor-pointer inline-flex items-center justify-center whitespace-nowrap"
+              >
+                Get a Quote
+              </button>
 
-              <div className="space-y-2.5 text-xs">
-                {/* Google */}
-                {(provider.reviews.google?.count ?? 0) > 0 && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <GoogleLogo className="w-4 h-4" />
-                      <span className="font-medium text-gray-700">Google</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex items-center text-amber-500">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                        ))}
-                      </div>
-                      <span className="font-bold text-gray-900">
-                        {provider.reviews.google.rating}
-                      </span>
-                      <span className="text-gray-400">
-                        ({provider.reviews.google.count})
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Yelp */}
-                {(provider.reviews.yelp?.count ?? 0) > 0 && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <YelpLogo className="w-4 h-4" />
-                      <span className="font-medium text-gray-700">Yelp</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex items-center text-amber-500">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                        ))}
-                      </div>
-                      <span className="font-bold text-gray-900">
-                        {provider.reviews.yelp.rating}
-                      </span>
-                      <span className="text-gray-400">
-                        ({provider.reviews.yelp.count})
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Houzz */}
-                {((provider.reviews.houzz?.count || provider.reviews.facebook?.count) ?? 0) > 0 && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <HouzzLogo className="w-4 h-4" />
-                      <span className="font-medium text-gray-700">Houzz</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="flex items-center text-amber-500">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                        ))}
-                      </div>
-                      <span className="font-bold text-gray-900">
-                        {provider.reviews.houzz?.rating || provider.reviews.facebook?.rating}
-                      </span>
-                      <span className="text-gray-400">
-                        ({provider.reviews.houzz?.count || provider.reviews.facebook?.count})
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer link to jump to reviews section */}
-              <div className="pt-2 border-t border-gray-100">
+              {provider.phone ? (
+                <a
+                  href={`tel:${provider.phone.replace(/\D/g, '')}`}
+                  className="h-12 bg-white hover:bg-gray-50 text-gray-900 border border-gray-300 font-bold text-sm px-5 rounded-xl shadow-xs transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                >
+                  <Phone className="w-4 h-4 text-gray-600 shrink-0" />
+                  <span>Call {provider.displayPhone || provider.phone}</span>
+                </a>
+              ) : (
                 <button
                   type="button"
                   onClick={onScrollToReviews}
-                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                  className="h-12 bg-white hover:bg-gray-50 text-gray-900 border border-gray-300 font-bold text-sm px-5 rounded-xl shadow-xs transition-colors inline-flex items-center justify-center whitespace-nowrap cursor-pointer"
                 >
-                  <span>See all reviews</span>
-                  <ChevronRight className="w-3 h-3" />
+                  Read Customer Reviews
                 </button>
-              </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Lightbox Modal */}
+      {/* Lightbox Photo Viewer Modal */}
       <PhotoLightboxModal
         isOpen={lightboxOpen}
         onClose={() => setLightboxOpen(false)}

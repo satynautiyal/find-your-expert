@@ -14,6 +14,7 @@ import {
   ProfileGalleryAndProjects,
   ProfileServiceAreasAndFaq,
   ProfileBottomCta,
+  ReviewsModal,
 } from '@/components/contractor-profile';
 import { AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 
@@ -32,6 +33,13 @@ export default function ContractorProfilePage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [costGuideOpen, setCostGuideOpen] = useState(false);
+  const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
+  const [reviewsModalPlatform, setReviewsModalPlatform] = useState<string>('ALL');
+
+  const handleOpenReviewsModal = (initialPlatform?: string) => {
+    setReviewsModalPlatform(initialPlatform || 'ALL');
+    setReviewsModalOpen(true);
+  };
 
   useEffect(() => {
     if (!slug) return;
@@ -122,6 +130,7 @@ export default function ContractorProfilePage() {
             provider={provider}
             onOpenQuoteModal={() => setQuoteModalOpen(true)}
             onScrollToReviews={scrollToReviews}
+            onOpenReviewsModal={handleOpenReviewsModal}
           />
         </div>
 
@@ -130,7 +139,11 @@ export default function ContractorProfilePage() {
           activeTab={activeTab}
           onTabChange={setActiveTab}
           reviewCount={provider.totalReviews || 0}
-          projectCount={provider.photoCount || 0}
+          projectCount={
+            (provider.photos || []).filter(
+              (p) => Boolean(p?.url) && p.url !== provider.imageUrl
+            ).length
+          }
         />
 
         {/* Section Blocks Container */}
@@ -142,6 +155,7 @@ export default function ContractorProfilePage() {
           <ProfileServicesAndReviews
             provider={provider}
             onOpenQuoteModal={() => setQuoteModalOpen(true)}
+            onOpenReviewsModal={handleOpenReviewsModal}
             scrapedReviews={scrapedReviews}
           />
 
@@ -173,6 +187,15 @@ export default function ContractorProfilePage() {
       <CostGuideModal
         isOpen={costGuideOpen}
         onClose={() => setCostGuideOpen(false)}
+      />
+
+      {/* Verified Customer Reviews Modal */}
+      <ReviewsModal
+        isOpen={reviewsModalOpen}
+        onClose={() => setReviewsModalOpen(false)}
+        provider={provider}
+        scrapedReviews={scrapedReviews}
+        initialPlatform={reviewsModalPlatform}
       />
     </div>
   );

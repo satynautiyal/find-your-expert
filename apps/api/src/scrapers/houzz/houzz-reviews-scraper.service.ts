@@ -128,20 +128,67 @@ export class HouzzReviewsScraperService {
       await new Promise((r) => setTimeout(r, 3500));
 
       const pageData = await page.evaluate((maxCount: number) => {
-        // 1. Extract schema.org JSON-LD
+        // 1. Extract schema.org JSON-LD (both aggregateRating AND individual Review objects)
         let rating = 0;
         let totalReviews = 0;
+        const reviewsRaw: Array<{
+          authorName: string;
+          authorAvatarUrl: string;
+          rating: number;
+          reviewDate: string;
+          comment: string;
+        }> = [];
+        const seenComments = new Set<string>();
+
         const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
         for (const s of scripts) {
           try {
             const parsed = JSON.parse(s.textContent || '');
-            const items = Array.isArray(parsed) ? parsed : [parsed];
-            for (const item of items) {
+            const rootItems = Array.isArray(parsed)
+              ? parsed
+              : parsed && Array.isArray(parsed['@graph'])
+              ? parsed['@graph']
+              : [parsed];
+
+            for (const item of rootItems) {
+              if (!item || typeof item !== 'object') continue;
               if (item.aggregateRating) {
                 const val = parseFloat(item.aggregateRating.ratingValue);
                 const count = parseInt(item.aggregateRating.reviewCount, 10);
                 if (!isNaN(val) && val > 0) rating = val;
                 if (!isNaN(count) && count > 0) totalReviews = count;
+              }
+
+              const jsonReviews = Array.isArray(item.review)
+                ? item.review
+                : item['@type'] === 'Review'
+                ? [item]
+                : [];
+
+              for (const jr of jsonReviews) {
+                if (reviewsRaw.length >= maxCount) break;
+                const body = String(jr.reviewBody || jr.description || '').trim();
+                if (body.length < 20) continue;
+                const key = body.substring(0, 60).toLowerCase();
+                if (seenComments.has(key)) continue;
+                seenComments.add(key);
+
+                const authorObj = jr.author;
+                const authorName =
+                  (typeof authorObj === 'string'
+                    ? authorObj
+                    : authorObj?.name || ''
+                  ).trim() || `Houzz Homeowner #${reviewsRaw.length + 1}`;
+                const rVal = parseFloat(jr.reviewRating?.ratingValue || '5');
+                const dateRaw = String(jr.datePublished || '').trim();
+
+                reviewsRaw.push({
+                  authorName,
+                  authorAvatarUrl: '',
+                  rating: !isNaN(rVal) && rVal > 0 ? Math.round(rVal) : 5,
+                  reviewDate: dateRaw,
+                  comment: body,
+                });
               }
             }
           } catch {}
@@ -177,15 +224,15 @@ export class HouzzReviewsScraperService {
           }
         }
 
-        // 3. Extract individual review cards (.review-item)
-        const reviewItems = Array.from(document.querySelectorAll('.review-item, [class*="review-item"], [class*="ReviewItem"]'));
-        const reviewsRaw: Array<{
-          authorName: string;
-          authorAvatarUrl: string;
-          rating: number;
-          reviewDate: string;
-          comment: string;
-        }> = [];
+        // 3. Extract top-level individual review cards (excluding child .review-item__* sub-nodes)
+        const reviewItems = Array.from(
+          document.querySelectorAll(
+            '[data-component="ReviewItem"], .hz-PendingReview, .review-item'
+          )
+        ).filter((el) => {
+          const cls = typeof el.className === 'string' ? el.className : '';
+          return !/review-item__/.test(cls);
+        });
 
         for (const item of reviewItems) {
           if (reviewsRaw.length >= maxCount) break;
@@ -195,11 +242,12 @@ export class HouzzReviewsScraperService {
           const genericAuthorEl = item.querySelector('.review-item__reviewer a, [class*="reviewer"] a');
           let authorName = (rightSideEl?.textContent || genericAuthorEl?.textContent || '').trim();
 
-          // Avoid using 2-letter initials icon as author name if right side is present
           if (authorName.length <= 2 && rightSideEl?.textContent) {
             authorName = rightSideEl.textContent.trim();
           }
-          if (!authorName) authorName = 'Houzz Reviewer';
+          if (!authorName || authorName.length <= 2) {
+            authorName = `Houzz Homeowner #${reviewsRaw.length + 1}`;
+          }
 
           // Avatar
           const avatarEl = item.querySelector('.review-item__reviewer img, [class*="reviewer"] img');
@@ -213,7 +261,9 @@ export class HouzzReviewsScraperService {
           const reviewRating = ratingMatch ? Math.round(parseFloat(ratingMatch[1])) : 5;
 
           // Date
-          const dateMatch = itemText.match(/(\d+\s+(?:days?|weeks?|months?|years?)\s+ago|[A-Z][a-z]+\s+\d{4})/);
+          const dateMatch = itemText.match(
+            /([A-Z][a-z]+\s+\d{1,2},\s+\d{4}|\d+\s+(?:days?|weeks?|months?|years?)\s+ago|[A-Z][a-z]+\s+\d{4})/
+          );
           const reviewDate = dateMatch ? dateMatch[1] : '';
 
           // Comment body text
@@ -226,14 +276,22 @@ export class HouzzReviewsScraperService {
           footerNodes.forEach((f) => f.remove());
 
           const cleanComment = (clone.innerText || '')
-            .replace(/Average rating:.*?\n/gi, '')
+            .replace(/Average rating:.*?(?:stars|\n)/gi, '')
             .replace(/Read More/gi, '')
             .replace(/Helpful\s*\(\d+\)/gi, '')
-            .replace(/(\d+\s+(?:days?|weeks?|months?|years?)\s+ago)/g, '')
+            .replace(/Like\s*\(\d*\)/gi, '')
+            .replace(/Save\s*/gi, '')
             .replace(/\s+/g, ' ')
             .trim();
 
-          if (cleanComment.length > 10) {
+          const isNoise =
+            cleanComment.length < 25 ||
+            /^Average rating:/i.test(cleanComment) ||
+            /^[A-Za-z0-9+/]{20,}/.test(cleanComment);
+
+          const dedupeKey = cleanComment.substring(0, 60).toLowerCase();
+          if (!isNoise && !seenComments.has(dedupeKey)) {
+            seenComments.add(dedupeKey);
             reviewsRaw.push({
               authorName,
               authorAvatarUrl,

@@ -17,66 +17,55 @@ export default function ProfileGalleryAndProjects({
 
   const isRoofing = provider.services?.some((s) => /Roof/i.test(s)) ?? true;
   const borough = provider.borough && provider.borough !== 'All' ? provider.borough : 'Manhattan';
+  const stateCode = provider.state || 'NY';
 
-  // Photos for gallery from DB ListingPhoto when available
-  const dbPhotos = (provider.photos || []).map((p) => p.url).filter(Boolean);
-  const photos =
-    dbPhotos.length > 0
-      ? dbPhotos
-      : [
-          provider.imageUrl && !provider.imageUrl.includes('placeholder')
-            ? provider.imageUrl
-            : '/roofing-hero-house.jpg',
-          '/contractor-hero-house.png',
-          '/contractor-hero-brick-house.png',
-          '/about-house.jpg',
-          '/hero-kitchen.jpg',
-        ];
+  // Real project photos for gallery from DB ListingPhoto (excluding the company logo) — never fall back to static images
+  const dbPhotoItems = (provider.photos || []).filter(
+    (p) => Boolean(p?.url) && p.url !== provider.imageUrl
+  );
+  const photos = dbPhotoItems.map((p) => p.url);
 
-  // 3 Recent Projects
-  const roofingProjects = [
-    {
-      title: 'Full Roof Replacement',
-      location: `${borough}, NY`,
-      type: 'Residential',
-      image: '/roofing-hero-clean.png',
-    },
-    {
-      title: 'Metal Roofing Installation',
-      location: 'Brooklyn, NY',
-      type: 'Residential',
-      image: '/contractor-hero-house.png',
-    },
-    {
-      title: 'Storm Damage Repair',
-      location: 'Queens, NY',
-      type: 'Residential',
-      image: '/about-house.jpg',
-    },
+  if (photos.length === 0) {
+    return null;
+  }
+
+  // Default fallback project titles if DB caption is generic
+  const defaultRoofingTitles = [
+    'Full Roof Replacement',
+    'Exterior & Roofing Installation',
+    'Waterproofing & Roof Restoration',
   ];
-
-  const cabinetProjects = [
-    {
-      title: 'Custom Kitchen Cabinetry',
-      location: `${borough}, NY`,
-      type: 'Residential',
-      image: '/hero-kitchen.jpg',
-    },
-    {
-      title: 'Modern Walk-In Wardrobe',
-      location: 'Brooklyn, NY',
-      type: 'Residential',
-      image: '/contractor-hero-brick-house.png',
-    },
-    {
-      title: 'Architectural Reception Millwork',
-      location: 'Queens, NY',
-      type: 'Commercial',
-      image: '/about-house.jpg',
-    },
+  const defaultCabinetTitles = [
+    'Custom Kitchen Cabinetry',
+    'Bespoke Built-In Millwork',
+    'Architectural Wardrobe & Storage',
   ];
+  const defaultTitles = isRoofing ? defaultRoofingTitles : defaultCabinetTitles;
 
-  const projects = isRoofing ? roofingProjects : cabinetProjects;
+  // Build Recent Projects dynamically from real DB project photos only
+  const projects = dbPhotoItems.slice(0, 3).map((item, idx) => {
+    const rawCaption = (item.caption || '').trim();
+    const cleanCaption = rawCaption
+      .replace(
+        new RegExp(
+          `^${provider.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[—–-]?\\s*`,
+          'i'
+        ),
+        ''
+      )
+      .trim();
+    const title =
+      cleanCaption && cleanCaption.length >= 4 && !/portfolio$/i.test(cleanCaption)
+        ? cleanCaption
+        : defaultTitles[idx % defaultTitles.length];
+    return {
+      title,
+      location: `${borough}, ${stateCode}`,
+      type: idx === 2 && !isRoofing ? 'Custom Millwork' : 'Residential',
+      image: item.url,
+      photoIndex: idx,
+    };
+  });
 
   const openLightbox = (index: number) => {
     setActivePhotoIndex(index);
@@ -109,7 +98,7 @@ export default function ProfileGalleryAndProjects({
             {/* Big Feature Left Photo (7 cols) */}
             <div
               onClick={() => openLightbox(0)}
-              className="sm:col-span-7 h-48 sm:h-56 rounded-xl overflow-hidden border border-gray-200 relative group cursor-pointer"
+              className="sm:col-span-7 h-60 sm:h-72 lg:h-80 rounded-xl overflow-hidden border border-gray-200 relative group cursor-pointer"
             >
               <img
                 src={photos[0]}
@@ -122,7 +111,7 @@ export default function ProfileGalleryAndProjects({
             </div>
 
             {/* 2x2 Grid of 4 Photos on Right (5 cols) */}
-            <div className="sm:col-span-5 grid grid-cols-2 gap-2 h-48 sm:h-56">
+            <div className="sm:col-span-5 grid grid-cols-2 gap-2.5 h-60 sm:h-72 lg:h-80">
               {photos.slice(1, 5).map((photo, idx) => (
                 <div
                   key={idx}
@@ -169,7 +158,7 @@ export default function ProfileGalleryAndProjects({
                 onClick={() => openLightbox(idx)}
                 className="rounded-xl border border-gray-200/90 overflow-hidden bg-slate-50/50 hover:bg-white hover:border-primary/40 hover:shadow-2xs transition-all cursor-pointer group flex flex-col justify-between"
               >
-                <div className="h-28 overflow-hidden bg-gray-100 relative">
+                <div className="h-36 sm:h-40 overflow-hidden bg-gray-100 relative">
                   <img
                     src={proj.image}
                     alt={proj.title}

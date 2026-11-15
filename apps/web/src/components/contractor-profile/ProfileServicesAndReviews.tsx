@@ -20,24 +20,44 @@ import {
   Paintbrush,
   Box,
   Compass,
+  Clock,
+  ArrowUpRight,
 } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
-import { GoogleLogo, YelpLogo, HouzzLogo, FacebookLogo } from './PlatformLogos';
+import {
+  GoogleLogo,
+  YelpLogo,
+  HomeAdvisorLogo,
+  HouzzLogo,
+  FacebookLogo,
+} from './PlatformLogos';
 import type { ScrapedReviewItemDto } from '@/lib/api';
 
 interface ProfileServicesAndReviewsProps {
   provider: RooferProvider;
   onOpenQuoteModal: () => void;
+  onOpenReviewsModal?: (initialPlatform?: string) => void;
   scrapedReviews?: ScrapedReviewItemDto[];
 }
 
 export default function ProfileServicesAndReviews({
   provider,
   onOpenQuoteModal,
+  onOpenReviewsModal,
   scrapedReviews = [],
 }: ProfileServicesAndReviewsProps) {
   const [filterPlatform, setFilterPlatform] = useState<string>('ALL');
-  const [showAllReviews, setShowAllReviews] = useState(false);
+
+  const formattedReviewsUpdated = (() => {
+    if (!provider.reviewsLastUpdatedAt) return null;
+    const parsed = new Date(provider.reviewsLastUpdatedAt);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  })();
 
   // Trade detection
   const isRoofing = provider.services?.some((s) => /Roof/i.test(s)) ?? true;
@@ -93,9 +113,9 @@ export default function ProfileServicesAndReviews({
   const displayServices =
     provider.services && provider.services.length > 0
       ? provider.services.map((name, idx) => ({
-          name,
-          icon: serviceIcons[idx % serviceIcons.length],
-        }))
+        name,
+        icon: serviceIcons[idx % serviceIcons.length],
+      }))
       : fallbackServicesList;
 
   // Rating & review distributions from DB
@@ -118,35 +138,146 @@ export default function ProfileServicesAndReviews({
   });
 
   // Real scraped reviews from DB
-  const allDisplayReviews = (scrapedReviews || []).map((sr) => ({
-    authorName: sr.authorName || 'Verified Homeowner',
-    platform: sr.platform?.toUpperCase() || 'GOOGLE',
-    rating: sr.rating || 5,
-    date: sr.reviewDate || 'Verified Review',
-    comment: sr.comment,
-  }));
+  const allDisplayReviews = (scrapedReviews || []).map((sr) => {
+    const rawName = (sr.authorName || '').trim();
+    let authorName = rawName || 'Verified Homeowner';
+    if (/^HU-\d+$/i.test(authorName)) {
+      authorName = 'Verified Houzz Homeowner';
+    } else {
+      const parts = authorName.split(/\s+/);
+      if (parts.length >= 2 && parts[0].length > 20 && /[+/0-9]/.test(parts[0])) {
+        authorName = parts.slice(1).join(' ');
+      }
+    }
+    let formattedDate = (sr.reviewDate || '').trim() || 'Verified Review';
+    if (/^\d{4}-\d{2}-\d{2}(?:[T\s].*)?$/.test(formattedDate)) {
+      const parsedDate = new Date(formattedDate);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        formattedDate = parsedDate.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
+      }
+    }
+    return {
+      authorName,
+      platform: sr.platform?.toUpperCase() || 'GOOGLE',
+      rating: sr.rating || 5,
+      date: formattedDate,
+      comment: sr.comment,
+    };
+  });
 
   const renderPlatformIcon = (platform: string) => {
     switch (platform) {
       case 'GOOGLE':
-        return <GoogleLogo className="w-4 h-4" />;
+        return <GoogleLogo className="w-4 h-4 shrink-0" />;
       case 'YELP':
-        return <YelpLogo className="w-4 h-4" />;
+        return <YelpLogo className="w-4 h-4 shrink-0" />;
+      case 'HOMEADVISOR':
+        return <HomeAdvisorLogo className="w-4 h-4 shrink-0" />;
       case 'HOUZZ':
-        return <HouzzLogo className="w-4 h-4" />;
+        return <HouzzLogo className="w-4 h-4 shrink-0" />;
       case 'FACEBOOK':
-        return <FacebookLogo className="w-4 h-4" />;
+        return <FacebookLogo className="w-4 h-4 shrink-0" />;
       default:
-        return <GoogleLogo className="w-4 h-4" />;
+        return <GoogleLogo className="w-4 h-4 shrink-0" />;
     }
   };
+
+  const activePlatformSummaries = [
+    provider.reviews?.google && provider.reviews.google.count > 0
+      ? {
+        key: 'GOOGLE',
+        label: 'Google',
+        rating: provider.reviews.google.rating,
+        count: provider.reviews.google.count,
+        url: provider.reviews.google.url,
+      }
+      : null,
+    provider.reviews?.yelp && provider.reviews.yelp.count > 0
+      ? {
+        key: 'YELP',
+        label: 'Yelp',
+        rating: provider.reviews.yelp.rating,
+        count: provider.reviews.yelp.count,
+        url: provider.reviews.yelp.url,
+      }
+      : null,
+    provider.reviews?.homeadvisor && provider.reviews.homeadvisor.count > 0
+      ? {
+        key: 'HOMEADVISOR',
+        label: 'HomeAdvisor',
+        rating: provider.reviews.homeadvisor.rating,
+        count: provider.reviews.homeadvisor.count,
+        url: provider.reviews.homeadvisor.url,
+      }
+      : null,
+    (provider.reviews?.houzz?.count || provider.reviews?.facebook?.count || 0) > 0
+      ? {
+        key: 'HOUZZ',
+        label: 'Houzz',
+        rating: provider.reviews.houzz?.rating || provider.reviews.facebook?.rating || 0,
+        count: provider.reviews.houzz?.count || provider.reviews.facebook?.count || 0,
+        url: provider.reviews.houzz?.url || provider.reviews.facebook?.url || '',
+      }
+      : null,
+  ].filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+  const platformFilterOptions = [
+    { key: 'ALL', label: 'All', count: totalReviews },
+    {
+      key: 'GOOGLE',
+      label: 'Google',
+      count:
+        activePlatformSummaries.find((p) => p.key === 'GOOGLE')?.count ||
+        allDisplayReviews.filter((r) => r.platform === 'GOOGLE').length,
+    },
+    {
+      key: 'YELP',
+      label: 'Yelp',
+      count:
+        activePlatformSummaries.find((p) => p.key === 'YELP')?.count ||
+        allDisplayReviews.filter((r) => r.platform === 'YELP').length,
+    },
+    {
+      key: 'HOMEADVISOR',
+      label: 'HomeAdvisor',
+      count:
+        activePlatformSummaries.find((p) => p.key === 'HOMEADVISOR')?.count ||
+        allDisplayReviews.filter((r) => r.platform === 'HOMEADVISOR').length,
+    },
+    {
+      key: 'HOUZZ',
+      label: 'Houzz',
+      count:
+        activePlatformSummaries.find((p) => p.key === 'HOUZZ')?.count ||
+        allDisplayReviews.filter((r) => r.platform === 'HOUZZ').length,
+    },
+  ].filter(
+    (opt) =>
+      opt.key === 'ALL' ||
+      opt.count > 0 ||
+      allDisplayReviews.some((r) => r.platform === opt.key)
+  );
+
+  const filteredReviews =
+    filterPlatform === 'ALL'
+      ? allDisplayReviews
+      : allDisplayReviews.filter((r) => r.platform === filterPlatform);
+
+  const selectedPlatformSummary =
+    filterPlatform !== 'ALL'
+      ? activePlatformSummaries.find((p) => p.key === filterPlatform) || null
+      : null;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* ========================================================= */}
       {/* LEFT COLUMN: SERVICES OFFERED (col-span-12 lg:col-span-7) */}
       {/* ========================================================= */}
-      <div id="services" className="lg:col-span-7 bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 space-y-4 shadow-xs">
+      <div id="services" className="lg:col-span-7 bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 space-y-4 shadow-sm">
         <div>
           <h2 className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight">
             Services Offered
@@ -180,19 +311,28 @@ export default function ProfileServicesAndReviews({
       {/* ========================================================= */}
       {/* RIGHT COLUMN: CUSTOMER REVIEWS (col-span-12 lg:col-span-5) */}
       {/* ========================================================= */}
-      <div id="reviews" className="lg:col-span-5 bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 space-y-4 shadow-xs">
+      <div id="reviews" className="lg:col-span-5 bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 space-y-4 shadow-sm">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight">
-            Customer Reviews
-          </h2>
-          <a
-            href="#reviews-list"
-            className="text-xs font-bold text-primary hover:underline flex items-center gap-0.5"
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight">
+              Customer Reviews
+            </h2>
+            {formattedReviewsUpdated && (
+              <p className="text-xs text-gray-500 mt-1 flex items-center gap-1.5 font-medium">
+                <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <span>Reviews last updated: {formattedReviewsUpdated}</span>
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => onOpenReviewsModal?.(filterPlatform)}
+            className="text-xs font-bold text-primary hover:underline flex items-center gap-0.5 shrink-0 pt-1 cursor-pointer"
           >
             <span>See all reviews</span>
             <ChevronRight className="w-3.5 h-3.5" />
-          </a>
+          </button>
         </div>
 
         {/* Score & Stars + Distribution Breakdown */}
@@ -231,6 +371,30 @@ export default function ProfileServicesAndReviews({
           </div>
         </div>
 
+        {/* Verified Platform Ratings Breakdown — Opens Reviews Modal on Click */}
+        {activePlatformSummaries.length > 0 && (
+          <div className="grid grid-cols-2 gap-2 pt-0.5">
+            {activePlatformSummaries.map((plat) => (
+              <button
+                key={plat.key}
+                type="button"
+                onClick={() => onOpenReviewsModal?.(plat.key)}
+                className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-gray-200/90 bg-slate-50/70 hover:bg-white hover:border-gray-300 transition-colors text-xs cursor-pointer text-left"
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {renderPlatformIcon(plat.key)}
+                  <span className="font-bold text-gray-800 truncate">{plat.label}</span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Star className="w-3 h-3 fill-amber-400 text-amber-400 shrink-0" />
+                  <span className="font-bold text-gray-950">{plat.rating.toFixed(1)}</span>
+                  <span className="text-gray-400 text-[11px]">({plat.count})</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Write a Review Button */}
         <div>
           <button
@@ -242,46 +406,126 @@ export default function ProfileServicesAndReviews({
           </button>
         </div>
 
+        {/* Platform Filter Pills (shown for every verified platform on this contractor) */}
+        {platformFilterOptions.length > 1 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {platformFilterOptions.map((opt) => {
+              const active = filterPlatform === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setFilterPlatform(opt.key)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${active
+                      ? 'bg-[#0B3B2C] text-white border-[#0B3B2C]'
+                      : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
+                >
+                  {opt.key !== 'ALL' && renderPlatformIcon(opt.key)}
+                  <span>{opt.label}</span>
+                  {opt.key !== 'ALL' && opt.count > 0 && (
+                    <span
+                      className={`text-[10px] ${active ? 'text-white/80' : 'text-gray-400'
+                        }`}
+                    >
+                      ({opt.count})
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Recent Review Cards List */}
         <div id="reviews-list" className="space-y-3 pt-1">
-          {(showAllReviews ? allDisplayReviews : allDisplayReviews.slice(0, 3)).map((rev, idx) => (
-            <div
-              key={idx}
-              className="p-3.5 rounded-xl border border-gray-100 bg-slate-50/50 space-y-2 hover:bg-slate-50 transition-colors"
-            >
-              <div className="flex items-center justify-between">
+          {filteredReviews.length > 0 ? (
+            <>
+              {filteredReviews.slice(0, 3).map((rev, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => onOpenReviewsModal?.(filterPlatform)}
+                  className="p-3.5 rounded-xl border border-gray-100 bg-slate-50/50 space-y-2 hover:bg-slate-50 hover:border-gray-200 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {renderPlatformIcon(rev.platform)}
+                      <span className="font-bold text-xs text-gray-900">
+                        {rev.authorName}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-gray-400">{rev.date}</span>
+                  </div>
+
+                  <div className="flex items-center text-amber-500">
+                    {[...Array(rev.rating || 5)].map((_, i) => (
+                      <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
+                    ))}
+                  </div>
+
+                  <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+                    "{rev.comment.replace(/\nPrice assessment[\s\S]*$/i, '').trim()}"
+                  </p>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => onOpenReviewsModal?.(filterPlatform)}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#F8FAFC] hover:bg-slate-100 border border-gray-200/90 text-xs font-bold text-primary transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <span>
+                  Read all{' '}
+                  {filterPlatform === 'ALL'
+                    ? `${allDisplayReviews.length} verified reviews`
+                    : `${filteredReviews.length} ${platformFilterOptions.find((o) => o.key === filterPlatform)?.label || ''
+                    } reviews`}
+                </span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </>
+          ) : selectedPlatformSummary ? (
+            <div className="p-4 rounded-xl border border-gray-200/90 bg-[#F8FAFC] space-y-3">
+              <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  {renderPlatformIcon(rev.platform)}
-                  <span className="font-bold text-xs text-gray-900">
-                    {rev.authorName}
+                  {renderPlatformIcon(selectedPlatformSummary.key)}
+                  <span className="text-xs font-bold text-gray-950">
+                    Verified {selectedPlatformSummary.label} Rating
                   </span>
                 </div>
-                <span className="text-[10px] text-gray-400">{rev.date}</span>
+                <div className="flex items-center gap-1">
+                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  <span className="text-xs font-black text-gray-950">
+                    {selectedPlatformSummary.rating.toFixed(1)}
+                  </span>
+                  <span className="text-[11px] text-gray-500 font-medium">
+                    ({selectedPlatformSummary.count} reviews)
+                  </span>
+                </div>
               </div>
 
-              <div className="flex items-center text-amber-500">
-                {[...Array(rev.rating || 5)].map((_, i) => (
-                  <Star key={i} className="w-3 h-3 fill-amber-400 text-amber-400" />
-                ))}
-              </div>
-
-              <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
-                "{rev.comment}"
+              <p className="text-xs text-gray-600 leading-relaxed">
+                {provider.name} holds a verified{' '}
+                <strong className="font-bold text-gray-900">
+                  {selectedPlatformSummary.rating.toFixed(1)}-star
+                </strong>{' '}
+                rating across{' '}
+                <strong className="font-bold text-gray-900">
+                  {selectedPlatformSummary.count} customer reviews
+                </strong>{' '}
+                on {selectedPlatformSummary.label}.
               </p>
-            </div>
-          ))}
 
-          {allDisplayReviews.length > 3 && (
-            <button
-              type="button"
-              onClick={() => setShowAllReviews(!showAllReviews)}
-              className="w-full text-center text-xs font-bold text-primary hover:underline py-1.5 cursor-pointer"
-            >
-              {showAllReviews
-                ? 'Show less reviews'
-                : `+ View ${allDisplayReviews.length - 3} more reviews`}
-            </button>
-          )}
+              <button
+                type="button"
+                onClick={() => onOpenReviewsModal?.('ALL')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white hover:bg-gray-50 text-gray-900 hover:text-primary border border-gray-200 shadow-sm text-xs font-bold transition-all cursor-pointer"
+              >
+                <span>Read all verified customer reviews</span>
+                <ChevronRight className="w-3.5 h-3.5 text-primary" />
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

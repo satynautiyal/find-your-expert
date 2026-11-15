@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { CacheModule } from './common/cache';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 import { StorageModule } from './storage';
@@ -13,6 +14,7 @@ import { BlogsModule } from './blogs';
       isGlobal: true,
       envFilePath: ['.env', '../../.env'],
     }),
+    CacheModule,
     PrismaModule,
     HealthModule,
     StorageModule,

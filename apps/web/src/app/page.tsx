@@ -143,7 +143,7 @@ export default function Home() {
     {
       question: 'How does Prosvetted rank contractors?',
       answer:
-        'We evaluate contractors across verified license verifications, confirmed liability insurance, cross-platform review sentiment (Google, Yelp, Houzz), BBB standing, and demonstrated project history to produce our independent score.',
+        'We evaluate contractors across verified license verifications, confirmed liability insurance, cross-platform review sentiment (Google, Yelp, HomeAdvisor, Houzz), BBB standing, and demonstrated project history to produce our independent score.',
     },
     {
       question: 'Do you verify licenses and insurance?',

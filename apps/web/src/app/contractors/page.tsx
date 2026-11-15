@@ -116,14 +116,18 @@ function ContractorsDirectoryContent() {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
-  // Load categories and filters meta on mount
+  // Load categories and filters meta on mount (fetchProviderFilters already includes categories)
   useEffect(() => {
     let isMounted = true;
 
-    Promise.all([fetchCategories(), fetchProviderFilters()])
-      .then(([cats, meta]) => {
+    fetchProviderFilters()
+      .then(async (meta) => {
         if (!isMounted) return;
-        const resolvedCats = cats && cats.length > 0 ? cats : meta?.categories || [];
+        const resolvedCats =
+          meta?.categories && meta.categories.length > 0
+            ? meta.categories
+            : await fetchCategories();
+        if (!isMounted) return;
         if (resolvedCats.length > 0) {
           setCategoriesList(resolvedCats);
           if (urlService && !urlCategory) {

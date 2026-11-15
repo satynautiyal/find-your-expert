@@ -47,6 +47,7 @@ export interface RooferProvider {
   reviews: {
     google: PlatformReviewData;
     yelp: PlatformReviewData;
+    homeadvisor?: PlatformReviewData;
     houzz: PlatformReviewData;
     facebook?: PlatformReviewData;
   };
@@ -54,6 +55,7 @@ export interface RooferProvider {
   totalReviews: number;
   featuredQuote: string;
   verifiedYear: number;
+  reviewsLastUpdatedAt?: string;
   aiReviewSummary?: string;
   aiSummaryUpdatedAt?: string;
   scrapedReviews?: Array<{
@@ -62,7 +64,7 @@ export interface RooferProvider {
     rating: number;
     comment: string;
     reviewDate?: string;
-    platform: 'GOOGLE' | 'YELP' | 'HOUZZ' | 'FACEBOOK' | string;
+    platform: 'GOOGLE' | 'YELP' | 'HOMEADVISOR' | 'HOUZZ' | 'FACEBOOK' | string;
     sourceUrl?: string;
   }>;
 }

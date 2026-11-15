@@ -32,6 +32,7 @@ export default function ProviderCard({
   onOpenQuoteModal,
 }: ProviderCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [cardImgIdx, setCardImgIdx] = useState(0);
 
   // Trust score calculation from DB compositeRating & yearsInBusiness
   const ratingValue = provider.compositeRating || 0;
@@ -61,6 +62,19 @@ export default function ProviderCard({
 
   // Authentic scraped business logo from DB
   const businessLogo = provider.imageUrl || '';
+
+  // Real project photos from DB (excluding business logo)
+  const projectPhotos = (provider.photos || [])
+    .map((p) => p.url)
+    .filter((url) => Boolean(url) && url !== businessLogo);
+
+  // Candidate images for Col 1: project photos first, falling back to businessLogo if no project photos exist
+  const cardCandidates = [
+    ...projectPhotos,
+    ...(businessLogo ? [businessLogo] : []),
+  ];
+  const activeCardImage = cardCandidates[cardImgIdx] || '';
+  const isShowingProjectPhoto = cardImgIdx < projectPhotos.length;
 
   // Complete full address formatted from DB address, borough, city, state, and zipCode
   const fullAddress = (() => {
@@ -108,7 +122,7 @@ export default function ProviderCard({
     return provider.servesArea || 'New York, NY';
   })();
 
-  // Real platform reviews from DB (only include platforms with real reviews)
+  // Real platform reviews from DB (only include platforms with real reviews: Google, Yelp, HomeAdvisor, Houzz)
   const googleReview =
     provider.reviews?.google && provider.reviews.google.count > 0
       ? provider.reviews.google
@@ -117,6 +131,10 @@ export default function ProviderCard({
     provider.reviews?.yelp && provider.reviews.yelp.count > 0
       ? provider.reviews.yelp
       : null;
+  const homeAdvisorReview =
+    provider.reviews?.homeadvisor && provider.reviews.homeadvisor.count > 0
+      ? provider.reviews.homeadvisor
+      : null;
   const houzzOrFbReview =
     provider.reviews?.houzz && provider.reviews.houzz.count > 0
       ? { ...provider.reviews.houzz, label: 'Houzz' as const }
@@ -124,26 +142,51 @@ export default function ProviderCard({
         ? { ...provider.reviews.facebook, label: 'Facebook' as const }
         : null;
 
-  const hasPlatformReviews = Boolean(googleReview || yelpReview || houzzOrFbReview);
+  const hasPlatformReviews = Boolean(
+    googleReview || yelpReview || homeAdvisorReview || houzzOrFbReview
+  );
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-300 hover:border-[#0B3B2C]/40 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
+    <div className="bg-white rounded-2xl border border-gray-300/90 hover:border-[#0B3B2C]/45 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.14),0_4px_10px_-2px_rgba(15,23,42,0.08)] hover:shadow-[0_14px_36px_-4px_rgba(15,23,42,0.20),0_6px_14px_-2px_rgba(15,23,42,0.10)] transition-all duration-200 overflow-hidden">
       {/* 1. Top Card Area */}
       <div className="p-4 sm:p-5">
         <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-start lg:items-center justify-between">
           {/* Left Block: Business Logo + Company Details */}
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start flex-1 min-w-0 w-full sm:w-auto">
-            {/* Col 1: Business Logo with Rank Badge */}
-            <div className="relative w-full sm:w-44 md:w-48 lg:w-52 h-44 xs:h-48 sm:h-34 rounded-xl overflow-hidden shrink-0 bg-white group border border-gray-200 shadow-xs flex items-center justify-center p-3">
-              <SafeImage
-                src={businessLogo}
-                alt={`${provider.name} Logo`}
-                fallbackCategory={isCabinets ? 'Custom Cabinets' : 'Roofing'}
-                fallbackTitle={provider.name}
-                fallbackIcon="letter"
-                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
-                loading="lazy"
-              />
+            {/* Col 1: Project Photo (or Business Logo if no project photos exist) with Rank Badge */}
+            <div
+              className={`relative w-full sm:w-44 md:w-48 lg:w-52 h-44 xs:h-48 sm:h-34 rounded-xl overflow-hidden shrink-0 group border border-gray-200 shadow-xs flex items-center justify-center ${
+                isShowingProjectPhoto ? 'bg-gray-100' : 'bg-white p-3'
+              }`}
+            >
+              {activeCardImage ? (
+                <img
+                  src={activeCardImage}
+                  alt={
+                    isShowingProjectPhoto
+                      ? `${provider.name} Project`
+                      : `${provider.name} Logo`
+                  }
+                  onError={() => {
+                    if (cardImgIdx + 1 < cardCandidates.length) {
+                      setCardImgIdx((prev) => prev + 1);
+                    }
+                  }}
+                  className={`w-full h-full ${
+                    isShowingProjectPhoto ? 'object-cover' : 'object-contain'
+                  } group-hover:scale-105 transition-transform duration-300`}
+                  loading="lazy"
+                />
+              ) : (
+                <SafeImage
+                  src=""
+                  alt={provider.name}
+                  fallbackCategory={isCabinets ? 'Custom Cabinets' : 'Roofing'}
+                  fallbackTitle={provider.name}
+                  fallbackIcon="letter"
+                  className="w-full h-full object-contain"
+                />
+              )}
 
               {/* Rank Badge on top-left of image */}
               <div className="absolute top-2 left-2 bg-[#0B3B2C] text-white text-[11px] font-bold px-2 py-0.5 rounded-md shadow-xs z-10">
@@ -167,24 +210,26 @@ export default function ProviderCard({
             {/* Col 2: Business Info & Ratings */}
             <div className="space-y-1.5 min-w-0 flex-1 w-full">
               {/* Company Logo + Name */}
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
                 {provider.imageUrl ? (
-                  <SafeImage
-                    src={provider.imageUrl}
-                    alt={provider.name}
-                    fallbackCategory={isCabinets ? 'Custom Cabinets' : 'Roofing'}
-                    fallbackTitle={provider.name}
-                    className="w-7 h-7 object-contain rounded shrink-0 bg-white border border-gray-100 p-0.5"
-                  />
+                  <div className="h-11 sm:h-12 min-w-[44px] sm:min-w-[48px] max-w-[160px] sm:max-w-[180px] px-2.5 py-1 rounded-xl bg-white border border-gray-200 shadow-xs flex items-center justify-center shrink-0">
+                    <SafeImage
+                      src={provider.imageUrl}
+                      alt={provider.name}
+                      fallbackCategory={isCabinets ? 'Custom Cabinets' : 'Roofing'}
+                      fallbackTitle={provider.name}
+                      className="max-h-9 sm:max-h-10 w-auto max-w-[144px] sm:max-w-[164px] object-contain"
+                    />
+                  </div>
                 ) : (
-                  <div className="w-7 h-7 rounded bg-[#EBF3F1] text-[#0F3E35] flex items-center justify-center shrink-0 font-bold text-xs">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-[#EBF3F1] text-[#0F3E35] flex items-center justify-center shrink-0 font-bold text-sm border border-[#0B3B2C]/15">
                     {provider.name.charAt(0)}
                   </div>
                 )}
 
                 <Link
                   href={`/contractors/${provider.slug}`}
-                  className="text-base sm:text-[17px] font-bold text-[#111827] hover:text-[#DA5F2F] transition-colors leading-tight truncate"
+                  className="text-base sm:text-lg font-extrabold text-[#111827] hover:text-[#DA5F2F] transition-colors leading-tight truncate"
                 >
                   {provider.name}
                 </Link>
@@ -417,8 +462,8 @@ export default function ProviderCard({
                   <div className="space-y-2 text-xs">
                     {/* 1. Google */}
                     {googleReview && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0">
                             <path
                               fill="#4285F4"
@@ -437,7 +482,10 @@ export default function ProviderCard({
                               d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
                             />
                           </svg>
-                          <div className="flex items-center gap-0.5">
+                          <span className="font-medium text-[#374151] w-[78px] truncate">
+                            Google
+                          </span>
+                          <div className="flex items-center gap-0.5 shrink-0">
                             {[1, 2, 3, 4, 5].map((i) => (
                               <Star
                                 key={i}
@@ -448,11 +496,11 @@ export default function ProviderCard({
                               />
                             ))}
                           </div>
-                          <span className="font-bold text-[#111827] text-xs">
+                          <span className="font-bold text-[#111827] text-xs shrink-0">
                             {googleReview.rating.toFixed(1)}
                           </span>
                         </div>
-                        <span className="text-xs text-[#5A6578]">
+                        <span className="text-xs text-[#5A6578] shrink-0">
                           {googleReview.count} reviews
                         </span>
                       </div>
@@ -460,8 +508,8 @@ export default function ProviderCard({
 
                     {/* 2. Yelp */}
                     {yelpReview && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0">
                             <rect width="24" height="24" rx="4" fill="#D32323" />
                             <path
@@ -469,7 +517,10 @@ export default function ProviderCard({
                               d="M12 12.8l2.6 3.6c.2.3.6.4.9.2l1.2-.8c.3-.2.4-.6.2-.9l-3.1-3.2 4.2-1.3c.4-.1.6-.5.5-.9l-.4-1.4c-.1-.4-.5-.6-.9-.5l-4.2 1.7 1.1-4.3c.1-.4-.2-.8-.6-.9l-1.4-.4c-.4-.1-.8.2-.9.6l-1.5 4.2-3.2-3c-.3-.3-.7-.2-.9.1l-.9 1.1c-.2.3-.2.7.1.9l3.5 2.6-4.3 1.2c-.4.1-.6.5-.5.9l.4 1.4c.1.4.5.6.9.5l4.3-1.4-1.2 4.3c-.1.4.2.8.6.9l1.4.4c.4.1.8-.2.9-.6l1.3-4.3z"
                             />
                           </svg>
-                          <div className="flex items-center gap-0.5">
+                          <span className="font-medium text-[#374151] w-[78px] truncate">
+                            Yelp
+                          </span>
+                          <div className="flex items-center gap-0.5 shrink-0">
                             {[1, 2, 3, 4, 5].map((i) => (
                               <Star
                                 key={i}
@@ -480,20 +531,60 @@ export default function ProviderCard({
                               />
                             ))}
                           </div>
-                          <span className="font-bold text-[#111827] text-xs">
+                          <span className="font-bold text-[#111827] text-xs shrink-0">
                             {yelpReview.rating.toFixed(1)}
                           </span>
                         </div>
-                        <span className="text-xs text-[#5A6578]">
+                        <span className="text-xs text-[#5A6578] shrink-0">
                           {yelpReview.count} reviews
                         </span>
                       </div>
                     )}
 
-                    {/* 3. Houzz / Facebook / BBB */}
+                    {/* 3. HomeAdvisor */}
+                    {homeAdvisorReview && (
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0">
+                            <rect width="24" height="24" rx="4" fill="#F68B1E" />
+                            <path
+                              d="M12 4.8L4.8 10.8h2.2v7.6h10v-7.6h2.2L12 4.8z"
+                              fill="#FFFFFF"
+                            />
+                            <path
+                              d="M10.8 14.9l-1.9-1.9-1.1 1.1 3 3 5.2-5.2-1.1-1.1-4.1 4.1z"
+                              fill="#F68B1E"
+                            />
+                          </svg>
+                          <span className="font-medium text-[#374151] w-[78px] truncate">
+                            HomeAdvisor
+                          </span>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            {[1, 2, 3, 4, 5].map((i) => (
+                              <Star
+                                key={i}
+                                className={`w-3 h-3 ${
+                                  i <= Math.round(homeAdvisorReview.rating)
+                                    ? 'text-[#DA5F2F] fill-[#DA5F2F]'
+                                    : 'text-gray-200 fill-gray-200'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <span className="font-bold text-[#111827] text-xs shrink-0">
+                            {homeAdvisorReview.rating.toFixed(1)}
+                          </span>
+                        </div>
+                        <span className="text-xs text-[#5A6578] shrink-0">
+                          {homeAdvisorReview.count} reviews
+                        </span>
+                      </div>
+                    )}
+
+                    {/* 4. Houzz */}
                     {houzzOrFbReview && (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0">
                             <rect width="24" height="24" rx="4" fill="#3FB87F" />
                             <path
@@ -501,7 +592,10 @@ export default function ProviderCard({
                               d="M7 6h3v4.5h4V6h3v12h-3v-4.5h-4V18H7V6z"
                             />
                           </svg>
-                          <div className="flex items-center gap-0.5">
+                          <span className="font-medium text-[#374151] w-[78px] truncate">
+                            {houzzOrFbReview.label}
+                          </span>
+                          <div className="flex items-center gap-0.5 shrink-0">
                             {[1, 2, 3, 4, 5].map((i) => (
                               <Star
                                 key={i}
@@ -512,11 +606,11 @@ export default function ProviderCard({
                               />
                             ))}
                           </div>
-                          <span className="font-bold text-[#111827] text-xs">
+                          <span className="font-bold text-[#111827] text-xs shrink-0">
                             {houzzOrFbReview.rating.toFixed(1)}
                           </span>
                         </div>
-                        <span className="text-xs text-[#5A6578]">
+                        <span className="text-xs text-[#5A6578] shrink-0">
                           {houzzOrFbReview.count} reviews
                         </span>
                       </div>

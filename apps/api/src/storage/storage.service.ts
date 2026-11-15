@@ -22,6 +22,7 @@ export class StorageService {
   private s3Client: S3Client | null = null;
   private readonly bucketName: string;
   private readonly isReady: boolean;
+  private readonly presignedUrlCache = new Map<string, { url: string; expiresAt: number }>();
 
   /**
    * Default expiration duration for presigned URLs: 12 hours (43,200 seconds)
@@ -148,15 +149,35 @@ export class StorageService {
     }
 
     if (this.isReady && this.s3Client) {
+      const cacheKey = `${cleanKey}:${expiresInSeconds}`;
+      const now = Date.now();
+      const cached = this.presignedUrlCache.get(cacheKey);
+      if (cached && now < cached.expiresAt) {
+        return cached.url;
+      }
+
       try {
         const command = new GetObjectCommand({
           Bucket: this.bucketName,
           Key: cleanKey,
         });
 
-        return await getSignedUrl(this.s3Client, command, {
+        const signedUrl = await getSignedUrl(this.s3Client, command, {
           expiresIn: expiresInSeconds,
         });
+
+        // Cache for half of expiration window (e.g. 6h for 12h URLs) so browser HTTP cache also reuses stable URLs
+        const ttlMs = Math.max(60_000, Math.floor(expiresInSeconds * 500));
+        if (this.presignedUrlCache.size >= 1000) {
+          const oldest = this.presignedUrlCache.keys().next().value;
+          if (oldest !== undefined) this.presignedUrlCache.delete(oldest);
+        }
+        this.presignedUrlCache.set(cacheKey, {
+          url: signedUrl,
+          expiresAt: now + ttlMs,
+        });
+
+        return signedUrl;
       } catch (err: any) {
         this.logger.error(
           `Failed to generate presigned GET URL for key "${cleanKey}": ${err.message}`
@@ -179,6 +200,7 @@ export class StorageService {
     expiresInSeconds = 3600 // 1 hour window for upload
   ): Promise<PresignedUploadResult> {
     const cleanKey = key.replace(/^\/+/, '');
+    this.invalidatePresignedCache(cleanKey);
 
     if (this.isReady && this.s3Client) {
       const command = new PutObjectCommand({
@@ -206,11 +228,20 @@ export class StorageService {
     };
   }
 
+  private invalidatePresignedCache(cleanKey: string): void {
+    for (const k of this.presignedUrlCache.keys()) {
+      if (k.startsWith(`${cleanKey}:`)) {
+        this.presignedUrlCache.delete(k);
+      }
+    }
+  }
+
   /**
    * Store a raw buffer under `key` (R2 when configured, otherwise local public/uploads).
    */
   async putObject(buffer: Buffer, key: string, contentType = 'image/jpeg'): Promise<void> {
     const cleanKey = key.replace(/^\/+/, '');
+    this.invalidatePresignedCache(cleanKey);
 
     if (this.isReady && this.s3Client) {
       await this.s3Client.send(
@@ -253,6 +284,7 @@ export class StorageService {
     expiresInSeconds: number = StorageService.DEFAULT_PRESIGNED_EXPIRATION
   ): Promise<string> {
     const cleanKey = key.replace(/^\/+/, '');
+    this.invalidatePresignedCache(cleanKey);
 
     if (this.isReady && this.s3Client) {
       const command = new PutObjectCommand({
@@ -314,6 +346,7 @@ export class StorageService {
    */
   async deleteObject(key: string): Promise<void> {
     const cleanKey = key.replace(/^\/+/, '');
+    this.invalidatePresignedCache(cleanKey);
     if (this.isReady && this.s3Client) {
       const command = new DeleteObjectCommand({
         Bucket: this.bucketName,

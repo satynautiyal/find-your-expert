@@ -1,11 +1,33 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
+import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   PlatformScrapedResult,
   ScrapedReviewItem,
 } from '../interfaces/review-scraper.interface';
 import { ScraperHttpUtil } from '../utils/scraper-http.util';
 import { BrowserPoolUtil } from '../utils/browser-pool.util';
+
+function resolveSerpApiKey(): string {
+  const candidates = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(process.cwd(), 'apps/api/.env'),
+    path.resolve(process.cwd(), '../web/.env'),
+    path.resolve(process.cwd(), 'apps/web/.env'),
+  ];
+  if (!process.env.SERPAPI_KEY) {
+    for (const envPath of candidates) {
+      if (fs.existsSync(envPath)) {
+        dotenv.config({ path: envPath });
+      }
+    }
+  }
+  return (process.env.SERPAPI_KEY || process.env.SERPAPI_API_KEY || '')
+    .replace(/^['"]|['"]$/g, '')
+    .trim();
+}
 
 @Injectable()
 export class YelpReviewsScraperService {
@@ -24,10 +46,13 @@ export class YelpReviewsScraperService {
     yelpUrlOrSlug: string,
     maxReviews = 100,
   ): Promise<PlatformScrapedResult> {
-    const businessAlias = this.extractBusinessAlias(yelpUrlOrSlug);
+    const isSearchQuery = !yelpUrlOrSlug.startsWith('http') && /\s/.test(yelpUrlOrSlug.trim());
+    const businessAlias = isSearchQuery ? yelpUrlOrSlug.trim() : this.extractBusinessAlias(yelpUrlOrSlug);
     const targetUrl = yelpUrlOrSlug.startsWith('http')
       ? yelpUrlOrSlug.split('?')[0]
-      : `https://www.yelp.com/biz/${businessAlias}`;
+      : isSearchQuery
+        ? 'https://www.yelp.com'
+        : `https://www.yelp.com/biz/${businessAlias}`;
 
     this.logger.log(`🔍 [Yelp] Starting review fetch for: ${targetUrl} (Max: ${maxReviews})`);
 
@@ -40,6 +65,26 @@ export class YelpReviewsScraperService {
       scrapedAt: new Date(),
       success: false,
     };
+
+    // Strategy 0: SerpApi (yelp + yelp_reviews) — returns up to ~49 full Yelp reviews per call
+    const serpApiKey = resolveSerpApiKey();
+    if (serpApiKey) {
+      try {
+        this.logger.log(`🚀 [Yelp] Using SerpApi (yelp + yelp_reviews) for: "${businessAlias}"`);
+        const serpRes = await this.fetchViaSerpApi(
+          businessAlias,
+          targetUrl,
+          isSearchQuery,
+          serpApiKey,
+          maxReviews,
+        );
+        if (serpRes.success && (serpRes.reviews.length > 0 || serpRes.totalReviews > 0)) {
+          return serpRes;
+        }
+      } catch (serpErr: any) {
+        this.logger.warn(`⚠️ [Yelp] SerpApi strategy failed (${serpErr.message}), falling back...`);
+      }
+    }
 
     // Strategy 1: Try Official Yelp Fusion API if API key is configured
     const apiKey = process.env.YELP_API_KEY || process.env.YELP_FUSION_API_KEY;
@@ -100,8 +145,11 @@ export class YelpReviewsScraperService {
       browser = await BrowserPoolUtil.createBrowser();
       const page = await BrowserPoolUtil.createStealthPage(browser);
 
-      // Search Google for the exact Yelp business page
-      const searchQuery = `site:yelp.com/biz/${businessAlias}`;
+      // Search Google for the exact Yelp business page (supports both /biz/alias and "Business Name City" search)
+      const isNameQuery = /\s/.test(businessAlias);
+      const searchQuery = isNameQuery
+        ? `site:yelp.com/biz ${businessAlias}`
+        : `site:yelp.com/biz/${businessAlias}`;
       const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}&gl=us&hl=en`;
 
       this.logger.debug(`[Yelp] Google search: ${searchQuery}`);
@@ -114,8 +162,16 @@ export class YelpReviewsScraperService {
 
         // Check for Google CAPTCHA
         if (body.includes('unusual traffic') || body.includes('not a robot')) {
-          return { error: 'CAPTCHA', rating: 0, reviewCount: 0, snippets: [] as string[] };
+          return { error: 'CAPTCHA', rating: 0, reviewCount: 0, discoveredUrl: '', snippets: [] as string[] };
         }
+
+        let discoveredUrl = '';
+        document.querySelectorAll('a[href*="yelp.com/biz/"]').forEach((a) => {
+          const href = (a as HTMLAnchorElement).href || '';
+          if (!discoveredUrl && /https?:\/\/(www\.)?yelp\.com\/biz\/[^/?#]+/i.test(href)) {
+            discoveredUrl = href.split('?')[0];
+          }
+        });
 
         // Google shows Yelp rating as "3.0(4)" pattern in rich snippets
         const ratingPattern = body.match(/(\d\.?\d?)\((\d+)\)/);
@@ -134,18 +190,22 @@ export class YelpReviewsScraperService {
             ? parseInt(ratingAlt[2], 10)
             : 0;
 
-        // Extract review snippet text from search results
+        // Extract review snippet text ONLY from Google result blocks that link to this exact Yelp /biz/ page
         const snippets: string[] = [];
         const seen = new Set<string>();
-        document.querySelectorAll('div.VwiC3b, span.aCOpRe, div[data-sncf], em').forEach((el) => {
-          const text = (el as HTMLElement).innerText?.trim();
-          if (text && text.length > 30 && !text.includes('Missing:') && !seen.has(text)) {
-            seen.add(text);
-            snippets.push(text);
-          }
+        document.querySelectorAll('div.MjjYud, div.g').forEach((block) => {
+          const yelpLink = block.querySelector('a[href*="yelp.com/biz/"]') as HTMLAnchorElement | null;
+          if (!yelpLink) return;
+          block.querySelectorAll('div.VwiC3b, span.aCOpRe, div[data-sncf]').forEach((el) => {
+            const text = (el as HTMLElement).innerText?.trim();
+            if (text && text.length > 30 && !text.includes('Missing:') && !seen.has(text)) {
+              seen.add(text);
+              snippets.push(text);
+            }
+          });
         });
 
-        return { rating, reviewCount, snippets: snippets.slice(0, maxCount), error: '' };
+        return { rating, reviewCount, discoveredUrl, snippets: snippets.slice(0, maxCount), error: '' };
       }, maxReviews);
 
       if (extracted.error === 'CAPTCHA') {
@@ -153,23 +213,72 @@ export class YelpReviewsScraperService {
         return result;
       }
 
+      if (extracted.discoveredUrl && result.profileUrl === 'https://www.yelp.com') {
+        result.profileUrl = extracted.discoveredUrl;
+      }
+
       result.rating = extracted.rating;
       result.totalReviews = extracted.reviewCount;
 
-      // Build review items from snippets
-      if (extracted.snippets.length > 0) {
+      const allSnippets = [...extracted.snippets];
+
+      // Step 2: Query indexed Yelp review quotes (?hrid= / paginated snippets) for authentic review text
+      const resolvedAlias = this.extractBusinessAlias(result.profileUrl);
+      if (resolvedAlias && result.totalReviews > 0) {
+        try {
+          const quoteQuery = `site:yelp.com/biz/${resolvedAlias} ("recommend" OR "great" OR "work" OR "team" OR "project" OR "service")`;
+          await page.goto(
+            `https://www.google.com/search?q=${encodeURIComponent(quoteQuery)}&num=10&gl=us&hl=en`,
+            { waitUntil: 'networkidle2', timeout: 15000 }
+          );
+          await new Promise((r: any) => setTimeout(r, 1000));
+
+          const extraQuotes: string[] = await page.evaluate((aliasLower: string) => {
+            const body = document.body?.innerText || '';
+            if (body.includes('unusual traffic') || body.includes('not a robot')) {
+              return [];
+            }
+            const out: string[] = [];
+            document.querySelectorAll('div.MjjYud, div.g').forEach((block) => {
+              const yelpLink = block.querySelector('a[href*="yelp.com/biz/"]') as HTMLAnchorElement | null;
+              if (!yelpLink || !yelpLink.href.toLowerCase().includes(aliasLower)) return;
+              block.querySelectorAll('div.VwiC3b, span.aCOpRe, div[data-sncf]').forEach((el) => {
+                const txt = (el as HTMLElement).innerText?.trim();
+                if (txt && txt.length >= 45 && !txt.includes('Missing:')) {
+                  out.push(txt);
+                }
+              });
+            });
+            return out;
+          }, resolvedAlias.toLowerCase());
+          allSnippets.push(...extraQuotes);
+        } catch {
+          // Ignore optional quote enrichment errors
+        }
+      }
+
+      // Build review items from snippets (filter out directory address/hours meta descriptions)
+      if (allSnippets.length > 0) {
         const seenComments = new Set<string>();
-        for (const snippet of extracted.snippets) {
+        let idx = 1;
+        for (const snippet of allSnippets) {
           const cleanSnippet = snippet.replace(/Read more$/i, '').replace(/\.{3}$/i, '').trim();
-          if (cleanSnippet.length > 20 && !seenComments.has(cleanSnippet.substring(0, 50))) {
+          const isDirectoryMeta =
+            /\b\d+\s+Photos\b/i.test(cleanSnippet) ||
+            /\bMon\s*-\s*\d{1,2}:\d{2}/i.test(cleanSnippet) ||
+            /\bTop\s+10\s+Best\b/i.test(cleanSnippet) ||
+            /^\d+\s+[A-Za-z0-9\s.,#-]+NY\s+\d{5}$/i.test(cleanSnippet) ||
+            cleanSnippet.length < 45;
+
+          if (!isDirectoryMeta && !seenComments.has(cleanSnippet.substring(0, 50))) {
             seenComments.add(cleanSnippet.substring(0, 50));
             result.reviews.push({
-              authorName: 'Yelp Reviewer',
-              rating: result.rating || 5,
+              authorName: `Yelp Reviewer #${idx++}`,
+              rating: Math.min(5, Math.max(1, Math.round(result.rating || 5))),
               comment: cleanSnippet,
               isVerified: true,
               platform: 'YELP',
-              sourceUrl: profileUrl,
+              sourceUrl: result.profileUrl || profileUrl,
             });
           }
         }
@@ -277,6 +386,205 @@ export class YelpReviewsScraperService {
     clean = clean.replace(/^https?:\/\/(www\.)?yelp\.com\/?/i, '');
     clean = clean.split('?')[0].split('#')[0].replace(/^\/+|\/+$/g, '');
     return clean;
+  }
+
+  /**
+   * Strategy 0: Fetch full Yelp rating, total review count, and up to ~49+ full customer reviews via SerpApi
+   */
+  private async fetchViaSerpApi(
+    businessAliasOrQuery: string,
+    initialProfileUrl: string,
+    isSearchQuery: boolean,
+    serpApiKey: string,
+    maxReviews: number,
+  ): Promise<PlatformScrapedResult> {
+    const result: PlatformScrapedResult = {
+      platform: 'YELP',
+      rating: 0,
+      totalReviews: 0,
+      profileUrl: initialProfileUrl,
+      reviews: [],
+      scrapedAt: new Date(),
+      success: false,
+    };
+
+    // Derive clean search description & location
+    let findDesc = businessAliasOrQuery;
+    let findLoc = 'New York, NY';
+
+    if (!isSearchQuery) {
+      // Convert slug e.g. "new-york-kitchen-and-bath-new-york-2" -> "new york kitchen and bath"
+      findDesc = businessAliasOrQuery
+        .replace(/-\d+$/, '')
+        .replace(/-(new-york|manhattan|brooklyn|queens|bronx|staten-island|nyc|ny|nj)$/i, '')
+        .replace(/-/g, ' ')
+        .trim();
+    } else {
+      const locMatch = businessAliasOrQuery.match(
+        /\b(Manhattan|Brooklyn|Queens|Bronx|Staten Island|New York)\b.*$/i,
+      );
+      if (locMatch && typeof locMatch.index === 'number' && locMatch.index > 2) {
+        findDesc = businessAliasOrQuery.slice(0, locMatch.index).trim();
+        findLoc = `${locMatch[1]}, NY`;
+      }
+    }
+
+    // Step 1: Resolve Yelp 22-char place_id + rating + count via SerpApi engine=yelp
+    const searchParams = new URLSearchParams({
+      engine: 'yelp',
+      find_desc: findDesc,
+      find_loc: findLoc,
+      api_key: serpApiKey,
+    });
+    const searchRes = await fetch(`https://serpapi.com/search.json?${searchParams.toString()}`);
+    if (!searchRes.ok) {
+      throw new Error(`SerpApi yelp search HTTP ${searchRes.status}`);
+    }
+    const searchJson: any = await searchRes.json();
+    if (searchJson.error) {
+      throw new Error(searchJson.error);
+    }
+
+    const organic: any[] = Array.isArray(searchJson.organic_results)
+      ? searchJson.organic_results
+      : [];
+
+    const stopWords = new Set([
+      'inc',
+      'llc',
+      'corp',
+      'co',
+      'company',
+      'the',
+      'and',
+      'ny',
+      'nyc',
+      'new',
+      'york',
+      'brooklyn',
+      'manhattan',
+      'queens',
+      'bronx',
+      'staten',
+      'island',
+    ]);
+    const descTokens = findDesc
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((t) => t.length >= 2 && !stopWords.has(t));
+
+    let matchedBiz: any = null;
+    if (!isSearchQuery && businessAliasOrQuery) {
+      const aliasLower = businessAliasOrQuery.toLowerCase();
+      matchedBiz = organic.find(
+        (item) =>
+          (typeof item.link === 'string' && item.link.toLowerCase().includes(aliasLower)) ||
+          (Array.isArray(item.place_ids) &&
+            item.place_ids.some((id: string) => String(id).toLowerCase() === aliasLower)),
+      );
+    }
+
+    if (!matchedBiz && descTokens.length > 0) {
+      matchedBiz = organic.find((item) => {
+        const hay = `${item.title || ''} ${item.link || ''}`
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, ' ');
+        return descTokens.every((tok) => hay.includes(tok));
+      });
+    }
+
+    if (!matchedBiz) {
+      this.logger.log(`ℹ️ [Yelp SerpApi] No matching Yelp listing found for "${findDesc}" in ${findLoc}`);
+      return result;
+    }
+
+    const placeIds: string[] = Array.isArray(matchedBiz.place_ids)
+      ? matchedBiz.place_ids
+      : matchedBiz.place_id
+        ? [matchedBiz.place_id]
+        : [];
+    const primaryPlaceId = placeIds[0] || (!isSearchQuery ? businessAliasOrQuery : '');
+
+    result.rating = Number(matchedBiz.rating) || 0;
+    result.totalReviews = Number(matchedBiz.reviews) || 0;
+    if (typeof matchedBiz.link === 'string' && matchedBiz.link.includes('yelp.com/biz/')) {
+      result.profileUrl = matchedBiz.link.split('?')[0];
+    }
+
+    // Step 2: Fetch full granular Yelp customer reviews via engine=yelp_reviews
+    if (primaryPlaceId && result.totalReviews > 0) {
+      let offset = 0;
+      while (result.reviews.length < maxReviews && offset < result.totalReviews) {
+        const revParams = new URLSearchParams({
+          engine: 'yelp_reviews',
+          place_id: primaryPlaceId,
+          start: String(offset),
+          api_key: serpApiKey,
+        });
+        const revRes = await fetch(`https://serpapi.com/search.json?${revParams.toString()}`);
+        if (!revRes.ok) break;
+        const revJson: any = await revRes.json();
+        if (revJson.error) {
+          this.logger.warn(`⚠️ [Yelp SerpApi Reviews] ${revJson.error}`);
+          break;
+        }
+
+        const rawList: any[] = Array.isArray(revJson.reviews) ? revJson.reviews : [];
+        if (rawList.length === 0) break;
+
+        for (const r of rawList) {
+          if (result.reviews.length >= maxReviews) break;
+
+          const rawText =
+            typeof r.comment === 'string'
+              ? r.comment
+              : typeof r.comment?.text === 'string'
+                ? r.comment.text
+                : '';
+          let cleanComment = ScraperHttpUtil.cleanText(rawText);
+          if (!cleanComment || cleanComment.length < 10) continue;
+
+          // Append owner reply cleanly if present so ReviewsModal formats it into a nested Owner Response box
+          const ownerReplyText =
+            r.owner_replies?.[0]?.comment ||
+            r.owner_response?.comment ||
+            '';
+          if (ownerReplyText && typeof ownerReplyText === 'string' && ownerReplyText.trim().length > 5) {
+            cleanComment = `${cleanComment}\nComment from the Owner: ${ownerReplyText.trim()}`;
+          }
+
+          const userObj = r.user || {};
+          const authorName =
+            (userObj.name || userObj.user_name || '').trim() ||
+            `Yelp Customer #${result.reviews.length + 1}`;
+          const avatarUrl = userObj.thumbnail || userObj.avatar || undefined;
+
+          result.reviews.push({
+            authorName,
+            authorAvatarUrl: avatarUrl,
+            rating: Math.min(5, Math.max(1, Math.round(Number(r.rating) || 5))),
+            comment: cleanComment,
+            reviewDate: r.date || undefined,
+            isVerified: true,
+            platform: 'YELP',
+            sourceUrl: result.profileUrl,
+          });
+        }
+
+        // One page from SerpApi returns ~49 reviews; stop if single page satisfies maxReviews or fewer returned
+        if (rawList.length < 20 || result.reviews.length >= maxReviews) {
+          break;
+        }
+        offset += rawList.length;
+      }
+    }
+
+    result.success = result.totalReviews > 0 || result.reviews.length > 0;
+    this.logger.log(
+      `✅ [Yelp SerpApi] "${matchedBiz.title}": ${result.rating}★ (${result.totalReviews} total), saved ${result.reviews.length} full reviews`,
+    );
+    return result;
   }
 
   /**

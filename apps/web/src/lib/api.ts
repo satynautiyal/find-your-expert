@@ -1,4 +1,5 @@
 import type { RooferProvider } from '@/data/mockRoofers';
+import { getMediaUrl } from './media-url';
 
 export interface GetProvidersParams {
   search?: string;
@@ -36,8 +37,66 @@ interface ApiResponse<T> {
   error?: string;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// IN-FLIGHT PROMISE DEDUPLICATION + BOUNDED TTL CLIENT CACHE
+// Eliminates duplicate bursts across Header, Footer, Page & React StrictMode
+// ═══════════════════════════════════════════════════════════════════════════
+
+const CLIENT_CACHE_TTL_MS = 60_000; // 60s in browser
+const SSR_CACHE_TTL_MS = 15_000; // 15s on server
+const MAX_CLIENT_CACHE_ENTRIES = 200;
+
+const memoryCache = new Map<string, { data: unknown; expiresAt: number }>();
+const inFlightRequests = new Map<string, Promise<unknown>>();
+
+function getCacheTtl(): number {
+  return typeof window !== 'undefined' ? CLIENT_CACHE_TTL_MS : SSR_CACHE_TTL_MS;
+}
+
+function setMemoryCache<T>(key: string, data: T, ttlMs = getCacheTtl()): void {
+  if (memoryCache.size >= MAX_CLIENT_CACHE_ENTRIES && !memoryCache.has(key)) {
+    const oldestKey = memoryCache.keys().next().value;
+    if (oldestKey !== undefined) memoryCache.delete(oldestKey);
+  }
+  memoryCache.set(key, { data, expiresAt: Date.now() + ttlMs });
+}
+
+async function cachedRequest<T>(
+  cacheKey: string,
+  fetcher: () => Promise<T>,
+  ttlMs = getCacheTtl()
+): Promise<T> {
+  const now = Date.now();
+  const cached = memoryCache.get(cacheKey);
+  if (cached && now < cached.expiresAt) {
+    return cached.data as T;
+  }
+
+  const existing = inFlightRequests.get(cacheKey);
+  if (existing) {
+    return existing as Promise<T>;
+  }
+
+  const promise = fetcher()
+    .then((result) => {
+      setMemoryCache(cacheKey, result, ttlMs);
+      return result;
+    })
+    .finally(() => {
+      inFlightRequests.delete(cacheKey);
+    });
+
+  inFlightRequests.set(cacheKey, promise);
+  return promise;
+}
+
+export function invalidateProvidersCache(): void {
+  memoryCache.clear();
+}
+
 /**
- * Robust URL builder for API requests (works in client, SSR, with full or relative URLs)
+ * Robust URL builder for API requests (works in client, SSR, with full or relative URLs).
+ * Normalizes localhost:4000 -> 127.0.0.1:4000 in development to avoid Windows IPv6 ::1 fallback delays.
  */
 function buildApiUrl(
   endpoint: string,
@@ -49,15 +108,18 @@ function buildApiUrl(
   // 1. Prefer NEXT_PUBLIC_API_URL if it's an absolute URL
   const envUrl = process.env.NEXT_PUBLIC_API_URL;
   if (envUrl && (envUrl.startsWith('http://') || envUrl.startsWith('https://'))) {
-    fullUrl = `${envUrl.replace(/\/+$/, '')}/${cleanEndpoint}`;
+    const normalizedEnv = envUrl
+      .replace(/\/+$/, '')
+      .replace('://localhost:4000', '://127.0.0.1:4000');
+    fullUrl = `${normalizedEnv}/${cleanEndpoint}`;
   } else if (process.env.NODE_ENV === 'production') {
     fullUrl = `https://api.prosvetted.com/api/${cleanEndpoint}`;
   } else if (typeof window !== 'undefined') {
     // 2. In browser: use same-origin /api rewrite
     fullUrl = `${window.location.origin}/api/${cleanEndpoint}`;
   } else {
-    // 3. Server-side fallback: directly to backend port 4000
-    fullUrl = `http://localhost:4000/api/${cleanEndpoint}`;
+    // 3. Server-side fallback: directly to backend IPv4 port 4000
+    fullUrl = `http://127.0.0.1:4000/api/${cleanEndpoint}`;
   }
 
   const url = new URL(fullUrl);
@@ -104,24 +166,24 @@ export async function fetchProviders(
 
   const url = buildApiUrl('providers', queryParams);
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    cache: 'no-store', // Always fetch fresh database records
+  return cachedRequest(`providers:list:${url}`, async () => {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+
+    const json: ApiResponse<PaginatedProvidersResponse> = await response.json();
+    if (!json.success || !json.data) {
+      throw new Error(json.error || 'Invalid response from providers API');
+    }
+
+    return json.data;
   });
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status} ${response.statusText}`);
-  }
-
-  const json: ApiResponse<PaginatedProvidersResponse> = await response.json();
-  if (!json.success || !json.data) {
-    throw new Error(json.error || 'Invalid response from providers API');
-  }
-
-  return json.data;
 }
 
 /**
@@ -130,24 +192,31 @@ export async function fetchProviders(
 export async function fetchProviderFilters(): Promise<ProviderFiltersResponse> {
   const url = buildApiUrl('providers/filters');
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    cache: 'no-store',
+  return cachedRequest('providers:filters', async () => {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch filter options: ${response.status}`);
+    }
+
+    const json: ApiResponse<ProviderFiltersResponse> = await response.json();
+    if (!json.success || !json.data) {
+      throw new Error(json.error || 'Invalid filter response from API');
+    }
+
+    // Normalize & cross-seed categories cache so Header/Footer reuse it without an extra network hop
+    if (Array.isArray(json.data.categories) && json.data.categories.length > 0) {
+      const normalizedCats = normalizeAndSortCategories(json.data.categories);
+      json.data.categories = normalizedCats;
+      setMemoryCache('providers:categories', normalizedCats);
+    }
+
+    return json.data;
   });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch filter options: ${response.status}`);
-  }
-
-  const json: ApiResponse<ProviderFiltersResponse> = await response.json();
-  if (!json.success || !json.data) {
-    throw new Error(json.error || 'Invalid filter response from API');
-  }
-
-  return json.data;
 }
 
 /**
@@ -156,24 +225,24 @@ export async function fetchProviderFilters(): Promise<ProviderFiltersResponse> {
 export async function fetchProviderBySlug(slug: string): Promise<RooferProvider> {
   const url = buildApiUrl(`providers/${encodeURIComponent(slug)}`);
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    cache: 'no-store',
+  return cachedRequest(`providers:slug:${slug}`, async () => {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Provider "${slug}" not found (HTTP ${response.status})`);
+    }
+
+    const json: ApiResponse<RooferProvider> = await response.json();
+    if (!json.success || !json.data) {
+      throw new Error(json.error || 'Failed to load provider profile');
+    }
+
+    return json.data;
   });
-
-  if (!response.ok) {
-    throw new Error(`Provider "${slug}" not found (HTTP ${response.status})`);
-  }
-
-  const json: ApiResponse<RooferProvider> = await response.json();
-  if (!json.success || !json.data) {
-    throw new Error(json.error || 'Failed to load provider profile');
-  }
-
-  return json.data;
 }
 
 export interface ScrapedReviewItemDto {
@@ -182,7 +251,7 @@ export interface ScrapedReviewItemDto {
   rating: number;
   comment: string;
   reviewDate?: string;
-  platform: 'GOOGLE' | 'YELP' | 'HOUZZ' | 'FACEBOOK';
+  platform: 'GOOGLE' | 'YELP' | 'HOMEADVISOR' | 'HOUZZ' | 'FACEBOOK';
   sourceUrl?: string;
 }
 
@@ -196,6 +265,7 @@ export interface SyncReviewsResult {
     platforms: {
       google?: { rating: number; totalReviews: number; reviews: ScrapedReviewItemDto[] };
       yelp?: { rating: number; totalReviews: number; reviews: ScrapedReviewItemDto[] };
+      homeadvisor?: { rating: number; totalReviews: number; reviews: ScrapedReviewItemDto[] };
       houzz?: { rating: number; totalReviews: number; reviews: ScrapedReviewItemDto[] };
       facebook?: { rating: number; totalReviews: number; reviews: ScrapedReviewItemDto[] };
     };
@@ -204,7 +274,7 @@ export interface SyncReviewsResult {
 }
 
 /**
- * Trigger live reviews scrape & sync from Google, Yelp and Facebook
+ * Trigger live reviews scrape & sync from Google, Yelp, HomeAdvisor and Houzz
  */
 export async function syncProviderReviews(slug: string): Promise<SyncReviewsResult> {
   const url = buildApiUrl(`providers/${encodeURIComponent(slug)}/sync-reviews`);
@@ -225,6 +295,7 @@ export async function syncProviderReviews(slug: string): Promise<SyncReviewsResu
     throw new Error(json.error || 'Failed to sync reviews from platforms');
   }
 
+  invalidateProvidersCache();
   return json.data;
 }
 
@@ -255,6 +326,7 @@ export async function generateAiSummary(slug: string): Promise<AiSummaryResult> 
     throw new Error(json.error || 'Failed to generate AI review summary');
   }
 
+  invalidateProvidersCache();
   return json.data;
 }
 
@@ -289,52 +361,13 @@ export interface CategoryItem {
   }>;
 }
 
-import { getMediaUrl } from './media-url';
-
 function resolveCategoryImage(cat: any): string {
   if (cat.image) return cat.image;
   if (cat.icon) return getMediaUrl(cat.icon);
   return '';
 }
 
-/**
- * Fetch all categories dynamically from the database with provider counts and resolved images
- */
-export async function fetchCategories(): Promise<CategoryItem[]> {
-  const url = buildApiUrl('categories');
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    cache: 'no-store',
-  });
-
-  if (!response.ok) {
-    // Try providers/categories route fallback
-    const fallbackUrl = buildApiUrl('providers/categories');
-    const fallbackRes = await fetch(fallbackUrl, { cache: 'no-store' });
-    if (!fallbackRes.ok) {
-      throw new Error(`Failed to fetch categories: HTTP ${response.status}`);
-    }
-    const json: ApiResponse<any[]> = await fallbackRes.json();
-    const items: any[] = json.data || [];
-    return items
-      .map((cat) => ({
-        ...cat,
-        image: resolveCategoryImage(cat),
-      }))
-      .sort((a, b) => {
-        const aActive = (a.providerCount || 0) > 0 ? 1 : 0;
-        const bActive = (b.providerCount || 0) > 0 ? 1 : 0;
-        if (bActive !== aActive) return bActive - aActive;
-        return a.name.localeCompare(b.name);
-      });
-  }
-
-  const json: ApiResponse<any[]> = await response.json();
-  const items: any[] = json.data || [];
-
+function normalizeAndSortCategories(items: any[]): CategoryItem[] {
   return items
     .map((cat) => ({
       ...cat,
@@ -346,6 +379,37 @@ export async function fetchCategories(): Promise<CategoryItem[]> {
       if (bActive !== aActive) return bActive - aActive;
       return a.name.localeCompare(b.name);
     });
+}
+
+/**
+ * Fetch all categories dynamically from the database with provider counts and resolved images
+ */
+export async function fetchCategories(): Promise<CategoryItem[]> {
+  return cachedRequest('providers:categories', async () => {
+    const url = buildApiUrl('categories');
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      const fallbackUrl = buildApiUrl('providers/categories');
+      const fallbackRes = await fetch(fallbackUrl, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!fallbackRes.ok) {
+        throw new Error(`Failed to fetch categories: HTTP ${response.status}`);
+      }
+      const json: ApiResponse<any[]> = await fallbackRes.json();
+      return normalizeAndSortCategories(json.data || []);
+    }
+
+    const json: ApiResponse<any[]> = await response.json();
+    return normalizeAndSortCategories(json.data || []);
+  });
 }
 
 /**

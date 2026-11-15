@@ -364,22 +364,9 @@ async function main() {
       where: { id: provider.id },
       data: {
         logoUrl: finalLogoUrl,
-        coverImageUrl: finalLogoUrl,
         ...(externalWebsite ? { websiteUrl: externalWebsite } : {}),
       },
     });
-
-    // Update ListingPhoto in DB so listing photos also have the clean logo or project photo
-    for (const listing of provider.listings) {
-      for (const photo of listing.photos) {
-        await prisma.listingPhoto.update({
-          where: { id: photo.id },
-          data: {
-            imageUrl: finalLogoUrl,
-          },
-        });
-      }
-    }
 
     // Ensure HOUZZ PlatformReview has the Houzz profileUrl saved
     if (houzzUrl) {
