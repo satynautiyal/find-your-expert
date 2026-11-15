@@ -204,17 +204,21 @@ export default function CompareModal({
                 {providers.map((p) => (
                   <td key={p.id} className="p-3">
                     <div className="space-y-1 text-[11px] font-semibold">
-                      <div className="flex items-center gap-1.5 text-gray-700">
+                      <div className="flex items-center justify-between gap-2 text-gray-700">
+                        <span>Business Confirmed</span>
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Business confirmed</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-gray-400">
+                      <div className="flex items-center justify-between gap-2 text-gray-400 select-none">
+                        <span>License &amp; Insurance Checked</span>
                         <CheckCircle2 className="w-3.5 h-3.5 text-gray-300 shrink-0" />
-                        <span>License and insurance</span>
                       </div>
-                      <div className="flex items-center gap-1.5 text-gray-700">
+                      <div className="flex items-center justify-between gap-2 text-gray-700">
+                        <span>Reputation Analyzed</span>
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Reputation &amp; Reviews analyzed</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 text-gray-700">
+                        <span>Reviews Analyzed</span>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                       </div>
                     </div>
                   </td>

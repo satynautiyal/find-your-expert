@@ -332,19 +332,19 @@ export default function ProfileHero({
                 {/* 4-Point Vetting Checklist (Tick placed after text) */}
                 <div className="space-y-2 text-xs font-semibold">
                   <div className="flex items-center justify-between gap-2 text-gray-700">
-                    <span>Business confirmed</span>
+                    <span>Business Confirmed</span>
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   </div>
                   <div className="flex items-center justify-between gap-2 text-gray-400 select-none">
-                    <span>License and insurance</span>
+                    <span>License &amp; Insurance Checked</span>
                     <CheckCircle2 className="w-4 h-4 text-gray-300 shrink-0" />
                   </div>
                   <div className="flex items-center justify-between gap-2 text-gray-700">
-                    <span>Reputation analyzed</span>
+                    <span>Reputation Analyzed</span>
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   </div>
                   <div className="flex items-center justify-between gap-2 text-gray-700">
-                    <span>Reviews analyzed</span>
+                    <span>Reviews Analyzed</span>
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   </div>
                 </div>

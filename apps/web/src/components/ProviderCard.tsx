@@ -447,22 +447,22 @@ export default function ProviderCard({
                   </div>
                 </div>
 
-                {/* 4-Point Vetting Checklist (Tick placed after text, License and insurance greyed out) */}
-                <div className="space-y-1.5 text-[11.5px] font-semibold min-w-[156px]">
-                  <div className="flex items-center justify-between gap-2 text-gray-700">
-                    <span>Business confirmed</span>
+                {/* 4-Point Vetting Checklist (Tick placed after text, License & Insurance Checked greyed out) */}
+                <div className="space-y-1.5 text-[11.5px] font-semibold min-w-[178px]">
+                  <div className="flex items-center justify-between gap-2.5 text-gray-700 whitespace-nowrap">
+                    <span>Business Confirmed</span>
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-gray-400 select-none">
-                    <span>License and insurance</span>
+                  <div className="flex items-center justify-between gap-2.5 text-gray-400 select-none whitespace-nowrap">
+                    <span>License &amp; Insurance Checked</span>
                     <CheckCircle2 className="w-3.5 h-3.5 text-gray-300 shrink-0" />
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-gray-700">
-                    <span>Reputation analyzed</span>
+                  <div className="flex items-center justify-between gap-2.5 text-gray-700 whitespace-nowrap">
+                    <span>Reputation Analyzed</span>
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-gray-700">
-                    <span>Reviews analyzed</span>
+                  <div className="flex items-center justify-between gap-2.5 text-gray-700 whitespace-nowrap">
+                    <span>Reviews Analyzed</span>
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   </div>
                 </div>
