@@ -40,69 +40,69 @@ export default function EvaluationAndCostSection({
 
   const methodologyCards = [
     {
-      icon: Star,
-      title: 'Reputation & Reviews',
-      description: 'Review sentiment & rating volume across Google, Yelp, HomeAdvisor, and Houzz.',
+      icon: Building2,
+      title: 'Business Confirmed',
+      description: `Active local business presence and project portfolio in ${currentLocation}.`,
     },
     {
-      icon: Clock,
-      title: 'NYC Experience',
-      description: `Years in business and demonstrated project portfolio in ${currentLocation}.`,
+      icon: Star,
+      title: 'Reviews Analyzed',
+      description: 'Cross-platform customer ratings across Google, Yelp, HomeAdvisor, and Houzz.',
     },
     {
       icon: ShieldCheck,
-      title: 'Verified Credentials',
-      description: 'NYC Home Improvement Contractor license and active liability insurance.',
+      title: 'Reputation Analyzed',
+      description: 'Prosvetted Audit evaluating homeowner feedback, responsiveness, and standing.',
     },
     {
-      icon: Building2,
-      title: 'Business Reliability',
-      description: 'Transparent pricing estimates, written contracts, and manufacturer warranties.',
+      icon: Clock,
+      title: 'Service Highlights',
+      description: 'Free estimates, warranty availability, and established years in business.',
     },
   ];
 
   const hiringSteps = isCabinets
     ? [
-        { step: 1, text: 'Review workshop portfolio and joinery craftsmanship' },
-        { step: 2, text: 'Verify NYC contractor license and liability insurance' },
-        { step: 3, text: 'Request detailed 3D shop drawings and material specs' },
-        { step: 4, text: 'Confirm soft-close hardware warranties (Blum, Salice)' },
-        { step: 5, text: 'Confirm in-shop spray finish vs on-site painting' },
-        { step: 6, text: 'Clarify delivery, building COI, and installation scope' },
-        { step: 7, text: 'Do not compare bids on price alone (hardwood vs MDF)' },
-      ]
+      { step: 1, text: 'Review workshop portfolio and joinery craftsmanship' },
+      { step: 2, text: 'Verify NYC contractor license and liability insurance' },
+      { step: 3, text: 'Request detailed 3D shop drawings and material specs' },
+      { step: 4, text: 'Confirm soft-close hardware warranties (Blum, Salice)' },
+      { step: 5, text: 'Confirm in-shop spray finish vs on-site painting' },
+      { step: 6, text: 'Clarify delivery, building COI, and installation scope' },
+      { step: 7, text: 'Do not compare bids on price alone (hardwood vs MDF)' },
+    ]
     : [
-        { step: 1, text: 'Verify NYC Department of Buildings license and active insurance' },
-        { step: 2, text: 'Check recent reviews from brownstone and flat roof owners' },
-        { step: 3, text: 'Ask for a detailed written estimate with line-item materials' },
-        { step: 4, text: 'Understand the manufacturer vs workmanship warranty' },
-        { step: 5, text: 'Confirm who performs the work (in-house vs subcontractor)' },
-        { step: 6, text: 'Ask about DOB scaffolding permits and disposal fees' },
-        { step: 7, text: 'Never select a roofer on lowest price alone' },
-      ];
+      { step: 1, text: 'Verify NYC Department of Buildings license and active insurance' },
+      { step: 2, text: 'Check recent reviews from brownstone and flat roof owners' },
+      { step: 3, text: 'Ask for a detailed written estimate with line-item materials' },
+      { step: 4, text: 'Understand the manufacturer vs workmanship warranty' },
+      { step: 5, text: 'Confirm who performs the work (in-house vs subcontractor)' },
+      { step: 6, text: 'Ask about DOB scaffolding permits and disposal fees' },
+      { step: 7, text: 'Never select a roofer on lowest price alone' },
+    ];
 
   const fallbackCostItems = isCabinets
     ? [
-        { project: 'Custom Bathroom Vanity (Single/Double)', cost: '$1,800 – $4,500' },
-        { project: 'Built-In Bookcases & Media Wall', cost: '$3,500 – $9,000' },
-        { project: 'Semi-Custom Kitchen Cabinetry', cost: '$8,000 – $18,000' },
-        { project: 'Full Custom Luxury Kitchen (NYC)', cost: '$18,000 – $45,000+' },
-        { project: 'Architectural Wall Paneling & Millwork', cost: '$4,500 – $14,000' },
-      ]
+      { project: 'Custom Bathroom Vanity (Single/Double)', cost: '$1,800 – $4,500' },
+      { project: 'Built-In Bookcases & Media Wall', cost: '$3,500 – $9,000' },
+      { project: 'Semi-Custom Kitchen Cabinetry', cost: '$8,000 – $18,000' },
+      { project: 'Full Custom Luxury Kitchen (NYC)', cost: '$18,000 – $45,000+' },
+      { project: 'Architectural Wall Paneling & Millwork', cost: '$4,500 – $14,000' },
+    ]
     : [
-        { project: 'Roof Inspection & Leak Diagnostics', cost: '$200 – $500' },
-        { project: 'NYC Emergency Leak Repair', cost: '$450 – $1,800' },
-        { project: 'Flat Roof SBS Modified Bitumen (1,000 sq ft)', cost: '$6,500 – $14,000' },
-        { project: 'Asphalt Shingle Roof Replacement', cost: '$7,500 – $16,000' },
-        { project: 'Full Commercial Flat Roof System', cost: '$12,000 – $35,000+' },
-      ];
+      { project: 'Roof Inspection & Leak Diagnostics', cost: '$200 – $500' },
+      { project: 'NYC Emergency Leak Repair', cost: '$450 – $1,800' },
+      { project: 'Flat Roof SBS Modified Bitumen (1,000 sq ft)', cost: '$6,500 – $14,000' },
+      { project: 'Asphalt Shingle Roof Replacement', cost: '$7,500 – $16,000' },
+      { project: 'Full Commercial Flat Roof System', cost: '$12,000 – $35,000+' },
+    ];
 
   const costItems =
     costBenchmarks && costBenchmarks.length > 0
       ? costBenchmarks.map((cb) => ({
-          project: cb.footprint ? `${cb.roofType} (${cb.footprint})` : cb.roofType,
-          cost: `$${cb.minCost.toLocaleString()} – $${cb.maxCost.toLocaleString()}`,
-        }))
+        project: cb.footprint ? `${cb.roofType} (${cb.footprint})` : cb.roofType,
+        cost: `$${cb.minCost.toLocaleString()} – $${cb.maxCost.toLocaleString()}`,
+      }))
       : fallbackCostItems;
 
   return (
@@ -116,7 +116,7 @@ export default function EvaluationAndCostSection({
               How We Evaluate {currentService} Companies in {currentLocation}
             </h2>
             <p className="mt-1.5 text-xs sm:text-[13px] text-[#5A6578] font-normal leading-relaxed">
-              We combine business licensing, multi-platform customer feedback, verified insurance credentials, and demonstrated New York project craftsmanship to help property owners compare verified professionals.
+              Every contractor&apos;s Vetted Score combines confirmed business details, multi-platform customer ratings, reputation analysis, and demonstrated New York project craftsmanship.
             </p>
           </div>
 

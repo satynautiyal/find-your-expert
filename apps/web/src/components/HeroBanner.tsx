@@ -55,8 +55,8 @@ export default function HeroBanner({
       ? selectedService
       : 'Custom Cabinets';
 
-  const isCabinets = currentService.toLowerCase().includes('cabinet') || 
-    currentService.toLowerCase().includes('shelv') || 
+  const isCabinets = currentService.toLowerCase().includes('cabinet') ||
+    currentService.toLowerCase().includes('shelv') ||
     currentService.toLowerCase().includes('closet') ||
     currentService.toLowerCase().includes('millwork');
 
@@ -89,8 +89,8 @@ export default function HeroBanner({
     companiesCount > 0
       ? companiesCount
       : stats?.totalProviders
-      ? stats.totalProviders
-      : 0;
+        ? stats.totalProviders
+        : 0;
   const displayRating = stats?.avgRating ? `${stats.avgRating}/5` : '';
 
   return (
@@ -322,7 +322,7 @@ export default function HeroBanner({
               Verified NYC Professionals
             </div>
             <div className="text-[11px] text-[#5A6578] font-medium leading-tight mt-0.5">
-              100% Licensed &amp; Insured in New York
+              Business, Reputation &amp; Reviews Audited
             </div>
           </div>
         </div>

@@ -74,7 +74,7 @@ export default function ContractorFilterToolbar({
             {currentService} in {currentLocation}
           </h2>
           <p className="mt-1 text-xs sm:text-[13px] text-[#5A6578] font-normal">
-            Compare licensed and vetted {currentService.toLowerCase()} professionals in New York by reputation, verified credentials, portfolio, and verified reviews.
+            Compare vetted {currentService.toLowerCase()} professionals in New York by Vetted Score, reputation, project portfolio, and verified customer reviews.
           </p>
         </div>
 

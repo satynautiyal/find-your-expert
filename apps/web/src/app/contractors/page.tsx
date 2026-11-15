@@ -18,6 +18,7 @@ import ServiceCategoriesSection from '@/components/ServiceCategoriesSection';
 import ContractorFilterToolbar from '@/components/ContractorFilterToolbar';
 import ProviderCard from '@/components/ProviderCard';
 import EvaluationAndCostSection from '@/components/EvaluationAndCostSection';
+import { ReviewsModal } from '@/components/contractor-profile';
 import type { RooferProvider } from '@/data/mockRoofers';
 import {
   fetchProviders,
@@ -107,6 +108,26 @@ function ContractorsDirectoryContent() {
   const [costGuideOpen, setCostGuideOpen] = useState(false);
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [selectedRooferForQuote, setSelectedRooferForQuote] = useState<RooferProvider | null>(null);
+  const [reviewsModalState, setReviewsModalState] = useState<{
+    isOpen: boolean;
+    provider: RooferProvider | null;
+    initialPlatform: string;
+  }>({
+    isOpen: false,
+    provider: null,
+    initialPlatform: 'ALL',
+  });
+
+  const handleOpenReviewsModal = useCallback(
+    (provider: RooferProvider, initialPlatform = 'ALL') => {
+      setReviewsModalState({
+        isOpen: true,
+        provider,
+        initialPlatform,
+      });
+    },
+    []
+  );
 
   // Debounce search input
   useEffect(() => {
@@ -552,6 +573,7 @@ function ContractorsDirectoryContent() {
                 onToggleCompare={handleToggleCompare}
                 onOpenQuoteModal={handleOpenQuote}
                 onOpenCostGuide={() => setCostGuideOpen(true)}
+                onOpenReviewsModal={handleOpenReviewsModal}
               />
             ))
           )}
@@ -561,7 +583,7 @@ function ContractorsDirectoryContent() {
         {!isComingSoon && (
           <div className="bg-[#0B3B2C] rounded-2xl px-5 py-5 sm:px-7 sm:py-6 shadow-sm border border-[#0F3E35] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6">
             <div className="flex items-center gap-4 sm:gap-5 min-w-0">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 bg-white/10 border border-white/15 shadow-xs">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden shrink-0 bg-white/10 border border-white/15 shadow-sm">
                 <SafeImage
                   src={activeCategoryObj?.image || '/categories/custom-cabinets.jpg'}
                   alt={currentService}
@@ -575,10 +597,10 @@ function ContractorsDirectoryContent() {
                   FOR CONTRACTORS • PROSVETTED VERIFIED NETWORK
                 </span>
                 <h3 className="text-base sm:text-lg md:text-[20px] font-bold text-white leading-snug tracking-tight">
-                  Are You a Licensed {currentService} Professional in {currentLocation}?
+                  Are You a Verified {currentService} Professional in {currentLocation}?
                 </h3>
                 <p className="text-xs sm:text-[13px] text-emerald-100/75 mt-1 font-normal leading-relaxed max-w-2xl">
-                  Join Prosvetted&apos;s verified directory to showcase your project portfolio, highlight your Trust Score, and connect directly with high-intent homeowners.
+                  Join Prosvetted&apos;s verified directory to showcase your project portfolio, highlight your Vetted Score, and connect directly with high-intent homeowners.
                 </p>
               </div>
             </div>
@@ -586,7 +608,7 @@ function ContractorsDirectoryContent() {
             <button
               type="button"
               onClick={() => handleOpenQuote()}
-              className="bg-[#DA5F2F] hover:bg-[#C44D29] text-white rounded-xl px-5 py-3 text-xs sm:text-[13px] font-bold leading-tight text-center shrink-0 transition-all cursor-pointer w-full sm:w-auto inline-flex items-center justify-center gap-2 shadow-xs"
+              className="bg-[#DA5F2F] hover:bg-[#C44D29] text-white rounded-xl px-5 py-3 text-xs sm:text-[13px] font-bold leading-tight text-center shrink-0 transition-all cursor-pointer w-full sm:w-auto inline-flex items-center justify-center gap-2 shadow-sm"
             >
               <span>Get Listed on Prosvetted</span>
               <ArrowRight className="w-3.5 h-3.5 stroke-[2.4]" />
@@ -639,6 +661,18 @@ function ContractorsDirectoryContent() {
         onClose={handleCloseQuote}
         selectedProvider={selectedRooferForQuote}
       />
+
+      {/* 11. In-App Verified Customer Reviews Modal */}
+      {reviewsModalState.provider && (
+        <ReviewsModal
+          isOpen={reviewsModalState.isOpen}
+          onClose={() =>
+            setReviewsModalState((prev) => ({ ...prev, isOpen: false }))
+          }
+          provider={reviewsModalState.provider}
+          initialPlatform={reviewsModalState.initialPlatform}
+        />
+      )}
     </div>
   );
 }

@@ -1,19 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   Heart,
   ChevronDown,
+  ChevronRight,
   MapPin,
-  Check,
+  CheckCircle2,
+  Calendar,
+  Award,
+  FileText,
   Star,
   Clock,
+  Phone,
   ArrowRight,
 } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
 import { EButton } from '@/components/EComponents';
 import SafeImage from '@/components/common/SafeImage';
+import {
+  GoogleLogo,
+  YelpLogo,
+  HomeAdvisorLogo,
+  HouzzLogo,
+} from '@/components/contractor-profile/PlatformLogos';
+import ReviewsModal from '@/components/contractor-profile/ReviewsModal';
 
 export interface ProviderCardProps {
   provider: RooferProvider;
@@ -22,6 +34,17 @@ export interface ProviderCardProps {
   onToggleCompare: (id: string) => void;
   onOpenQuoteModal: (provider: RooferProvider) => void;
   onOpenCostGuide?: () => void;
+  onOpenReviewsModal?: (provider: RooferProvider, initialPlatform?: string) => void;
+}
+
+function toTitleCaseIfUpper(text: string): string {
+  if (!text) return '';
+  if (text.length > 2 && text === text.toUpperCase()) {
+    return text
+      .toLowerCase()
+      .replace(/\b\w/g, (ch) => ch.toUpperCase());
+  }
+  return text;
 }
 
 export default function ProviderCard({
@@ -30,20 +53,54 @@ export default function ProviderCard({
   isCompared,
   onToggleCompare,
   onOpenQuoteModal,
+  onOpenReviewsModal,
 }: ProviderCardProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [cardImgIdx, setCardImgIdx] = useState(0);
+  const [localReviewsModalOpen, setLocalReviewsModalOpen] = useState(false);
+  const [localReviewsPlatform, setLocalReviewsPlatform] = useState<string>('ALL');
 
-  // Trust score calculation from DB compositeRating & yearsInBusiness
+  const handleOpenReviews = (platform = 'ALL') => {
+    if (onOpenReviewsModal) {
+      onOpenReviewsModal(provider, platform);
+    } else {
+      setLocalReviewsPlatform(platform);
+      setLocalReviewsModalOpen(true);
+    }
+  };
+
+  // Unified Vetted Score calculation matching ProfileHero (88 - 99 range)
   const ratingValue = provider.compositeRating || 0;
   const yearsValue = provider.yearsInBusiness || 0;
-  const trustScore =
-    ratingValue > 0
-      ? Math.min(
-        98,
-        Math.max(82, Math.round(ratingValue * 18.5 + (yearsValue > 10 ? 3 : 1)))
+  const vettedScore = Math.min(
+    99,
+    Math.max(
+      88,
+      Math.round(
+        (provider.compositeRating || 4.8) * 18 +
+          (provider.isLicensed ? 3 : 0) +
+          (provider.isInsured ? 3 : 0)
       )
-      : 85;
+    )
+  );
+
+  const establishedYear =
+    provider.sinceYear && provider.sinceYear > 0
+      ? provider.sinceYear
+      : yearsValue > 0
+      ? new Date().getFullYear() - yearsValue
+      : 0;
+
+  const formattedReviewsUpdated = (() => {
+    if (!provider.reviewsLastUpdatedAt) return null;
+    const parsed = new Date(provider.reviewsLastUpdatedAt);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return parsed.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  })();
 
   const isCabinets =
     provider.services?.some(
@@ -57,18 +114,15 @@ export default function ProviderCard({
     provider.tagline?.toLowerCase().includes('cabinet') ||
     provider.description?.toLowerCase().includes('cabinet');
 
-  // Show all provider services directly from DB without artificial slicing or fake dropdown icons
-  const servicesList = provider.services && provider.services.length > 0 ? provider.services : [];
+  const servicesList =
+    provider.services && provider.services.length > 0 ? provider.services : [];
 
-  // Authentic scraped business logo from DB
   const businessLogo = provider.imageUrl || '';
 
-  // Real project photos from DB (excluding business logo)
   const projectPhotos = (provider.photos || [])
     .map((p) => p.url)
     .filter((url) => Boolean(url) && url !== businessLogo);
 
-  // Candidate images for Col 1: project photos first, falling back to businessLogo if no project photos exist
   const cardCandidates = [
     ...projectPhotos,
     ...(businessLogo ? [businessLogo] : []),
@@ -76,41 +130,68 @@ export default function ProviderCard({
   const activeCardImage = cardCandidates[cardImgIdx] || '';
   const isShowingProjectPhoto = cardImgIdx < projectPhotos.length;
 
-  // Complete full address formatted from DB address, borough, city, state, and zipCode
-  const fullAddress = (() => {
-    const raw = (provider.address || '').trim().replace(/,\s*$/, '');
+  // Short city/borough label for top identity strip (matching ProfileHero)
+  const shortLocation = (() => {
     const borough =
-      provider.borough && provider.borough !== 'All' ? provider.borough.trim() : '';
-    const city = (provider.city || '').trim();
+      provider.borough &&
+      provider.borough !== 'All' &&
+      provider.borough !== 'New York City'
+        ? toTitleCaseIfUpper(provider.borough.trim())
+        : '';
+    const city = toTitleCaseIfUpper((provider.city || '').trim());
+    const state = (provider.state || 'NY').trim();
+    const locality = borough || city || 'New York';
+    return `${locality}, ${state}`;
+  })();
+
+  // Clean normalized full street address for bottom details bar
+  const fullAddress = (() => {
+    const raw = (provider.address || '')
+      .trim()
+      .replace(/[\\/\s,]+$/g, '')
+      .replace(
+        /,?\s+\bNY\b,\s*(Manhattan|Brooklyn|Queens|Bronx|Staten Island|New York),\s*NY\b/gi,
+        ', $1, NY'
+      );
+    const borough =
+      provider.borough &&
+      provider.borough !== 'All' &&
+      provider.borough !== 'New York City'
+        ? toTitleCaseIfUpper(provider.borough.trim())
+        : '';
+    const city = toTitleCaseIfUpper((provider.city || '').trim());
     const state = (provider.state || 'NY').trim();
     const zip = (provider.zipCode || '').trim();
 
     if (raw) {
       let result = raw;
-      const lower = result.toLowerCase();
-
-      if (borough && !lower.includes(borough.toLowerCase())) {
-        const firstComma = result.indexOf(',');
-        if (firstComma !== -1) {
-          result = `${result.slice(0, firstComma)}, ${borough}${result.slice(firstComma)}`;
-        } else {
-          result += `, ${borough}`;
-        }
+      const locality = city || borough;
+      if (locality && !result.toLowerCase().includes(locality.toLowerCase())) {
+        result += `, ${locality}`;
       }
-
-      if (city && !result.toLowerCase().includes(city.toLowerCase())) {
-        result += `, ${city}`;
-      }
-      if (state && !result.toLowerCase().includes(state.toLowerCase())) {
+      if (state && !new RegExp(`\\b${state}\\b`, 'i').test(result)) {
         result += `, ${state}`;
       }
       if (zip && !result.includes(zip)) {
         result += ` ${zip}`;
       }
-      return result;
+      const parts = result
+        .split(',')
+        .map((p) => toTitleCaseIfUpper(p.trim()))
+        .filter(Boolean);
+      const deduped: string[] = [];
+      for (const part of parts) {
+        if (
+          deduped.length === 0 ||
+          deduped[deduped.length - 1].toLowerCase() !== part.toLowerCase()
+        ) {
+          deduped.push(part);
+        }
+      }
+      return deduped.join(', ');
     }
 
-    const parts = [borough, city, state].filter(
+    const parts = [borough || city, state].filter(
       (val, idx, arr) =>
         Boolean(val) &&
         arr.findIndex((v) => v.toLowerCase() === val.toLowerCase()) === idx
@@ -122,522 +203,491 @@ export default function ProviderCard({
     return provider.servesArea || 'New York, NY';
   })();
 
-  // Real platform reviews from DB (only include platforms with real reviews: Google, Yelp, HomeAdvisor, Houzz)
-  const googleReview =
+  // Active verified platform ratings
+  const platformItems = [
     provider.reviews?.google && provider.reviews.google.count > 0
-      ? provider.reviews.google
-      : null;
-  const yelpReview =
+      ? {
+          key: 'GOOGLE',
+          label: 'Google',
+          rating: provider.reviews.google.rating,
+          count: provider.reviews.google.count,
+          Logo: GoogleLogo,
+        }
+      : null,
     provider.reviews?.yelp && provider.reviews.yelp.count > 0
-      ? provider.reviews.yelp
-      : null;
-  const homeAdvisorReview =
+      ? {
+          key: 'YELP',
+          label: 'Yelp',
+          rating: provider.reviews.yelp.rating,
+          count: provider.reviews.yelp.count,
+          Logo: YelpLogo,
+        }
+      : null,
     provider.reviews?.homeadvisor && provider.reviews.homeadvisor.count > 0
-      ? provider.reviews.homeadvisor
-      : null;
-  const houzzOrFbReview =
-    provider.reviews?.houzz && provider.reviews.houzz.count > 0
-      ? { ...provider.reviews.houzz, label: 'Houzz' as const }
-      : provider.reviews?.facebook && provider.reviews.facebook.count > 0
-        ? { ...provider.reviews.facebook, label: 'Facebook' as const }
-        : null;
+      ? {
+          key: 'HOMEADVISOR',
+          label: 'HomeAdvisor',
+          rating: provider.reviews.homeadvisor.rating,
+          count: provider.reviews.homeadvisor.count,
+          Logo: HomeAdvisorLogo,
+        }
+      : null,
+    (provider.reviews?.houzz?.count || provider.reviews?.facebook?.count || 0) > 0
+      ? {
+          key: 'HOUZZ',
+          label: 'Houzz',
+          rating:
+            provider.reviews.houzz?.rating ||
+            provider.reviews.facebook?.rating ||
+            0,
+          count:
+            provider.reviews.houzz?.count ||
+            provider.reviews.facebook?.count ||
+            0,
+          Logo: HouzzLogo,
+        }
+      : null,
+  ].filter((item): item is NonNullable<typeof item> => Boolean(item));
 
-  const hasPlatformReviews = Boolean(
-    googleReview || yelpReview || homeAdvisorReview || houzzOrFbReview
-  );
+  const useTwoColPlatformGrid = platformItems.length >= 3;
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-300/90 hover:border-[#0B3B2C]/45 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.14),0_4px_10px_-2px_rgba(15,23,42,0.08)] hover:shadow-[0_14px_36px_-4px_rgba(15,23,42,0.20),0_6px_14px_-2px_rgba(15,23,42,0.10)] transition-all duration-200 overflow-hidden">
-      {/* 1. Top Card Area */}
-      <div className="p-4 sm:p-5">
-        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 items-start lg:items-center justify-between">
-          {/* Left Block: Business Logo + Company Details */}
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-start flex-1 min-w-0 w-full sm:w-auto">
-            {/* Col 1: Project Photo (or Business Logo if no project photos exist) with Rank Badge */}
-            <div
-              className={`relative w-full sm:w-44 md:w-48 lg:w-52 h-44 xs:h-48 sm:h-34 rounded-xl overflow-hidden shrink-0 group border border-gray-200 shadow-xs flex items-center justify-center ${
-                isShowingProjectPhoto ? 'bg-gray-100' : 'bg-white p-3'
-              }`}
-            >
-              {activeCardImage ? (
-                <img
-                  src={activeCardImage}
-                  alt={
-                    isShowingProjectPhoto
-                      ? `${provider.name} Project`
-                      : `${provider.name} Logo`
-                  }
-                  onError={() => {
-                    if (cardImgIdx + 1 < cardCandidates.length) {
-                      setCardImgIdx((prev) => prev + 1);
-                    }
-                  }}
-                  className={`w-full h-full ${
-                    isShowingProjectPhoto ? 'object-cover' : 'object-contain'
-                  } group-hover:scale-105 transition-transform duration-300`}
-                  loading="lazy"
-                />
-              ) : (
-                <SafeImage
-                  src=""
-                  alt={provider.name}
-                  fallbackCategory={isCabinets ? 'Custom Cabinets' : 'Roofing'}
-                  fallbackTitle={provider.name}
-                  fallbackIcon="letter"
-                  className="w-full h-full object-contain"
-                />
-              )}
-
-              {/* Rank Badge on top-left of image */}
-              <div className="absolute top-2 left-2 bg-[#0B3B2C] text-white text-[11px] font-bold px-2 py-0.5 rounded-md shadow-xs z-10">
-                #{rank}
-              </div>
-
-              {/* Mobile Quick-Save Heart */}
-              <button
-                type="button"
-                onClick={() => onToggleCompare(provider.id)}
-                className="sm:hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-white/95 backdrop-blur-xs flex items-center justify-center shadow-xs border border-gray-200 z-10 cursor-pointer active:scale-90 transition-transform"
-                title={isCompared ? 'Saved' : 'Save'}
+    <>
+      <div className="bg-white rounded-2xl border border-gray-300/90 hover:border-[#0B3B2C]/45 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.12),0_4px_10px_-2px_rgba(15,23,42,0.06)] hover:shadow-[0_14px_36px_-4px_rgba(15,23,42,0.18),0_6px_14px_-2px_rgba(15,23,42,0.09)] transition-all duration-200 overflow-hidden">
+        {/* 1. Top Card Area */}
+        <div className="p-4 sm:p-5">
+          <div className="flex flex-col lg:flex-row gap-4 sm:gap-5 items-stretch justify-between">
+            {/* Left Block: Media Thumbnail + Company Identity & Highlights */}
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-stretch flex-1 min-w-0 w-full sm:w-auto">
+              {/* Col 1: Project Photo (stretches evenly on desktop so zero awkward gap below image) */}
+              <Link
+                href={`/contractors/${provider.slug}`}
+                className={`relative w-full sm:w-44 md:w-48 lg:w-48 xl:w-52 h-44 xs:h-48 sm:h-auto sm:min-h-[152px] rounded-xl overflow-hidden shrink-0 group border border-gray-200 shadow-sm flex items-center justify-center ${
+                  isShowingProjectPhoto ? 'bg-gray-100' : 'bg-white p-3'
+                }`}
               >
-                <Heart
-                  className={`w-4 h-4 text-[#DA5F2F] ${isCompared ? 'fill-[#DA5F2F]' : ''
-                    }`}
-                />
-              </button>
-            </div>
-
-            {/* Col 2: Business Info & Ratings */}
-            <div className="space-y-1.5 min-w-0 flex-1 w-full">
-              {/* Company Logo + Name */}
-              <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-                {provider.imageUrl ? (
-                  <div className="h-11 sm:h-12 min-w-[44px] sm:min-w-[48px] max-w-[160px] sm:max-w-[180px] px-2.5 py-1 rounded-xl bg-white border border-gray-200 shadow-xs flex items-center justify-center shrink-0">
-                    <SafeImage
-                      src={provider.imageUrl}
-                      alt={provider.name}
-                      fallbackCategory={isCabinets ? 'Custom Cabinets' : 'Roofing'}
-                      fallbackTitle={provider.name}
-                      className="max-h-9 sm:max-h-10 w-auto max-w-[144px] sm:max-w-[164px] object-contain"
-                    />
-                  </div>
+                {activeCardImage ? (
+                  <img
+                    src={activeCardImage}
+                    alt={
+                      isShowingProjectPhoto
+                        ? `${provider.name} Project`
+                        : `${provider.name} Logo`
+                    }
+                    onError={() => {
+                      if (cardImgIdx + 1 < cardCandidates.length) {
+                        setCardImgIdx((prev) => prev + 1);
+                      }
+                    }}
+                    className={`w-full h-full ${
+                      isShowingProjectPhoto
+                        ? 'object-cover sm:absolute sm:inset-0'
+                        : 'object-contain max-h-32'
+                    } group-hover:scale-105 transition-transform duration-300`}
+                    loading="lazy"
+                  />
                 ) : (
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-[#EBF3F1] text-[#0F3E35] flex items-center justify-center shrink-0 font-bold text-sm border border-[#0B3B2C]/15">
-                    {provider.name.charAt(0)}
-                  </div>
+                  <SafeImage
+                    src=""
+                    alt={provider.name}
+                    fallbackCategory={isCabinets ? 'Custom Cabinets' : 'Roofing'}
+                    fallbackTitle={provider.name}
+                    fallbackIcon="letter"
+                    className="w-full h-full object-contain"
+                  />
                 )}
 
-                <Link
-                  href={`/contractors/${provider.slug}`}
-                  className="text-base sm:text-lg font-extrabold text-[#111827] hover:text-[#DA5F2F] transition-colors leading-tight truncate"
-                >
-                  {provider.name}
-                </Link>
-              </div>
-
-              {/* Verified Professional Pill */}
-              <div className="pt-0.5">
-                <span className="inline-flex items-center gap-1 bg-[#EBF7F2] text-[#0B3B2C] text-[11px] font-semibold px-2.5 py-0.5 rounded-full">
-                  <Check className="w-3 h-3 stroke-[2.5]" />
-                  <span>Verified Professional</span>
-                </span>
-              </div>
-
-              {/* Rating Stars + Reviews Count */}
-              {ratingValue > 0 && (
-                <div className="flex items-center gap-2 pt-0.5">
-                  <div className="flex items-center gap-0.5">
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star
-                        key={s}
-                        className={`w-3.5 h-3.5 ${s <= Math.round(ratingValue)
-                          ? 'text-[#DA5F2F] fill-[#DA5F2F]'
-                          : 'text-gray-200 fill-gray-200'
-                          }`}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-xs font-bold text-[#111827]">
-                    {ratingValue.toFixed(1)}
-                  </span>
-                  <span className="text-xs text-[#5A6578]">
-                    {provider.totalReviews || 0} reviews
-                  </span>
+                {/* Rank Badge on top-left of image */}
+                <div className="absolute top-2 left-2 bg-[#0B3B2C] text-white text-[11px] font-bold px-2 py-0.5 rounded-md shadow-sm z-10">
+                  #{rank}
                 </div>
-              )}
 
-              {/* Direct Service Chips (All provider services shown directly, no dropdown icon) */}
-              {servicesList.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                  {servicesList.map((service) => (
-                    <span
-                      key={service}
-                      className="bg-[#F3F4F6] text-[#374151] border border-gray-200/90 text-[11px] font-medium px-2.5 py-1 rounded-md"
-                    >
-                      {service}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Metadata: Years in business + Full Address */}
-              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-[#5A6578] pt-1 font-normal">
-                {yearsValue > 0 && (
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <Clock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                    <span>{yearsValue}+ years in business</span>
-                  </div>
-                )}
-                {fullAddress && (
-                  <div className="flex items-start gap-1.5 min-w-0">
-                    <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
-                    <span className="break-words leading-snug">{fullAddress}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Right Block: Trust Score + Checklist + Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6 pt-3 lg:pt-0 border-t lg:border-t-0 border-gray-200 w-full lg:w-auto shrink-0">
-            {/* Trust Score & Checklist */}
-            <div className="flex items-center justify-between sm:justify-start gap-4">
-              {/* Trust Score Box */}
-              <div className="bg-[#EBF7F2] border border-[#0B3B2C]/15 rounded-xl px-4 py-2.5 text-center shrink-0 min-w-[76px]">
-                <div className="text-[10px] font-bold text-[#0B3B2C]/75 capitalize tracking-tight">
-                  Trust Score
-                </div>
-                <div className="text-3xl font-black text-[#0B3B2C] leading-none mt-1">
-                  {trustScore}
-                </div>
-              </div>
-
-              {/* Verified Checklist */}
-              <div className="space-y-1.5 text-xs text-[#374151]">
-                <div className="flex items-center gap-2 font-medium">
-                  <Check className="w-3.5 h-3.5 text-[#0B3B2C] stroke-[2.5]" />
-                  <span>License Verified</span>
-                </div>
-                <div className="flex items-center gap-2 font-medium">
-                  <Check className="w-3.5 h-3.5 text-[#0B3B2C] stroke-[2.5]" />
-                  <span>Insurance Verified</span>
-                </div>
-                <div className="flex items-center gap-2 font-medium">
-                  <Check className="w-3.5 h-3.5 text-[#0B3B2C] stroke-[2.5]" />
-                  <span>Free Estimates</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons & Expand Chevron */}
-            <div className="flex items-start gap-2 pt-3 sm:pt-0 pl-0 sm:pl-4 border-t sm:border-t-0 sm:border-l border-gray-200 w-full sm:w-auto">
-              <div className="w-full sm:w-32 md:w-36 grid grid-cols-2 sm:flex sm:flex-col gap-2">
-                <EButton
-                  variant="primary"
-                  size="md"
-                  className="w-full font-semibold justify-center"
-                  onClick={() => onOpenQuoteModal(provider)}
-                >
-                  Get a Quote
-                </EButton>
-
-                <Link href={`/contractors/${provider.slug}`} className="w-full">
-                  <EButton
-                    variant="secondary"
-                    size="md"
-                    className="w-full font-semibold justify-center"
-                  >
-                    View Profile
-                  </EButton>
-                </Link>
-
-                {/* Desktop Save Button */}
+                {/* Mobile Quick-Save Heart */}
                 <button
                   type="button"
-                  onClick={() => onToggleCompare(provider.id)}
-                  className="hidden sm:inline-flex items-center justify-center gap-1.5 text-xs text-[#111827] hover:border-gray-300 border border-gray-200 bg-white rounded-lg py-1.5 px-3 transition-colors cursor-pointer font-medium shadow-2xs"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggleCompare(provider.id);
+                  }}
+                  className="sm:hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center shadow-sm border border-gray-200 z-10 cursor-pointer active:scale-90 transition-transform"
+                  title={isCompared ? 'Saved' : 'Save'}
                 >
                   <Heart
-                    className={`w-3.5 h-3.5 text-[#DA5F2F] ${isCompared ? 'fill-[#DA5F2F]' : ''
-                      }`}
-                  />
-                  <span>Save</span>
-                </button>
-              </div>
-
-              {/* Chevron Collapse Toggle on far right */}
-              <button
-                type="button"
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="text-gray-400 hover:text-gray-600 p-1 transition-colors hidden sm:block cursor-pointer"
-                title={isExpanded ? 'Collapse' : 'Expand'}
-              >
-                <ChevronDown
-                  className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''
+                    className={`w-4 h-4 text-[#DA5F2F] ${
+                      isCompared ? 'fill-[#DA5F2F]' : ''
                     }`}
-                />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+                  />
+                </button>
+              </Link>
 
-      {/* Mobile Toggle Button for Details */}
-      <button
-        type="button"
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="sm:hidden w-full py-2.5 px-4 border-t border-gray-200 bg-gray-50/80 hover:bg-gray-100/70 flex items-center justify-center gap-1.5 text-xs text-gray-700 font-semibold transition-colors"
-      >
-        <span>
-          {isExpanded
-            ? 'Hide company details & reviews'
-            : 'Show company details & reviews'}
-        </span>
-        <ChevronDown
-          className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''
-            }`}
-        />
-      </button>
+              {/* Col 2: Business Identity, Pills, Ratings & Services */}
+              <div className="flex flex-col justify-between gap-2 min-w-0 flex-1 w-full py-0.5">
+                <div className="space-y-2">
+                  {/* Company Logo + Name */}
+                  <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
+                    {provider.imageUrl ? (
+                      <div className="h-10 sm:h-11 min-w-[42px] sm:min-w-[46px] max-w-[150px] sm:max-w-[170px] px-2 py-1 rounded-xl bg-white border border-gray-200 shadow-sm flex items-center justify-center shrink-0">
+                        <SafeImage
+                          src={provider.imageUrl}
+                          alt={provider.name}
+                          fallbackCategory={
+                            isCabinets ? 'Custom Cabinets' : 'Roofing'
+                          }
+                          fallbackTitle={provider.name}
+                          className="max-h-8 sm:max-h-9 w-auto max-w-[134px] sm:max-w-[154px] object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#EBF3F1] text-[#0F3E35] flex items-center justify-center shrink-0 font-bold text-sm border border-[#0B3B2C]/15">
+                        {provider.name.charAt(0)}
+                      </div>
+                    )}
 
-      {/* 2. Expandable Bottom Details: About, Address + Mini Map, Web Reviews */}
-      {isExpanded && (
-        <div className="border-t border-gray-200 bg-[#FCFDFB] p-4 sm:p-5">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-            {/* Col 1: About the Contractor */}
-            <div className="space-y-1.5 pb-4 md:pb-0 pr-0 md:pr-5 border-b md:border-b-0 md:border-r border-gray-200">
-              <h3 className="text-xs font-bold text-[#111827]">
-                About {provider.name}
-              </h3>
-              <p className="text-[11px] sm:text-xs text-[#5A6578] leading-relaxed line-clamp-3">
-                {provider.description || provider.tagline || 'Verified contractor profile.'}
-              </p>
-              <div className="pt-0.5">
-                <Link
-                  href={`/contractors/${provider.slug}`}
-                  className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-[#DA5F2F] hover:underline"
-                >
-                  <span>Read more</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
+                    <Link
+                      href={`/contractors/${provider.slug}`}
+                      className="text-base sm:text-lg font-extrabold text-[#111827] hover:text-[#DA5F2F] transition-colors leading-tight truncate"
+                    >
+                      {provider.name}
+                    </Link>
+                  </div>
+
+                  {/* Since {Year} + Verified Professional + Short Hub Location */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {establishedYear > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-100 text-gray-700 text-[11px] font-semibold border border-gray-200/90">
+                        <Calendar className="w-3 h-3 text-gray-500 shrink-0" />
+                        <span>Since {establishedYear}</span>
+                      </span>
+                    )}
+
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200/80">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                      <span>Verified Professional</span>
+                    </span>
+
+                    <span className="inline-flex items-center gap-1 text-[11.5px] font-medium text-gray-500 pl-0.5">
+                      <MapPin className="w-3 h-3 text-gray-400 shrink-0" />
+                      <span>{shortLocation}</span>
+                    </span>
+                  </div>
+
+                  {/* Rating Stars + Verified Reviews Count + Warranty Available & Free Estimates */}
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                    {ratingValue > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Star
+                              key={s}
+                              className={`w-3.5 h-3.5 ${
+                                s <= Math.round(ratingValue)
+                                  ? 'text-amber-400 fill-amber-400'
+                                  : 'text-gray-200 fill-gray-200'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-xs font-black text-gray-950">
+                          {ratingValue.toFixed(1)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenReviews('ALL')}
+                          className="text-xs font-semibold text-gray-500 hover:text-primary hover:underline transition-colors cursor-pointer"
+                        >
+                          ({provider.totalReviews || 0} verified reviews)
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50/70 border border-amber-200/60 text-[11px] font-semibold text-gray-800">
+                        <Award className="w-3 h-3 text-amber-600 shrink-0" />
+                        <span>Warranty Available</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50/70 border border-blue-200/60 text-[11px] font-semibold text-gray-800">
+                        <FileText className="w-3 h-3 text-blue-600 shrink-0" />
+                        <span>Free Estimates</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Direct Service Chips */}
+                {servicesList.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    {servicesList.map((service) => (
+                      <span
+                        key={service}
+                        className="bg-[#F3F4F6] text-[#374151] border border-gray-200/90 text-[11px] font-medium px-2.5 py-0.5 rounded-md"
+                      >
+                        {service}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Col 2: Address & Realistic Mini Map Graphic */}
-            <div className="space-y-1.5 pb-4 md:pb-0 px-0 md:px-2 md:pr-5 border-b md:border-b-0 md:border-r border-gray-200">
-              <h3 className="text-xs font-bold text-[#111827]">Address</h3>
-              <div className="flex items-start gap-1.5 text-[11px] sm:text-xs text-[#5A6578]">
-                <MapPin className="w-3.5 h-3.5 text-[#DA5F2F] shrink-0 mt-0.5" />
-                <span className="break-words leading-snug">{fullAddress}</span>
+            {/* Right Block: Vetted Score + 4-Point Audit Checklist + Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-3 lg:pt-0 border-t lg:border-t-0 border-gray-200 w-full lg:w-auto shrink-0">
+              {/* Vetted Score & 4-Point Audit Checklist */}
+              <div className="flex items-center justify-between sm:justify-start gap-3.5 bg-[#F8FAFC] border border-gray-200/90 rounded-xl px-3.5 py-3 h-full">
+                {/* Vetted Score Box */}
+                <div className="bg-[#EBF7F2] border border-[#0B3B2C]/15 rounded-xl px-3 py-2.5 text-center shrink-0 min-w-[84px]">
+                  <div className="text-[9.5px] font-extrabold text-[#0B3B2C]/80 uppercase tracking-wider leading-tight">
+                    Vetted Score
+                  </div>
+                  <div className="text-3xl font-black text-[#0B3B2C] leading-none mt-1">
+                    {vettedScore}
+                  </div>
+                  <div className="text-[9.5px] font-medium text-[#0B3B2C]/65 leading-tight mt-1">
+                    Prosvetted Audit
+                  </div>
+                </div>
+
+                {/* 4-Point Vetting Checklist (Tick placed after text, License and insurance greyed out) */}
+                <div className="space-y-1.5 text-[11.5px] font-semibold min-w-[156px]">
+                  <div className="flex items-center justify-between gap-2 text-gray-700">
+                    <span>Business confirmed</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-gray-400 select-none">
+                    <span>License and insurance</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-gray-700">
+                    <span>Reputation analyzed</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-gray-700">
+                    <span>Reviews analyzed</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  </div>
+                </div>
               </div>
 
-              <div className="h-16 w-full max-w-[220px] rounded-xl overflow-hidden relative border border-gray-200 bg-[#EAE9E6] shadow-2xs">
-                <img
-                  src="/mini-map-tile.svg"
-                  alt="Location Map Preview"
-                  className="w-full h-full object-cover select-none pointer-events-none"
-                />
-              </div>
-            </div>
+              {/* Action Buttons & Single Clean Expand Chevron */}
+              <div className="flex items-center gap-2 pt-3 sm:pt-0 pl-0 sm:pl-3.5 border-t sm:border-t-0 sm:border-l border-gray-200 w-full sm:w-auto h-full">
+                <div className="w-full sm:w-32 md:w-36 grid grid-cols-2 sm:flex sm:flex-col gap-2">
+                  <EButton
+                    variant="primary"
+                    size="md"
+                    className="w-full font-semibold justify-center"
+                    onClick={() => onOpenQuoteModal(provider)}
+                  >
+                    Get a Quote
+                  </EButton>
 
-            {/* Col 3: Reviews from around the web */}
-            <div className="space-y-2 pl-0 md:pl-1 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-bold text-[#111827]">
-                    Reviews from around the web
-                  </h3>
+                  <Link href={`/contractors/${provider.slug}`} className="w-full">
+                    <EButton
+                      variant="secondary"
+                      size="md"
+                      className="w-full font-semibold justify-center"
+                    >
+                      View Profile
+                    </EButton>
+                  </Link>
+
+                  {/* Desktop Save Button */}
                   <button
                     type="button"
-                    onClick={() => setIsExpanded(!isExpanded)}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                    onClick={() => onToggleCompare(provider.id)}
+                    className="hidden sm:inline-flex items-center justify-center gap-1.5 text-xs text-[#111827] hover:border-gray-300 border border-gray-200 bg-white rounded-lg py-1.5 px-3 transition-colors cursor-pointer font-medium shadow-sm"
                   >
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''
-                        }`}
+                    <Heart
+                      className={`w-3.5 h-3.5 text-[#DA5F2F] ${
+                        isCompared ? 'fill-[#DA5F2F]' : ''
+                      }`}
                     />
+                    <span>{isCompared ? 'Saved' : 'Save'}</span>
                   </button>
                 </div>
 
-                {hasPlatformReviews ? (
-                  <div className="space-y-2 text-xs">
-                    {/* 1. Google */}
-                    {googleReview && (
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0">
-                            <path
-                              fill="#4285F4"
-                              d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-                            />
-                            <path
-                              fill="#34A853"
-                              d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"
-                            />
-                            <path
-                              fill="#FBBC05"
-                              d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-                            />
-                            <path
-                              fill="#EA4335"
-                              d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                            />
-                          </svg>
-                          <span className="font-medium text-[#374151] w-[78px] truncate">
-                            Google
-                          </span>
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            {[1, 2, 3, 4, 5].map((i) => (
-                              <Star
-                                key={i}
-                                className={`w-3 h-3 ${i <= Math.round(googleReview.rating)
-                                  ? 'text-[#DA5F2F] fill-[#DA5F2F]'
-                                  : 'text-gray-200 fill-gray-200'
-                                  }`}
-                              />
-                            ))}
-                          </div>
-                          <span className="font-bold text-[#111827] text-xs shrink-0">
-                            {googleReview.rating.toFixed(1)}
-                          </span>
-                        </div>
-                        <span className="text-xs text-[#5A6578] shrink-0">
-                          {googleReview.count} reviews
-                        </span>
-                      </div>
-                    )}
-
-                    {/* 2. Yelp */}
-                    {yelpReview && (
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0">
-                            <rect width="24" height="24" rx="4" fill="#D32323" />
-                            <path
-                              fill="#FFFFFF"
-                              d="M12 12.8l2.6 3.6c.2.3.6.4.9.2l1.2-.8c.3-.2.4-.6.2-.9l-3.1-3.2 4.2-1.3c.4-.1.6-.5.5-.9l-.4-1.4c-.1-.4-.5-.6-.9-.5l-4.2 1.7 1.1-4.3c.1-.4-.2-.8-.6-.9l-1.4-.4c-.4-.1-.8.2-.9.6l-1.5 4.2-3.2-3c-.3-.3-.7-.2-.9.1l-.9 1.1c-.2.3-.2.7.1.9l3.5 2.6-4.3 1.2c-.4.1-.6.5-.5.9l.4 1.4c.1.4.5.6.9.5l4.3-1.4-1.2 4.3c-.1.4.2.8.6.9l1.4.4c.4.1.8-.2.9-.6l1.3-4.3z"
-                            />
-                          </svg>
-                          <span className="font-medium text-[#374151] w-[78px] truncate">
-                            Yelp
-                          </span>
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            {[1, 2, 3, 4, 5].map((i) => (
-                              <Star
-                                key={i}
-                                className={`w-3 h-3 ${i <= Math.round(yelpReview.rating)
-                                  ? 'text-[#DA5F2F] fill-[#DA5F2F]'
-                                  : 'text-gray-200 fill-gray-200'
-                                  }`}
-                              />
-                            ))}
-                          </div>
-                          <span className="font-bold text-[#111827] text-xs shrink-0">
-                            {yelpReview.rating.toFixed(1)}
-                          </span>
-                        </div>
-                        <span className="text-xs text-[#5A6578] shrink-0">
-                          {yelpReview.count} reviews
-                        </span>
-                      </div>
-                    )}
-
-                    {/* 3. HomeAdvisor */}
-                    {homeAdvisorReview && (
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0">
-                            <rect width="24" height="24" rx="4" fill="#F68B1E" />
-                            <path
-                              d="M12 4.8L4.8 10.8h2.2v7.6h10v-7.6h2.2L12 4.8z"
-                              fill="#FFFFFF"
-                            />
-                            <path
-                              d="M10.8 14.9l-1.9-1.9-1.1 1.1 3 3 5.2-5.2-1.1-1.1-4.1 4.1z"
-                              fill="#F68B1E"
-                            />
-                          </svg>
-                          <span className="font-medium text-[#374151] w-[78px] truncate">
-                            HomeAdvisor
-                          </span>
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            {[1, 2, 3, 4, 5].map((i) => (
-                              <Star
-                                key={i}
-                                className={`w-3 h-3 ${
-                                  i <= Math.round(homeAdvisorReview.rating)
-                                    ? 'text-[#DA5F2F] fill-[#DA5F2F]'
-                                    : 'text-gray-200 fill-gray-200'
-                                }`}
-                              />
-                            ))}
-                          </div>
-                          <span className="font-bold text-[#111827] text-xs shrink-0">
-                            {homeAdvisorReview.rating.toFixed(1)}
-                          </span>
-                        </div>
-                        <span className="text-xs text-[#5A6578] shrink-0">
-                          {homeAdvisorReview.count} reviews
-                        </span>
-                      </div>
-                    )}
-
-                    {/* 4. Houzz */}
-                    {houzzOrFbReview && (
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0">
-                            <rect width="24" height="24" rx="4" fill="#3FB87F" />
-                            <path
-                              fill="#FFFFFF"
-                              d="M7 6h3v4.5h4V6h3v12h-3v-4.5h-4V18H7V6z"
-                            />
-                          </svg>
-                          <span className="font-medium text-[#374151] w-[78px] truncate">
-                            {houzzOrFbReview.label}
-                          </span>
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            {[1, 2, 3, 4, 5].map((i) => (
-                              <Star
-                                key={i}
-                                className={`w-3 h-3 ${i <= Math.round(houzzOrFbReview.rating)
-                                  ? 'text-[#DA5F2F] fill-[#DA5F2F]'
-                                  : 'text-gray-200 fill-gray-200'
-                                  }`}
-                              />
-                            ))}
-                          </div>
-                          <span className="font-bold text-[#111827] text-xs shrink-0">
-                            {houzzOrFbReview.rating.toFixed(1)}
-                          </span>
-                        </div>
-                        <span className="text-xs text-[#5A6578] shrink-0">
-                          {houzzOrFbReview.count} reviews
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-[#5A6578]">
-                    {provider.totalReviews > 0
-                      ? `${provider.totalReviews} verified reviews (${ratingValue.toFixed(1)} avg rating)`
-                      : 'Verified contractor profile'}
-                  </p>
-                )}
-              </div>
-
-              {/* View all reviews link */}
-              <div className="text-right pt-1">
-                <Link
-                  href={`/contractors/${provider.slug}`}
-                  className="text-xs font-semibold text-[#DA5F2F] hover:underline"
+                {/* Single Chevron Collapse Toggle on far right */}
+                <button
+                  type="button"
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  className="text-gray-400 hover:text-gray-600 p-1 self-start transition-colors hidden sm:block cursor-pointer"
+                  title={isExpanded ? 'Collapse details' : 'Expand details'}
                 >
-                  View all reviews &rarr;
-                </Link>
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform duration-200 ${
+                      isExpanded ? 'rotate-180' : ''
+                    }`}
+                  />
+                </button>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Mobile Toggle Button for Details */}
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="sm:hidden w-full py-2.5 px-4 border-t border-gray-200 bg-gray-50/80 hover:bg-gray-100/70 flex items-center justify-center gap-1.5 text-xs text-gray-700 font-semibold transition-colors cursor-pointer"
+        >
+          <span>
+            {isExpanded
+              ? 'Hide company details & ratings'
+              : 'Show company details & ratings'}
+          </span>
+          <ChevronDown
+            className={`w-3.5 h-3.5 transition-transform duration-200 ${
+              isExpanded ? 'rotate-180' : ''
+            }`}
+          />
+        </button>
+
+        {/* 2. Symmetrical 2-Column Bottom Strip: Company Overview & Location | Customer Ratings */}
+        {isExpanded && (
+          <div className="border-t border-gray-200/90 bg-[#F8FAFC]/85 px-4 sm:px-5 py-3.5">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-stretch">
+              {/* Left Column (7 cols): About + Inline Location & Direct Phone Footer */}
+              <div className="lg:col-span-7 flex flex-col justify-between gap-2.5 pb-3.5 lg:pb-0 lg:pr-6 border-b lg:border-b-0 lg:border-r border-gray-200/90">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-xs font-bold text-[#111827]">
+                      About {provider.name}
+                    </h3>
+                    <Link
+                      href={`/contractors/${provider.slug}`}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#DA5F2F] hover:underline shrink-0"
+                    >
+                      <span>Read more</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </Link>
+                  </div>
+
+                  <p className="text-xs text-[#5A6578] leading-relaxed line-clamp-2">
+                    {provider.description ||
+                      provider.tagline ||
+                      'Verified contractor profile serving New York homeowners.'}
+                  </p>
+                </div>
+
+                {/* Crisp Location + Direct Phone Strip (No duplicate map or wasted column) */}
+                <div className="pt-2 border-t border-gray-200/70 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-gray-600">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <MapPin className="w-3.5 h-3.5 text-[#DA5F2F] shrink-0" />
+                    <span className="truncate font-medium text-gray-700">
+                      {fullAddress}
+                    </span>
+                  </div>
+
+                  {provider.phone && (
+                    <a
+                      href={`tel:${provider.phone.replace(/\D/g, '')}`}
+                      className="inline-flex items-center gap-1.5 font-semibold text-gray-700 hover:text-primary transition-colors shrink-0"
+                    >
+                      <Phone className="w-3 h-3 text-gray-400 shrink-0" />
+                      <span>{provider.displayPhone || provider.phone}</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column (5 cols): Balanced Customer Ratings Pill Grid */}
+              <div className="lg:col-span-5 flex flex-col justify-between gap-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xs font-bold text-[#111827]">
+                      Customer Ratings
+                    </h3>
+                    {formattedReviewsUpdated && (
+                      <span className="text-[11px] text-gray-400 font-medium inline-flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-gray-400 shrink-0" />
+                        <span>Updated {formattedReviewsUpdated}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenReviews('ALL')}
+                    className="text-xs font-bold text-[#EA580C] hover:text-[#D94F0A] inline-flex items-center gap-0.5 transition-colors cursor-pointer shrink-0"
+                  >
+                    <span>See all reviews</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {platformItems.length > 0 ? (
+                  <div
+                    className={
+                      useTwoColPlatformGrid
+                        ? 'grid grid-cols-1 sm:grid-cols-2 gap-2'
+                        : 'grid grid-cols-1 gap-1.5'
+                    }
+                  >
+                    {platformItems.map((item) => {
+                      const LogoComponent = item.Logo;
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => handleOpenReviews(item.key)}
+                          className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-white border border-gray-200/90 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer text-left"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <LogoComponent className="w-4 h-4 shrink-0" />
+                            <span className="text-xs font-semibold text-gray-800 truncate">
+                              {item.label}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0 text-xs">
+                            {useTwoColPlatformGrid ? (
+                              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 shrink-0" />
+                            ) : (
+                              <div className="flex items-center text-amber-500 mr-0.5">
+                                {[1, 2, 3, 4, 5].map((i) => (
+                                  <Star
+                                    key={i}
+                                    className={`w-3 h-3 ${
+                                      i <= Math.round(item.rating)
+                                        ? 'fill-amber-400 text-amber-400'
+                                        : 'fill-gray-200 text-gray-200'
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            <span className="font-bold text-gray-950">
+                              {item.rating.toFixed(1)}
+                            </span>
+                            <span className="text-gray-400 text-[11px]">
+                              ({item.count})
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="px-3 py-2.5 rounded-lg bg-white border border-gray-200/90 text-xs text-gray-500">
+                    {provider.totalReviews > 0
+                      ? `${provider.totalReviews} verified reviews (${ratingValue.toFixed(1)} avg rating)`
+                      : 'Verified contractor profile'}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Fallback local ReviewsModal if parent does not manage a shared modal */}
+      {!onOpenReviewsModal && localReviewsModalOpen && (
+        <ReviewsModal
+          isOpen={localReviewsModalOpen}
+          onClose={() => setLocalReviewsModalOpen(false)}
+          provider={provider}
+          initialPlatform={localReviewsPlatform}
+        />
       )}
-    </div>
+    </>
   );
 }

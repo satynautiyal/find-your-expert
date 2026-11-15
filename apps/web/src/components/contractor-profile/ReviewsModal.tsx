@@ -11,7 +11,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
-import type { ScrapedReviewItemDto } from '@/lib/api';
+import { fetchProviderBySlug, type ScrapedReviewItemDto } from '@/lib/api';
 import {
   GoogleLogo,
   YelpLogo,
@@ -108,6 +108,12 @@ export default function ReviewsModal({
   const [selectedPlatform, setSelectedPlatform] = useState<string>(initialPlatform);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'RELEVANT' | 'HIGHEST' | 'LOWEST'>('RELEVANT');
+  const [lazyScrapedReviews, setLazyScrapedReviews] = useState<ScrapedReviewItemDto[]>([]);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+
+  useEffect(() => {
+    setLazyScrapedReviews([]);
+  }, [provider.slug]);
 
   useEffect(() => {
     if (isOpen) {
@@ -116,6 +122,31 @@ export default function ReviewsModal({
       setSortBy('RELEVANT');
     }
   }, [isOpen, initialPlatform]);
+
+  // Lazy-fetch full scraped reviews when opened from listing/category cards where scrapedReviews aren't preloaded
+  useEffect(() => {
+    if (!isOpen) return;
+    if (scrapedReviews && scrapedReviews.length > 0) return;
+    if (provider.scrapedReviews && provider.scrapedReviews.length > 0) return;
+    if (!provider.slug) return;
+
+    let cancelled = false;
+    setIsLoadingReviews(true);
+    fetchProviderBySlug(provider.slug)
+      .then((fullProvider) => {
+        if (!cancelled && fullProvider?.scrapedReviews) {
+          setLazyScrapedReviews(fullProvider.scrapedReviews as ScrapedReviewItemDto[]);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setIsLoadingReviews(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, provider.slug, provider.scrapedReviews, scrapedReviews]);
 
   // Body scroll lock & Escape handler
   useEffect(() => {
@@ -145,9 +176,17 @@ export default function ReviewsModal({
     });
   }, [provider.reviewsLastUpdatedAt]);
 
+  const effectiveScrapedReviews = useMemo(() => {
+    if (scrapedReviews && scrapedReviews.length > 0) return scrapedReviews;
+    if (provider.scrapedReviews && provider.scrapedReviews.length > 0) {
+      return provider.scrapedReviews as ScrapedReviewItemDto[];
+    }
+    return lazyScrapedReviews;
+  }, [scrapedReviews, provider.scrapedReviews, lazyScrapedReviews]);
+
   const normalizedReviews = useMemo(
     () =>
-      (scrapedReviews || []).map((sr) => {
+      (effectiveScrapedReviews || []).map((sr) => {
         const parsed = parseReviewCommentAndOwnerReply(
           sr.comment,
           provider.name,
@@ -163,7 +202,7 @@ export default function ReviewsModal({
           ownerReply: parsed.ownerReply,
         };
       }),
-    [scrapedReviews, provider.name]
+    [effectiveScrapedReviews, provider.name]
   );
 
   const activePlatformSummaries = useMemo(
@@ -492,7 +531,32 @@ export default function ReviewsModal({
 
             {/* Scrollable Reviews List */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-              {visibleReviews.length > 0 ? (
+              {isLoadingReviews ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map((item) => (
+                    <div
+                      key={item}
+                      className="p-4 rounded-2xl border border-gray-200/90 bg-white space-y-3 animate-pulse"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-gray-200" />
+                          <div className="space-y-1.5">
+                            <div className="w-28 h-3.5 bg-gray-200 rounded" />
+                            <div className="w-20 h-3 bg-gray-100 rounded" />
+                          </div>
+                        </div>
+                        <div className="w-16 h-6 bg-gray-100 rounded-full" />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="w-full h-3 bg-gray-100 rounded" />
+                        <div className="w-5/6 h-3 bg-gray-100 rounded" />
+                        <div className="w-2/3 h-3 bg-gray-100 rounded" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : visibleReviews.length > 0 ? (
                 visibleReviews.map((rev, idx) => (
                   <article
                     key={`${rev.platform}-${rev.authorName}-${idx}`}

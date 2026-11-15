@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Star } from 'lucide-react';
+import { X, Star, CheckCircle2 } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
 import { EButton } from '@/components/EComponents';
 
@@ -9,6 +9,28 @@ export interface CompareModalProps {
   onClose: () => void;
   providers: RooferProvider[];
   onSelectForQuote: (p: RooferProvider) => void;
+}
+
+function getVettedScore(provider: RooferProvider): number {
+  return Math.min(
+    99,
+    Math.max(
+      88,
+      Math.round(
+        (provider.compositeRating || 4.8) * 18 +
+          (provider.isLicensed ? 3 : 0) +
+          (provider.isInsured ? 3 : 0)
+      )
+    )
+  );
+}
+
+function getEstablishedYear(provider: RooferProvider): number {
+  if (provider.sinceYear && provider.sinceYear > 0) return provider.sinceYear;
+  if (provider.yearsInBusiness && provider.yearsInBusiness > 0) {
+    return new Date().getFullYear() - provider.yearsInBusiness;
+  }
+  return 0;
 }
 
 export default function CompareModal({
@@ -20,7 +42,7 @@ export default function CompareModal({
   if (!isOpen || providers.length === 0) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/70 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl max-w-4xl w-full border border-gray-200 shadow-2xl overflow-hidden relative max-h-[90vh] flex flex-col">
         {/* Modal Header */}
         <div className="p-5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
@@ -42,7 +64,7 @@ export default function CompareModal({
 
         {/* Comparison Table */}
         <div className="overflow-x-auto p-3.5 sm:p-5 flex-1">
-          <table className="w-full min-w-[480px] text-left border-collapse text-xs">
+          <table className="w-full min-w-[520px] text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="p-3 font-bold text-gray-500 uppercase text-[10px] w-40">
@@ -50,24 +72,47 @@ export default function CompareModal({
                 </th>
                 {providers.map((p) => (
                   <th key={p.id} className="p-3 font-black text-gray-900 text-sm">
-                    <div className="w-8 h-8 rounded-md overflow-hidden bg-gray-100 mb-1">
-                      <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                    </div>
+                    {p.imageUrl ? (
+                      <div className="w-9 h-9 rounded-lg overflow-hidden bg-white border border-gray-200 p-1 mb-1.5 flex items-center justify-center">
+                        <img
+                          src={p.imageUrl}
+                          alt={p.name}
+                          className="max-w-full max-h-full object-contain"
+                        />
+                      </div>
+                    ) : null}
                     {p.name}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
+              {/* Vetted Score */}
+              <tr>
+                <td className="p-3 font-bold text-gray-500">Vetted Score</td>
+                {providers.map((p) => (
+                  <td key={p.id} className="p-3">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#EBF7F2] border border-[#0B3B2C]/15 font-black text-[#0B3B2C] text-sm">
+                      {getVettedScore(p)}
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-medium ml-1.5">
+                      Prosvetted Audit
+                    </span>
+                  </td>
+                ))}
+              </tr>
+
               {/* Composite Rating */}
               <tr>
-                <td className="p-3 font-bold text-gray-500">Customer Score</td>
+                <td className="p-3 font-bold text-gray-500">Customer Ratings</td>
                 {providers.map((p) => (
                   <td key={p.id} className="p-3 font-bold text-gray-950">
                     <div className="flex items-center gap-1">
-                      <Star className="w-3.5 h-3.5 fill-primary text-primary" />
-                      <span>{p.compositeRating}</span>
-                      <span className="text-gray-400 text-[10px]">({p.totalReviews} reviews)</span>
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      <span>{(p.compositeRating || 0).toFixed(1)}</span>
+                      <span className="text-gray-400 text-[10px]">
+                        ({p.totalReviews} verified reviews)
+                      </span>
                     </div>
                   </td>
                 ))}
@@ -75,7 +120,7 @@ export default function CompareModal({
 
               {/* Google Reviews */}
               <tr>
-                <td className="p-3 font-bold text-gray-500">Google Rating</td>
+                <td className="p-3 font-bold text-gray-500">Google</td>
                 {providers.map((p) => (
                   <td key={p.id} className="p-3 font-semibold text-blue-700">
                     {p.reviews.google?.count > 0
@@ -87,7 +132,7 @@ export default function CompareModal({
 
               {/* Yelp Reviews */}
               <tr>
-                <td className="p-3 font-bold text-gray-500">Yelp Rating</td>
+                <td className="p-3 font-bold text-gray-500">Yelp</td>
                 {providers.map((p) => (
                   <td key={p.id} className="p-3 font-semibold text-red-600">
                     {p.reviews.yelp?.count > 0
@@ -99,7 +144,7 @@ export default function CompareModal({
 
               {/* HomeAdvisor Reviews */}
               <tr>
-                <td className="p-3 font-bold text-gray-500">HomeAdvisor Rating</td>
+                <td className="p-3 font-bold text-gray-500">HomeAdvisor</td>
                 {providers.map((p) => {
                   const haRating = p.reviews.homeadvisor?.rating ?? 0;
                   const haCount = p.reviews.homeadvisor?.count ?? 0;
@@ -113,7 +158,7 @@ export default function CompareModal({
 
               {/* Houzz Reviews */}
               <tr>
-                <td className="p-3 font-bold text-gray-500">Houzz Rating</td>
+                <td className="p-3 font-bold text-gray-500">Houzz</td>
                 {providers.map((p) => {
                   const hRating = (p.reviews.houzz || p.reviews.facebook)?.rating ?? 0;
                   const hCount = (p.reviews.houzz || p.reviews.facebook)?.count ?? 0;
@@ -125,32 +170,53 @@ export default function CompareModal({
                 })}
               </tr>
 
-              {/* Price Range */}
+              {/* Established & Location */}
               <tr>
-                <td className="p-3 font-bold text-gray-500">Typical Project</td>
+                <td className="p-3 font-bold text-gray-500">Location &amp; Est.</td>
+                {providers.map((p) => {
+                  const est = getEstablishedYear(p);
+                  const loc =
+                    p.borough && p.borough !== 'All' && p.borough !== 'New York City'
+                      ? `${p.borough}, NY`
+                      : `${p.city || 'New York'}, ${p.state || 'NY'}`;
+                  return (
+                    <td key={p.id} className="p-3 text-gray-700 font-medium">
+                      {loc}
+                      {est > 0 ? ` • Since ${est}` : ''}
+                    </td>
+                  );
+                })}
+              </tr>
+
+              {/* Highlights */}
+              <tr>
+                <td className="p-3 font-bold text-gray-500">Service Highlights</td>
                 {providers.map((p) => (
-                  <td key={p.id} className="p-3 font-mono font-bold text-gray-950">
-                    {p.typicalPriceRange}
+                  <td key={p.id} className="p-3 text-gray-700 font-medium">
+                    Warranty Available • Free Estimates
                   </td>
                 ))}
               </tr>
 
-              {/* Borough & Years */}
+              {/* Audit Checklist */}
               <tr>
-                <td className="p-3 font-bold text-gray-500">Location &amp; Exp.</td>
+                <td className="p-3 font-bold text-gray-500">Audit Status</td>
                 {providers.map((p) => (
-                  <td key={p.id} className="p-3 text-gray-700">
-                    {p.borough}, NYC ({p.yearsInBusiness} yrs)
-                  </td>
-                ))}
-              </tr>
-
-              {/* License */}
-              <tr>
-                <td className="p-3 font-bold text-gray-500">NYC License</td>
-                {providers.map((p) => (
-                  <td key={p.id} className="p-3 font-mono text-[11px] text-gray-700">
-                    {p.licenseNumber}
+                  <td key={p.id} className="p-3">
+                    <div className="space-y-1 text-[11px] font-semibold">
+                      <div className="flex items-center gap-1.5 text-gray-700">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Business confirmed</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-gray-400">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                        <span>License and insurance</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-gray-700">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Reputation &amp; Reviews analyzed</span>
+                      </div>
+                    </div>
                   </td>
                 ))}
               </tr>
@@ -169,7 +235,7 @@ export default function CompareModal({
                       size="sm"
                       className="w-full"
                     >
-                      Get Quote
+                      Get a Quote
                     </EButton>
                   </td>
                 ))}
