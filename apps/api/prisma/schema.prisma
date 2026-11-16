@@ -194,6 +194,8 @@ model ProviderProfile {
 
   // Relations
   listings         Listing[]
+  projects         ProviderProject[]
+  teamMembers      ProviderTeamMember[]
   platformReviews  PlatformReview[]
   scrapedReviews   ScrapedReview[]   @relation("ScrapedReviews")
   reviewsReceived  Review[]         @relation("ProviderReviews")
@@ -409,6 +411,74 @@ model ListingServiceArea {
 }
 
 // ═══════════════════════════════════════════════════════
+// CONTRACTOR PORTFOLIO PROJECTS (Multi-photo Albums)
+// ═══════════════════════════════════════════════════════
+
+model ProviderProject {
+  id                String                 @id @default(uuid())
+  providerProfileId String
+  providerProfile   ProviderProfile        @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+
+  title             String
+  slug              String
+  description       String?                @db.Text
+  location          String?
+  projectYear       Int?
+  costRange         String?
+  serviceCategory   String?
+  sourceUrl         String?                @db.Text
+  coverImageUrl     String?
+  photoCount        Int                    @default(0)
+  orderIndex        Int                    @default(0)
+
+  photos            ProviderProjectPhoto[]
+
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@unique([providerProfileId, slug])
+  @@index([providerProfileId, orderIndex])
+  @@map("provider_projects")
+}
+
+model ProviderProjectPhoto {
+  id          String          @id @default(uuid())
+  projectId   String
+  project     ProviderProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  imageUrl    String
+  caption     String?         @db.Text
+  width       Int?
+  height      Int?
+  orderIndex  Int             @default(0)
+
+  createdAt   DateTime        @default(now())
+
+  @@index([projectId, orderIndex])
+  @@map("provider_project_photos")
+}
+
+model ProviderTeamMember {
+  id                String          @id @default(uuid())
+  providerProfileId String
+  providerProfile   ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+
+  name              String
+  role              String?
+  credentials       String?
+  bio               String?         @db.Text
+  imageUrl          String?
+  sourceUrl         String?         @db.Text
+  orderIndex        Int             @default(0)
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([providerProfileId, orderIndex])
+  @@map("provider_team_members")
+}
+
+// ═══════════════════════════════════════════════════════
 // REVIEWS (External platform + In-platform)
 // ═══════════════════════════════════════════════════════
 
@@ -419,7 +489,7 @@ model PlatformReview {
   platform          ReviewPlatform
   rating            Decimal         @db.Decimal(2, 1)
   reviewCount       Int
-  profileUrl        String
+  profileUrl        String          @db.Text
   lastScrapedAt     DateTime?
   updatedAt         DateTime        @updatedAt
 
@@ -434,11 +504,12 @@ model ScrapedReview {
   platform          ReviewPlatform
   authorName        String
   authorAvatarUrl   String?
+  photoUrls         Json?           @map("photo_urls")
   rating            Int             @default(5)
   comment           String          @db.Text
   reviewDate        String?
   isVerified        Boolean         @default(true)
-  sourceUrl         String?
+  sourceUrl         String?         @db.Text
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 

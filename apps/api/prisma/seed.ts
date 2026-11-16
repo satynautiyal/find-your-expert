@@ -43,15 +43,23 @@ if (isR2Ready) {
 
 /**
  * Downloads image from remote URL and uploads directly to Cloudflare R2 bucket,
- * returning the R2 destination key to store in the database.
+ * returning the R2 destination key to store in the database (never falls back to hotlinking remote URLs).
  */
-async function uploadImageToR2(remoteUrl: string, destinationKey: string): Promise<string> {
-  if (!isR2Ready || !r2Client || !remoteUrl || !remoteUrl.startsWith('http')) {
-    return remoteUrl;
+async function uploadImageToR2(remoteUrl: string, destinationKey: string): Promise<string | null> {
+  if (!remoteUrl || !remoteUrl.startsWith('http')) {
+    return remoteUrl || null;
+  }
+  if (!isR2Ready || !r2Client) {
+    return null;
   }
   try {
-    const res = await fetch(remoteUrl);
-    if (!res.ok) return remoteUrl;
+    const res = await fetch(remoteUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
+    });
+    if (!res.ok) return null;
     const arrayBuffer = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const contentType = res.headers.get('content-type') || 'image/jpeg';
@@ -62,13 +70,14 @@ async function uploadImageToR2(remoteUrl: string, destinationKey: string): Promi
         Key: destinationKey,
         Body: buffer,
         ContentType: contentType,
+        CacheControl: 'public, max-age=31536000, immutable',
       })
     );
 
     return destinationKey;
   } catch (e: any) {
     console.warn(`   ⚠️ R2 upload skipped for ${destinationKey}: ${e.message}`);
-    return remoteUrl;
+    return null;
   }
 }
 
@@ -189,8 +198,8 @@ async function main() {
   for (const p of providersData) {
     if (!p.email) continue;
 
-    // 3.1 Upload Logo to Cloudflare R2 Bucket
-    let finalLogoUrl = p.logoUrl;
+    // 3.1 Upload Logo to Cloudflare R2 Bucket (never store external hotlink URLs)
+    let finalLogoUrl: string | null = null;
     if (p.logoUrl && isR2Ready) {
       const r2Key = `providers/logos/${p.slug}.jpg`;
       console.log(`   ☁️ Uploading logo to R2: ${r2Key}...`);

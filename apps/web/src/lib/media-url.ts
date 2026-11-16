@@ -9,15 +9,10 @@
 export function getMediaUrl(urlOrKey: string | null | undefined): string {
   if (!urlOrKey) return '';
 
-  let trimmed = urlOrKey.trim();
+  const trimmed = urlOrKey.trim();
   if (!trimmed) return '';
 
-  // If Houzz CDN thumbnail (_0-xxxx or _1-xxxx), automatically upgrade to sharp resolution
-  if (trimmed.includes('hzcdn.com') && /_[0-2]-/.test(trimmed)) {
-    trimmed = trimmed.replace(/_[0-2]-/, '_10-');
-  }
-
-  // 1. Direct absolute URLs (e.g. presigned S3/R2 URL, Unsplash, Cloudinary)
+  // 1. Direct absolute URLs (e.g. presigned Cloudflare R2 URL)
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }

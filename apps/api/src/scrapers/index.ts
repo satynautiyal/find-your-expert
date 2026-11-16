@@ -1,5 +1,6 @@
 export * from './scrapers.module';
 export * from './reviews-scraper.service';
+export * from './projects/projects-scraper.service';
 export * from './google/google-reviews-scraper.service';
 export * from './yelp/yelp-reviews-scraper.service';
 export * from './homeadvisor/homeadvisor-reviews-scraper.service';

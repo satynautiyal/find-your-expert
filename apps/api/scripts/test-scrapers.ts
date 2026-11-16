@@ -1,5 +1,6 @@
 import { YelpReviewsScraperService } from '../src/scrapers/yelp/yelp-reviews-scraper.service';
 import { GoogleReviewsScraperService } from '../src/scrapers/google/google-reviews-scraper.service';
+import { HomeAdvisorReviewsScraperService } from '../src/scrapers/homeadvisor/homeadvisor-reviews-scraper.service';
 import { HouzzReviewsScraperService } from '../src/scrapers/houzz/houzz-reviews-scraper.service';
 import { ReviewsScraperService } from '../src/scrapers/reviews-scraper.service';
 
@@ -10,8 +11,14 @@ async function testScrapers() {
 
   const yelpScraper = new YelpReviewsScraperService();
   const googleScraper = new GoogleReviewsScraperService();
+  const homeAdvisorScraper = new HomeAdvisorReviewsScraperService();
   const houzzScraper = new HouzzReviewsScraperService();
-  const orchestrator = new ReviewsScraperService(googleScraper, yelpScraper, houzzScraper);
+  const orchestrator = new ReviewsScraperService(
+    googleScraper,
+    yelpScraper,
+    homeAdvisorScraper,
+    houzzScraper
+  );
 
   // 1. Test Houzz Scraper
   console.log('--- 1. Testing Houzz Scraper ---');

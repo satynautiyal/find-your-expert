@@ -7,7 +7,12 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 dotenv.config();
 
 import * as fs from 'fs';
+import { randomUUID } from 'crypto';
 import { PrismaClient } from '@prisma/client';
+import { ProjectsScraperService } from '../src/scrapers/projects/projects-scraper.service';
+import { ScraperHttpUtil } from '../src/scrapers/utils/scraper-http.util';
+import { AiReviewSummaryService } from '../src/providers/ai-review-summary.service';
+import { ingestImageToR2, uploadBufferToR2, hashAssetUrl } from './utils/r2-upload';
 
 interface ScrapedProvider {
   businessName: string;
@@ -116,7 +121,7 @@ function extractEmails(html: string): string[] {
 
   // 2. body text regex
   const regex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
-  const matches = html.match(regex) || [];
+  const matches: string[] = html.match(regex) ?? [];
   const badExts = ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.css', '.js', '.woff', '.woff2'];
   const badDomains = ['example.com', 'wixpress', 'sentry', 'domain.com', 'email.com', 'schema.org', 'cloudflare', 'wordpress'];
 
@@ -342,20 +347,85 @@ async function main() {
 
   // Try Seeding into Database if DATABASE_URL is ready
   const dbUrl = process.env.DATABASE_URL || '';
-  if (dbUrl.includes('[YOUR-PASSWORD]') || !dbUrl.startsWith('postgresql://')) {
+  if (
+    dbUrl.includes('[YOUR-PASSWORD]') ||
+    (!dbUrl.startsWith('mysql://') && !dbUrl.startsWith('postgresql://'))
+  ) {
     console.log('ℹ️ DATABASE_URL in .env has placeholder password.');
     console.log('   Scraped data is ready in JSON! Once you set real DB password in .env,');
-    console.log('   run `npm run db:seed` to populate PostgreSQL tables.\n');
+    console.log('   run `npm run db:seed` to populate database tables.\n');
     return;
   }
 
-  console.log('🗄️ Attempting database seed with accepted providers...');
+  console.log('🗄️ Seeding accepted providers with Website-First Logo, AI Bio & R2 Team...');
   const prisma = new PrismaClient();
+  const projectsScraper = new ProjectsScraperService();
+  const aiService = new AiReviewSummaryService();
   try {
     await prisma.$connect();
-    console.log('Connected to PostgreSQL database!');
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS \`provider_team_members\` (
+        \`id\` VARCHAR(191) NOT NULL,
+        \`providerProfileId\` VARCHAR(191) NOT NULL,
+        \`name\` VARCHAR(191) NOT NULL,
+        \`role\` VARCHAR(191) NULL,
+        \`credentials\` VARCHAR(191) NULL,
+        \`bio\` TEXT NULL,
+        \`imageUrl\` VARCHAR(512) NULL,
+        \`sourceUrl\` TEXT NULL,
+        \`orderIndex\` INT NOT NULL DEFAULT 0,
+        \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        \`updatedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+        PRIMARY KEY (\`id\`),
+        INDEX \`provider_team_members_providerProfileId_orderIndex_idx\` (\`providerProfileId\`, \`orderIndex\`),
+        CONSTRAINT \`provider_team_members_providerProfileId_fkey\`
+          FOREIGN KEY (\`providerProfileId\`) REFERENCES \`provider_profiles\`(\`id\`)
+          ON DELETE CASCADE ON UPDATE CASCADE
+      ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+    `);
 
     for (const p of acceptedProviders) {
+      const cleanWebsite = ScraperHttpUtil.normalizeOfficialWebsiteUrl(p.websiteUrl);
+      const brandRes = await projectsScraper.scrapeProviderBrandAndProjects({
+        businessName: p.businessName,
+        boroughOrCity: p.borough || p.city,
+        websiteUrl: cleanWebsite || p.websiteUrl,
+        skipProjects: true,
+      });
+
+      const finalWebsite = brandRes.officialWebsiteUrl || cleanWebsite || null;
+      let storedLogoKey: string | null = null;
+      if (brandRes.logoSourceUrl) {
+        storedLogoKey = await ingestImageToR2(
+          brandRes.logoSourceUrl,
+          `providers/logos/${p.slug}-site-${hashAssetUrl(brandRes.logoSourceUrl).slice(0, 8)}`
+        );
+      }
+      if (!storedLogoKey && brandRes.logoPngBuffer) {
+        storedLogoKey = await uploadBufferToR2(
+          brandRes.logoPngBuffer,
+          `providers/logos/${p.slug}-site-${hashAssetUrl(p.slug).slice(0, 8)}.png`,
+          'image/png'
+        );
+      }
+      if (!storedLogoKey && p.logoUrl) {
+        storedLogoKey = await ingestImageToR2(p.logoUrl, `providers/logos/${p.slug}`);
+      }
+
+      let aiDescription = p.description;
+      try {
+        const rewritten = await aiService.rewriteBusinessDescription({
+          businessName: p.businessName,
+          category: 'Roofing',
+          services: p.subServices,
+          boroughOrCity: p.borough || p.city,
+          sinceYear: p.sinceYear,
+          rawWebsiteAbout: brandRes.websiteAboutDescription,
+          fallbackBio: p.description,
+        });
+        if (rewritten && rewritten.length >= 35) aiDescription = rewritten;
+      } catch {}
+
       // 1. Create or Find User
       const user = await prisma.user.upsert({
         where: { email: p.email },
@@ -374,9 +444,9 @@ async function main() {
         update: {
           businessName: p.businessName,
           phone: p.phone,
-          websiteUrl: p.websiteUrl,
-          logoUrl: p.logoUrl,
-          description: p.description,
+          websiteUrl: finalWebsite,
+          logoUrl: storedLogoKey,
+          description: aiDescription,
           address: p.address,
           city: p.city,
           state: p.state,
@@ -396,9 +466,9 @@ async function main() {
           slug: p.slug,
           phone: p.phone,
           email: p.email,
-          websiteUrl: p.websiteUrl,
-          logoUrl: p.logoUrl,
-          description: p.description,
+          websiteUrl: finalWebsite,
+          logoUrl: storedLogoKey,
+          description: aiDescription,
           address: p.address,
           city: p.city,
           state: p.state,
@@ -414,7 +484,52 @@ async function main() {
         },
       });
 
-      console.log(`   + Seeded: ${p.businessName} (User ID: ${user.id})`);
+      // 3. Persist Website "The team" members in R2 if present on contractor's website
+      await prisma.$executeRawUnsafe(
+        `DELETE FROM \`provider_team_members\` WHERE \`providerProfileId\` = ?`,
+        profile.id
+      );
+      if (finalWebsite && brandRes.teamMembers.length > 0) {
+        for (let mIdx = 0; mIdx < brandRes.teamMembers.length; mIdx++) {
+          const m = brandRes.teamMembers[mIdx];
+          const mImgKey = m.photoSourceUrl
+            ? await ingestImageToR2(
+                m.photoSourceUrl,
+                `providers/team/${p.slug}/${projectsScraper.slugify(m.name) || mIdx}-${hashAssetUrl(
+                  m.photoSourceUrl
+                ).slice(0, 8)}`
+              )
+            : null;
+          let mBio: string | null = null;
+          if (m.bio && m.bio.length >= 20) {
+            try {
+              mBio = await aiService.rewriteTeamMemberBio({
+                businessName: p.businessName,
+                memberName: m.name,
+                role: m.role,
+                credentials: m.credentials,
+                rawBio: m.bio,
+              });
+            } catch {}
+          }
+          await prisma.$executeRawUnsafe(
+            `INSERT INTO \`provider_team_members\` (\`id\`, \`providerProfileId\`, \`name\`, \`role\`, \`credentials\`, \`bio\`, \`imageUrl\`, \`sourceUrl\`, \`orderIndex\`, \`createdAt\`, \`updatedAt\`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))`,
+            randomUUID(),
+            profile.id,
+            m.name.slice(0, 180),
+            m.role ? m.role.slice(0, 180) : null,
+            m.credentials ? m.credentials.slice(0, 180) : null,
+            mBio,
+            mImgKey,
+            m.sourceUrl || finalWebsite,
+            mIdx
+          );
+        }
+      }
+
+      console.log(
+        `   + Seeded: ${p.businessName} (Site: ${finalWebsite || 'none'}, Team: ${brandRes.teamMembers.length})`
+      );
     }
 
     console.log('\n🎉 Successfully seeded all email-verified providers into database!');

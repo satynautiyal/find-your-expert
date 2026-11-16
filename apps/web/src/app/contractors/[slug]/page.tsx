@@ -139,10 +139,13 @@ export default function ContractorProfilePage() {
           activeTab={activeTab}
           onTabChange={setActiveTab}
           reviewCount={provider.totalReviews || 0}
+          teamCount={provider.teamMembers?.length || provider.teamCount || 0}
           projectCount={
-            (provider.photos || []).filter(
-              (p) => Boolean(p?.url) && p.url !== provider.imageUrl
-            ).length
+            (provider.projects && provider.projects.length > 0
+              ? provider.projects.length
+              : (provider.photos || []).filter(
+                  (p) => Boolean(p?.url) && p.url !== provider.imageUrl
+                ).length) || 0
           }
         />
 

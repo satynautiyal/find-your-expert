@@ -4,6 +4,7 @@ import { YelpReviewsScraperService } from './yelp/yelp-reviews-scraper.service';
 import { HomeAdvisorReviewsScraperService } from './homeadvisor/homeadvisor-reviews-scraper.service';
 import { HouzzReviewsScraperService } from './houzz/houzz-reviews-scraper.service';
 import { ReviewsScraperService } from './reviews-scraper.service';
+import { ProjectsScraperService } from './projects/projects-scraper.service';
 
 @Module({
   providers: [
@@ -12,6 +13,7 @@ import { ReviewsScraperService } from './reviews-scraper.service';
     HomeAdvisorReviewsScraperService,
     HouzzReviewsScraperService,
     ReviewsScraperService,
+    ProjectsScraperService,
   ],
   exports: [
     GoogleReviewsScraperService,
@@ -19,6 +21,7 @@ import { ReviewsScraperService } from './reviews-scraper.service';
     HomeAdvisorReviewsScraperService,
     HouzzReviewsScraperService,
     ReviewsScraperService,
+    ProjectsScraperService,
   ],
 })
 export class ScrapersModule {}

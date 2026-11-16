@@ -110,7 +110,7 @@ function buildApiUrl(
   if (envUrl && (envUrl.startsWith('http://') || envUrl.startsWith('https://'))) {
     const normalizedEnv = envUrl
       .replace(/\/+$/, '')
-      .replace('://localhost:4000', '://127.0.0.1:4000');
+      .replace('://127.0.0.1:4000', '://localhost:4000');
     fullUrl = `${normalizedEnv}/${cleanEndpoint}`;
   } else if (process.env.NODE_ENV === 'production') {
     fullUrl = `https://api.prosvetted.com/api/${cleanEndpoint}`;
@@ -118,8 +118,8 @@ function buildApiUrl(
     // 2. In browser: use same-origin /api rewrite
     fullUrl = `${window.location.origin}/api/${cleanEndpoint}`;
   } else {
-    // 3. Server-side fallback: directly to backend IPv4 port 4000
-    fullUrl = `http://127.0.0.1:4000/api/${cleanEndpoint}`;
+    // 3. Server-side fallback: directly to backend localhost:4000
+    fullUrl = `http://localhost:4000/api/${cleanEndpoint}`;
   }
 
   const url = new URL(fullUrl);
@@ -245,6 +245,15 @@ export async function fetchProviderBySlug(slug: string): Promise<RooferProvider>
   });
 }
 
+export interface ProviderTeamMemberDto {
+  id: string;
+  name: string;
+  role?: string;
+  credentials?: string;
+  bio?: string;
+  photoUrl?: string;
+}
+
 export interface ScrapedReviewItemDto {
   authorName: string;
   authorAvatarUrl?: string;
@@ -253,6 +262,7 @@ export interface ScrapedReviewItemDto {
   reviewDate?: string;
   platform: 'GOOGLE' | 'YELP' | 'HOMEADVISOR' | 'HOUZZ' | 'FACEBOOK';
   sourceUrl?: string;
+  photoUrls?: string[];
 }
 
 export interface SyncReviewsResult {

@@ -6,11 +6,18 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 dotenv.config();
 
+import { randomUUID } from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import * as cheerio from 'cheerio';
 import { BrowserPoolUtil } from '../src/scrapers/utils/browser-pool.util';
+import { ProjectsScraperService } from '../src/scrapers/projects/projects-scraper.service';
+import { ScraperHttpUtil } from '../src/scrapers/utils/scraper-http.util';
+import { AiReviewSummaryService } from '../src/providers/ai-review-summary.service';
+import { ingestImageToR2, uploadBufferToR2, hashAssetUrl } from './utils/r2-upload';
 
 const prisma = new PrismaClient();
+const projectsScraper = new ProjectsScraperService();
+const aiService = new AiReviewSummaryService();
 
 const HOUZZ_NYC_CABINETS_URL = 'https://www.houzz.com/professionals/cabinets/c/New-York--NY';
 
@@ -308,6 +315,27 @@ async function main() {
     },
   });
 
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS \`provider_team_members\` (
+      \`id\` VARCHAR(191) NOT NULL,
+      \`providerProfileId\` VARCHAR(191) NOT NULL,
+      \`name\` VARCHAR(191) NOT NULL,
+      \`role\` VARCHAR(191) NULL,
+      \`credentials\` VARCHAR(191) NULL,
+      \`bio\` TEXT NULL,
+      \`imageUrl\` VARCHAR(512) NULL,
+      \`sourceUrl\` TEXT NULL,
+      \`orderIndex\` INT NOT NULL DEFAULT 0,
+      \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      \`updatedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      PRIMARY KEY (\`id\`),
+      INDEX \`provider_team_members_providerProfileId_orderIndex_idx\` (\`providerProfileId\`, \`orderIndex\`),
+      CONSTRAINT \`provider_team_members_providerProfileId_fkey\`
+        FOREIGN KEY (\`providerProfileId\`) REFERENCES \`provider_profiles\`(\`id\`)
+        ON DELETE CASCADE ON UPDATE CASCADE
+    ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
+
   console.log(`🔍 Processing ${cabinetProviders.length} Custom Cabinets providers in database...\n`);
 
   for (const provider of cabinetProviders) {
@@ -320,11 +348,12 @@ async function main() {
       provider.platformReviews.find((p) => p.platform === 'HOUZZ')?.profileUrl ||
       (provider.websiteUrl?.includes('houzz.com') ? provider.websiteUrl : '');
 
-    // Candidate Houzz logo URL
+    // Candidate Houzz logo URL (fallback ONLY if official website has no usable brand logo)
     let candidateHouzzLogo = dirMatch?.logoUrl || normalizeHouzzLogoUrl(provider.logoUrl || '');
     let externalWebsite =
-      OFFICIAL_WEBSITE_MAP[provider.slug] ||
-      (provider.websiteUrl && !provider.websiteUrl.includes('houzz.com') ? provider.websiteUrl : '');
+      ScraperHttpUtil.normalizeOfficialWebsiteUrl(OFFICIAL_WEBSITE_MAP[provider.slug]) ||
+      ScraperHttpUtil.normalizeOfficialWebsiteUrl(provider.websiteUrl) ||
+      '';
 
     if (houzzUrl) {
       const meta = await scrapeHouzzProfileMetadata(houzzUrl);
@@ -332,41 +361,128 @@ async function main() {
         candidateHouzzLogo = meta.houzzLogoUrl;
       }
       if (meta.externalWebsiteUrl && !externalWebsite) {
-        externalWebsite = meta.externalWebsiteUrl;
+        externalWebsite =
+          ScraperHttpUtil.normalizeOfficialWebsiteUrl(meta.externalWebsiteUrl) || '';
       }
     }
 
-    // Check if the Houzz avatar is a real graphic business logo vs a person's portrait photo
-    const isGraphicLogo = await isHouzzImageGraphicLogo(candidateHouzzLogo);
-    let finalLogoUrl = '';
+    // Website-First: scrape Official Website Logo + Website "About" + Website "The team"
+    const brandRes = await projectsScraper.scrapeProviderBrandAndProjects({
+      businessName: provider.businessName,
+      boroughOrCity: provider.borough || provider.city,
+      houzzUrl,
+      websiteUrl: externalWebsite || provider.websiteUrl,
+      skipProjects: true,
+    });
+    const finalOfficialSite = brandRes.officialWebsiteUrl || externalWebsite || null;
 
-    if (isGraphicLogo) {
-      finalLogoUrl = candidateHouzzLogo;
-      console.log(`   ✅ Verified Houzz Business Logo: ${finalLogoUrl}`);
-    } else {
-      console.log(`   ⚠️ Houzz avatar is a portrait photo (not a business logo). Scraping official website: ${externalWebsite || 'N/A'}...`);
-      if (externalWebsite) {
-        const scrapedSiteLogo = await scrapeLogoFromBusinessWebsite(externalWebsite);
-        if (scrapedSiteLogo) {
-          finalLogoUrl = scrapedSiteLogo;
-          console.log(`   ✅ Scraped Official Website Business Logo: ${finalLogoUrl}`);
-        }
+    let storedLogoKey: string | null = null;
+    if (brandRes.logoSourceUrl) {
+      storedLogoKey = await ingestImageToR2(
+        brandRes.logoSourceUrl,
+        `providers/logos/${provider.slug}-site-${hashAssetUrl(brandRes.logoSourceUrl).slice(0, 8)}`
+      );
+    }
+    if (!storedLogoKey && brandRes.logoPngBuffer) {
+      storedLogoKey = await uploadBufferToR2(
+        brandRes.logoPngBuffer,
+        `providers/logos/${provider.slug}-site-${hashAssetUrl(provider.slug).slice(0, 8)}.png`,
+        'image/png'
+      );
+    }
+    if (!storedLogoKey && finalOfficialSite) {
+      const scrapedSiteLogo = await scrapeLogoFromBusinessWebsite(finalOfficialSite);
+      if (scrapedSiteLogo) {
+        storedLogoKey = await ingestImageToR2(
+          scrapedSiteLogo,
+          `providers/logos/${provider.slug}-site-${hashAssetUrl(scrapedSiteLogo).slice(0, 8)}`
+        );
+      }
+    }
+    if (!storedLogoKey && candidateHouzzLogo) {
+      const isGraphicLogo = await isHouzzImageGraphicLogo(candidateHouzzLogo);
+      if (isGraphicLogo) {
+        storedLogoKey = await ingestImageToR2(
+          candidateHouzzLogo,
+          `providers/logos/${provider.slug}`
+        );
       }
     }
 
-    if (!finalLogoUrl) {
-      finalLogoUrl = candidateHouzzLogo || provider.logoUrl || '';
-      console.log(`   ℹ️ Keeping fallback URL: ${finalLogoUrl}`);
+    if (storedLogoKey) {
+      console.log(`   ☁️ Stored Website-First Business Logo in R2 Bucket: ${storedLogoKey}`);
     }
+
+    // AI-Rewrite Contractor "About" Business Description from Official Website
+    let aiBio: string | null = null;
+    try {
+      const rewritten = await aiService.rewriteBusinessDescription({
+        businessName: provider.businessName,
+        category: 'Custom Cabinets',
+        boroughOrCity: provider.borough || provider.city || undefined,
+        sinceYear: provider.sinceYear,
+        isLicensed: provider.isLicensed,
+        isInsured: provider.isInsured,
+        hasWarranty: provider.hasWarranty,
+        rawWebsiteAbout: brandRes.websiteAboutDescription,
+        fallbackBio: provider.description,
+      });
+      if (rewritten && rewritten.length >= 35) aiBio = rewritten;
+    } catch {}
 
     // Update ProviderProfile in DB
     await prisma.providerProfile.update({
       where: { id: provider.id },
       data: {
-        logoUrl: finalLogoUrl,
-        ...(externalWebsite ? { websiteUrl: externalWebsite } : {}),
+        ...(storedLogoKey ? { logoUrl: storedLogoKey } : {}),
+        websiteUrl: finalOfficialSite,
+        ...(aiBio ? { description: aiBio } : {}),
       },
     });
+
+    // Persist Website "The team" members in R2 (0 rows if contractor website has no team)
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM \`provider_team_members\` WHERE \`providerProfileId\` = ?`,
+      provider.id
+    );
+    if (finalOfficialSite && brandRes.teamMembers.length > 0) {
+      for (let mIdx = 0; mIdx < brandRes.teamMembers.length; mIdx++) {
+        const m = brandRes.teamMembers[mIdx];
+        const mImgKey = m.photoSourceUrl
+          ? await ingestImageToR2(
+              m.photoSourceUrl,
+              `providers/team/${provider.slug}/${projectsScraper.slugify(m.name) || mIdx}-${hashAssetUrl(
+                m.photoSourceUrl
+              ).slice(0, 8)}`
+            )
+          : null;
+        let mBio: string | null = null;
+        if (m.bio && m.bio.length >= 20) {
+          try {
+            mBio = await aiService.rewriteTeamMemberBio({
+              businessName: provider.businessName,
+              memberName: m.name,
+              role: m.role,
+              credentials: m.credentials,
+              rawBio: m.bio,
+            });
+          } catch {}
+        }
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO \`provider_team_members\` (\`id\`, \`providerProfileId\`, \`name\`, \`role\`, \`credentials\`, \`bio\`, \`imageUrl\`, \`sourceUrl\`, \`orderIndex\`, \`createdAt\`, \`updatedAt\`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))`,
+          randomUUID(),
+          provider.id,
+          m.name.slice(0, 180),
+          m.role ? m.role.slice(0, 180) : null,
+          m.credentials ? m.credentials.slice(0, 180) : null,
+          mBio,
+          mImgKey,
+          m.sourceUrl || finalOfficialSite,
+          mIdx
+        );
+      }
+      console.log(`   👥 Saved ${brandRes.teamMembers.length} website team member(s) in R2`);
+    }
 
     // Ensure HOUZZ PlatformReview has the Houzz profileUrl saved
     if (houzzUrl) {

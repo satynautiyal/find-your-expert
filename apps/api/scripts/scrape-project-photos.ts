@@ -1,415 +1,406 @@
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 dotenv.config();
 
-import { PrismaClient } from '@prisma/client';
-import { BrowserPoolUtil } from '../src/scrapers/utils/browser-pool.util';
+import { PrismaClient, PhotoCategory, Prisma } from '@prisma/client';
+import { ProjectsScraperService } from '../src/scrapers/projects/projects-scraper.service';
+import { ScraperHttpUtil } from '../src/scrapers/utils/scraper-http.util';
+import { AiReviewSummaryService } from '../src/providers/ai-review-summary.service';
+import { ingestImageToR2, uploadBufferToR2, hashAssetUrl } from './utils/r2-upload';
 
 const prisma = new PrismaClient();
+const projectsScraper = new ProjectsScraperService();
+const aiService = new AiReviewSummaryService();
 
-const BAD_IMAGE_KEYWORDS = [
-  'logo',
-  'icon',
-  'badge',
-  'seal',
-  'bbb',
-  'gaf',
-  'owens',
-  'certainteed',
-  'yelp',
-  'google',
-  'facebook',
-  'instagram',
-  'twitter',
-  'linkedin',
-  'youtube',
-  'tiktok',
-  'pinterest',
-  'avatar',
-  'star',
-  'rating',
-  'review',
-  'arrow',
-  'spinner',
-  'loader',
-  'placeholder',
-  'gravatar',
-  'smiley',
-  'emoji',
-  'flag',
-  'payment',
-  'visa',
-  'mastercard',
-  'amex',
-  'discover',
-  'paypal',
-  'award',
-  'certif',
-  'accredited',
-  'angies',
-  'angi',
-  'homeadvisor',
-  'expertise',
-  'houzz-pro',
-  'button',
-  'banner-ad',
-  'menu',
-  'phone',
-  'email',
-  'map',
-  'marker',
-  'pin',
-  'signature',
-  'coupon',
-  'discount',
-  'financing',
-  'warranty',
-  'guarantee',
-  'user_',
-  'default',
-  'blank',
-  'pixel',
-  'spacer',
-];
-
-function isBadImage(url: string, alt = '', cls = ''): boolean {
-  if (!url || typeof url !== 'string') return true;
-  const lowerUrl = url.toLowerCase().trim();
-  if (!lowerUrl.startsWith('http://') && !lowerUrl.startsWith('https://')) {
-    return true;
-  }
-  if (
-    lowerUrl.endsWith('.svg') ||
-    lowerUrl.endsWith('.gif') ||
-    lowerUrl.includes('.svg?') ||
-    lowerUrl.includes('.gif?') ||
-    lowerUrl.startsWith('data:')
-  ) {
-    return true;
-  }
-  const combined = `${lowerUrl} ${(alt || '').toLowerCase()} ${(cls || '').toLowerCase()}`;
-  for (const kw of BAD_IMAGE_KEYWORDS) {
-    if (combined.includes(kw)) return true;
-  }
-  return false;
+async function ensureTeamMembersTable() {
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS \`provider_team_members\` (
+      \`id\` VARCHAR(191) NOT NULL,
+      \`providerProfileId\` VARCHAR(191) NOT NULL,
+      \`name\` VARCHAR(191) NOT NULL,
+      \`role\` VARCHAR(191) NULL,
+      \`credentials\` VARCHAR(191) NULL,
+      \`bio\` TEXT NULL,
+      \`imageUrl\` VARCHAR(512) NULL,
+      \`sourceUrl\` TEXT NULL,
+      \`orderIndex\` INT NOT NULL DEFAULT 0,
+      \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      \`updatedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+      PRIMARY KEY (\`id\`),
+      INDEX \`provider_team_members_providerProfileId_orderIndex_idx\` (\`providerProfileId\`, \`orderIndex\`),
+      CONSTRAINT \`provider_team_members_providerProfileId_fkey\`
+        FOREIGN KEY (\`providerProfileId\`) REFERENCES \`provider_profiles\`(\`id\`)
+        ON DELETE CASCADE ON UPDATE CASCADE
+    ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+  `);
 }
 
-/**
- * Scrape real project photos from a Houzz Professional Profile page
- */
-async function scrapeHouzzProjects(
-  browser: any,
-  houzzUrl: string,
-  businessName: string,
-  logoUrl?: string | null
-): Promise<Array<{ url: string; caption: string }>> {
-  const page = await BrowserPoolUtil.createStealthPage(browser);
-  const photos: Array<{ url: string; caption: string }> = [];
-
-  try {
-    await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 2 });
-    await page.goto(houzzUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
-    await new Promise((r) => setTimeout(r, 2500));
-
-    await page.evaluate(async () => {
-      for (let y = 0; y < 3500; y += 500) {
-        window.scrollTo(0, y);
-        await new Promise((r) => setTimeout(r, 200));
-      }
-      window.scrollTo(0, 0);
-    });
-    await new Promise((r) => setTimeout(r, 1200));
-
-    const rawImgs = await page.evaluate(() => {
-      const out: Array<{ src: string; alt: string; cardTitle: string; w: number; h: number }> = [];
-      const imgs = Array.from(document.querySelectorAll('img'));
-      for (const img of imgs) {
-        const src = img.currentSrc || img.src || img.getAttribute('data-src') || '';
-        const alt = (img.alt || '').trim();
-        const w = img.naturalWidth || img.width || 0;
-        const h = img.naturalHeight || img.height || 0;
-
-        let cardTitle = '';
-        const card = img.closest('a, [class*="project"], [class*="Project"], li');
-        if (card) {
-          const titleEl = card.querySelector('h3, h4, [class*="title"], [class*="Title"], [class*="name"]');
-          if (titleEl && titleEl.textContent) {
-            cardTitle = titleEl.textContent.trim();
-          }
-        }
-        out.push({ src, alt, cardTitle, w, h });
-      }
-      return out;
-    });
-
-    const logoHashMatch = (logoUrl || '').match(/([0-9a-f]{16})_\d+/i);
-    const logoHash = logoHashMatch ? logoHashMatch[1].toLowerCase() : '';
-    const byHash = new Map<string, { url: string; caption: string; area: number }>();
-
-    for (const item of rawImgs) {
-      const { src, alt, cardTitle, w, h } = item;
-      if (!src || !src.includes('hzcdn.com')) continue;
-      if (src.includes('user_') || src.includes('badge') || src.includes('-w240-h240-')) continue;
-      if (w > 0 && h > 0 && Math.abs(w - h) <= 12 && w <= 300) continue;
-      if (w < 180 || h < 120) continue;
-
-      const hashMatch = src.match(/([0-9a-f]{16})_\d+/i);
-      const hash = hashMatch ? hashMatch[1].toLowerCase() : src;
-      if (logoHash && hash === logoHash) continue;
-
-      if (alt.toLowerCase() === businessName.toLowerCase() && !cardTitle && src.includes('simgs')) {
-        continue;
-      }
-
-      const caption =
-        cardTitle && cardTitle.length > 2 && cardTitle.length < 80
-          ? cardTitle
-          : alt && alt.toLowerCase() !== businessName.toLowerCase() && alt.length > 3
-          ? alt.slice(0, 100)
-          : `${businessName} Custom Cabinetry Project`;
-
-      const existing = byHash.get(hash);
-      if (!existing || w * h > existing.area) {
-        byHash.set(hash, { url: src, caption, area: w * h });
-      }
+async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<void>
+) {
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const i = cursor++;
+      await worker(items[i], i);
     }
-
-    for (const val of byHash.values()) {
-      photos.push({ url: val.url, caption: val.caption });
-    }
-  } catch (err: any) {
-    console.warn(`   ⚠️ Houzz scrape warning for ${businessName}: ${err.message}`);
-  } finally {
-    await page.close();
-  }
-
-  return photos;
-}
-
-/**
- * Scrape real project photos from a Contractor's Official Website (gallery/projects subpages + homepage)
- */
-async function scrapeWebsiteProjects(
-  browser: any,
-  websiteUrl: string,
-  businessName: string,
-  tradeLabel: string
-): Promise<Array<{ url: string; caption: string }>> {
-  const page = await BrowserPoolUtil.createStealthPage(browser);
-  const photos: Array<{ url: string; caption: string }> = [];
-  const seenUrls = new Set<string>();
-
-  try {
-    await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 2 });
-
-    const extractFromCurrentPage = async () => {
-      await page.evaluate(async () => {
-        for (let y = 0; y < Math.min(document.body.scrollHeight, 4000); y += 500) {
-          window.scrollTo(0, y);
-          await new Promise((r) => setTimeout(r, 150));
-        }
-        window.scrollTo(0, 0);
-      });
-      await new Promise((r) => setTimeout(r, 800));
-
-      return await page.evaluate(() => {
-        const list: Array<{ src: string; alt: string; cls: string; w: number; h: number }> = [];
-        for (const img of Array.from(document.querySelectorAll('img'))) {
-          const src =
-            img.currentSrc ||
-            img.src ||
-            img.getAttribute('data-src') ||
-            img.getAttribute('data-lazy-src') ||
-            '';
-          const alt = (img.alt || '').trim();
-          const cls = typeof img.className === 'string' ? img.className : '';
-          const rect = img.getBoundingClientRect();
-          const w = img.naturalWidth || rect.width || img.width || 0;
-          const h = img.naturalHeight || rect.height || img.height || 0;
-
-          const inHeaderOrFooter = Boolean(
-            img.closest(
-              'header, nav, footer, [class*="logo"], [id*="logo"], [class*="brand"], [class*="client"], [class*="partner"], [class*="badge"], [class*="cert"]'
-            )
-          );
-          if (inHeaderOrFooter) continue;
-          list.push({ src, alt, cls, w, h });
-        }
-
-        for (const el of Array.from(document.querySelectorAll('div, section, a, figure, li'))) {
-          const style = window.getComputedStyle(el);
-          const bg = style.backgroundImage || '';
-          if (bg && bg.includes('url(')) {
-            const m = bg.match(/url\(["']?(https?:\/\/[^"')]+)["']?\)/i);
-            if (m && m[1]) {
-              const rect = el.getBoundingClientRect();
-              if (rect.width >= 260 && rect.height >= 180) {
-                const cls = typeof (el as HTMLElement).className === 'string' ? (el as HTMLElement).className : '';
-                list.push({ src: m[1], alt: '', cls, w: rect.width, h: rect.height });
-              }
-            }
-          }
-        }
-        return list;
-      });
-    };
-
-    await page.goto(websiteUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-    await new Promise((r) => setTimeout(r, 2000));
-
-    const subpageLinks = await page.evaluate((baseUrl: string) => {
-      const links: string[] = [];
-      const seen = new Set<string>();
-      for (const a of Array.from(document.querySelectorAll('a[href]'))) {
-        const href = (a as HTMLAnchorElement).href;
-        const text = (a.textContent || '').trim();
-        if (!href || !href.startsWith(baseUrl.slice(0, 16))) continue;
-        if (/(gallery|project|portfolio|our-work|recent-work|work|photos|roofing|services)/i.test(href + ' ' + text)) {
-          if (!seen.has(href) && href !== window.location.href && !href.includes('#')) {
-            seen.add(href);
-            links.push(href);
-          }
-        }
-      }
-      return links.slice(0, 3);
-    }, websiteUrl);
-
-    const processCandidates = (candidates: Array<{ src: string; alt: string; cls: string; w: number; h: number }>) => {
-      for (const c of candidates) {
-        if (!c.src) continue;
-        if (c.w < 240 || c.h < 150) continue;
-        const ratio = c.w / c.h;
-        if (ratio < 0.45 || ratio > 3.2) continue;
-        if (Math.abs(c.w - c.h) < 10 && c.w < 260) continue;
-        if (isBadImage(c.src, c.alt, c.cls)) continue;
-
-        const cleanKey = c.src.split('?')[0].toLowerCase();
-        if (seenUrls.has(cleanKey)) continue;
-        seenUrls.add(cleanKey);
-
-        const caption =
-          c.alt && c.alt.length > 4 && c.alt.length < 90 && !/img|image|photo|pic|slide|banner|\d{4}/i.test(c.alt)
-            ? c.alt
-            : `${businessName} — ${tradeLabel} Project`;
-
-        photos.push({ url: c.src, caption });
-      }
-    };
-
-    for (const subUrl of subpageLinks) {
-      if (photos.length >= 8) break;
-      try {
-        await page.goto(subUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-        await new Promise((r) => setTimeout(r, 1500));
-        const subCandidates = await extractFromCurrentPage();
-        processCandidates(subCandidates);
-      } catch {}
-    }
-
-    if (photos.length < 6) {
-      try {
-        await page.goto(websiteUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-        await new Promise((r) => setTimeout(r, 1500));
-        const homeCandidates = await extractFromCurrentPage();
-        processCandidates(homeCandidates);
-      } catch {}
-    }
-  } catch (err: any) {
-    console.warn(`   ⚠️ Website scrape warning for ${businessName}: ${err.message}`);
-  } finally {
-    await page.close();
-  }
-
-  return photos.slice(0, 8);
+  });
+  await Promise.all(runners);
 }
 
 async function main() {
-  console.log('===========================================================');
-  console.log('🚀 ProsVetted — Contractor Project & Portfolio Photo Scraper');
-  console.log('===========================================================\n');
+  const args = process.argv.slice(2);
+  const skipProjects = args.includes('--skip-projects');
+  const filterSlug = args.find((a) => !a.startsWith('--'))?.trim() || '';
 
-  await prisma.$connect();
-  const browser = await BrowserPoolUtil.createBrowser();
+  console.log('===================================================================');
+  console.log(
+    '🏗️  Scraping Contractor Website Brand, AI Bio, Team & Project Albums -> R2'
+  );
+  console.log('===================================================================\n');
 
-  try {
-    const providers = await prisma.providerProfile.findMany({
-      include: {
-        platformReviews: true,
-        listings: {
-          include: {
-            category: true,
-            photos: true,
-          },
+  await ensureTeamMembersTable();
+
+  const providers = await prisma.providerProfile.findMany({
+    where: filterSlug ? { slug: filterSlug } : { isActive: true },
+    include: {
+      listings: {
+        include: {
+          category: true,
+          subServices: { include: { subService: true } },
+          serviceAreas: true,
+          photos: { orderBy: { orderIndex: 'asc' } },
         },
       },
-      orderBy: { createdAt: 'asc' },
+      platformReviews: true,
+      projects: { select: { id: true } },
+    },
+    orderBy: { compositeRating: 'desc' },
+  });
+
+  console.log(`Found ${providers.length} contractor(s) to sync.\n`);
+
+  let totalProjectsSaved = 0;
+  let totalPhotosSaved = 0;
+  let totalTeamSaved = 0;
+
+  for (let i = 0; i < providers.length; i++) {
+    const p = providers[i];
+    const primaryListing = p.listings[0];
+    const fallbackHz = p.websiteUrl?.includes('houzz.com') ? p.websiteUrl : null;
+    const houzzUrl =
+      p.platformReviews.find((r) => r.platform === 'HOUZZ')?.profileUrl || fallbackHz;
+
+    console.log(`\n[${i + 1}/${providers.length}] 🔎 ${p.businessName} (${p.slug})`);
+
+    const brandAndProjects = await projectsScraper.scrapeProviderBrandAndProjects({
+      businessName: p.businessName,
+      boroughOrCity: p.borough || p.city,
+      houzzUrl,
+      websiteUrl: p.websiteUrl,
+      maxProjects: 12,
+      maxPhotosPerProject: 12,
+      skipProjects,
     });
 
-    for (let i = 0; i < providers.length; i++) {
-      const p = providers[i];
-      const listing = p.listings[0];
-      if (!listing) continue;
+    // 1. Official Website Brand Logo -> R2
+    let newLogoKey: string | null = null;
+    if (brandAndProjects.logoSourceUrl) {
+      const h = hashAssetUrl(brandAndProjects.logoSourceUrl).slice(0, 8);
+      newLogoKey = await ingestImageToR2(
+        brandAndProjects.logoSourceUrl,
+        `providers/logos/${p.slug}-site-${h}`
+      );
+    }
+    if (!newLogoKey && brandAndProjects.logoPngBuffer && brandAndProjects.logoPngBuffer.length > 200) {
+      const h = hashAssetUrl(`${p.slug}-${brandAndProjects.logoPngBuffer.length}`).slice(0, 8);
+      newLogoKey = await uploadBufferToR2(
+        brandAndProjects.logoPngBuffer,
+        `providers/logos/${p.slug}-site-${h}.png`,
+        'image/png'
+      );
+    }
 
-      const categoryName = listing.category?.name || 'Roofing';
-      const houzzReview = p.platformReviews.find((r) => r.platform === 'HOUZZ');
-      const houzzUrl = houzzReview?.profileUrl || (p.websiteUrl?.includes('houzz.com') ? p.websiteUrl : '');
+    // 2. Official Website "About" Description -> AI Rewritten SEO-Original Bio
+    const categoryName = primaryListing?.category?.name || undefined;
+    const serviceNames =
+      p.listings.flatMap(
+        (l) => l.subServices?.map((ss) => ss.subService?.name).filter(Boolean) || []
+      ) || [];
+    const areaNames =
+      p.listings.flatMap(
+        (l) => l.serviceAreas?.map((sa) => sa.areaName).filter(Boolean) || []
+      ) || [];
 
-      console.log(`🔍 [${i + 1}/${providers.length}] ${p.businessName} (${categoryName})...`);
-      const scrapedPhotos: Array<{ url: string; caption: string }> = [];
-
-      if (houzzUrl) {
-        const hPhotos = await scrapeHouzzProjects(browser, houzzUrl, p.businessName, p.logoUrl);
-        scrapedPhotos.push(...hPhotos);
+    let aiAboutDesc: string | null = null;
+    try {
+      const rewritten = await aiService.rewriteBusinessDescription({
+        businessName: p.businessName,
+        category: categoryName,
+        services: serviceNames,
+        boroughOrCity: p.borough || p.city || undefined,
+        serviceAreas: areaNames,
+        sinceYear: p.sinceYear,
+        isLicensed: p.isLicensed,
+        isInsured: p.isInsured,
+        hasWarranty: p.hasWarranty,
+        rawWebsiteAbout: brandAndProjects.websiteAboutDescription,
+        fallbackBio: p.description,
+      });
+      if (rewritten && rewritten.length >= 35) {
+        aiAboutDesc = rewritten;
       }
+    } catch (err: any) {
+      console.warn(`   ⚠️ AI About rewrite skipped: ${err.message}`);
+    }
 
-      if (scrapedPhotos.length < 6 && p.websiteUrl && !p.websiteUrl.includes('houzz.com')) {
-        const wPhotos = await scrapeWebsiteProjects(browser, p.websiteUrl, p.businessName, categoryName);
-        for (const wp of wPhotos) {
-          if (!scrapedPhotos.some((sp) => sp.url === wp.url)) {
-            scrapedPhotos.push(wp);
-          }
+    const finalSite =
+      brandAndProjects.officialWebsiteUrl ||
+      ScraperHttpUtil.normalizeOfficialWebsiteUrl(p.websiteUrl) ||
+      null;
+
+    const brandUpdate: Prisma.ProviderProfileUpdateInput = {};
+    if (finalSite !== (p.websiteUrl || null)) brandUpdate.websiteUrl = finalSite;
+    if (newLogoKey) brandUpdate.logoUrl = newLogoKey;
+    if (aiAboutDesc) brandUpdate.description = aiAboutDesc;
+    if (Object.keys(brandUpdate).length > 0) {
+      await prisma.providerProfile.update({
+        where: { id: p.id },
+        data: brandUpdate,
+      });
+    }
+
+    // 3. Official Website "The team" -> R2 Headshots + AI-Rewritten Bios
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM \`provider_team_members\` WHERE \`providerProfileId\` = ?`,
+      p.id
+    );
+    if (brandAndProjects.officialWebsiteUrl && brandAndProjects.teamMembers.length > 0) {
+      for (let mIdx = 0; mIdx < brandAndProjects.teamMembers.length; mIdx++) {
+        const member = brandAndProjects.teamMembers[mIdx];
+        let r2TeamImg: string | null = null;
+        if (member.photoSourceUrl) {
+          const mSlug = projectsScraper.slugify(member.name) || `member-${mIdx + 1}`;
+          const mHash = hashAssetUrl(member.photoSourceUrl).slice(0, 8);
+          r2TeamImg = await ingestImageToR2(
+            member.photoSourceUrl,
+            `providers/team/${p.slug}/${mSlug}-${mHash}`
+          );
         }
+        let memberBio: string | null = null;
+        if (member.bio && member.bio.trim().length >= 20) {
+          try {
+            const rewrittenBio = await aiService.rewriteTeamMemberBio({
+              businessName: p.businessName,
+              memberName: member.name,
+              role: member.role,
+              credentials: member.credentials,
+              rawBio: member.bio,
+            });
+            if (rewrittenBio && rewrittenBio.length >= 15) memberBio = rewrittenBio;
+          } catch {}
+        }
+        await prisma.$executeRawUnsafe(
+          `INSERT INTO \`provider_team_members\` (\`id\`, \`providerProfileId\`, \`name\`, \`role\`, \`credentials\`, \`bio\`, \`imageUrl\`, \`sourceUrl\`, \`orderIndex\`, \`createdAt\`, \`updatedAt\`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))`,
+          randomUUID(),
+          p.id,
+          member.name.slice(0, 180),
+          member.role ? member.role.slice(0, 180) : null,
+          member.credentials ? member.credentials.slice(0, 180) : null,
+          memberBio,
+          r2TeamImg,
+          member.sourceUrl || finalSite,
+          mIdx
+        );
+        totalTeamSaved++;
       }
+      console.log(`   👥 Saved ${brandAndProjects.teamMembers.length} website team member(s) in R2`);
+    }
 
-      const finalPhotos = scrapedPhotos.slice(0, 8);
-      if (finalPhotos.length > 0) {
-        await prisma.listingPhoto.deleteMany({
-          where: { listingId: listing.id },
-        });
+    if (skipProjects) continue;
 
-        for (let idx = 0; idx < finalPhotos.length; idx++) {
-          await prisma.listingPhoto.create({
-            data: {
-              listingId: listing.id,
-              imageUrl: finalPhotos[idx].url,
-              caption: finalPhotos[idx].caption,
-              category: 'PORTFOLIO',
-              orderIndex: idx,
-            },
+    // 4. Website-First Project Albums (+ Houzz Fallback) -> R2 Photos + AI-Rewritten Descriptions
+    const uploadedProjects: Array<{
+      title: string;
+      slug: string;
+      description?: string;
+      location?: string;
+      projectYear?: number;
+      costRange?: string;
+      serviceCategory?: string;
+      sourceUrl?: string;
+      photos: Array<{
+        r2Key: string;
+        caption?: string;
+        width?: number;
+        height?: number;
+      }>;
+    }> = [];
+
+    for (const proj of brandAndProjects.projects) {
+      const uploadedPhotos: Array<{
+        order: number;
+        r2Key: string;
+        caption?: string;
+        width?: number;
+        height?: number;
+      }> = [];
+
+      await runWithConcurrency(proj.photos, 6, async (photo, pIdx) => {
+        const shortHash = hashAssetUrl(photo.sourceUrl);
+        const keyBase = `providers/projects/${p.slug}/${proj.slug}/${String(
+          pIdx + 1
+        ).padStart(2, '0')}-${shortHash}`;
+        const r2Key = await ingestImageToR2(photo.sourceUrl, keyBase);
+        if (r2Key) {
+          uploadedPhotos.push({
+            order: pIdx,
+            r2Key,
+            caption: photo.caption,
+            width: photo.width,
+            height: photo.height,
           });
         }
+      });
 
-        await prisma.providerProfile.update({
-          where: { id: p.id },
+      uploadedPhotos.sort((a, b) => a.order - b.order);
+      if (uploadedPhotos.length > 0) {
+        totalPhotosSaved += uploadedPhotos.length;
+
+        let aiProjDesc: string | undefined;
+        try {
+          aiProjDesc = await aiService.rewriteProjectDescription({
+            businessName: p.businessName,
+            category: categoryName,
+            services: serviceNames,
+            boroughOrCity: p.borough || p.city || undefined,
+            title: proj.title,
+            rawDescription: proj.description,
+            location: proj.location,
+            projectYear: proj.projectYear,
+            costRange: proj.costRange,
+            photoCount: uploadedPhotos.length,
+            photoCaptions: uploadedPhotos.map((ph) => ph.caption || '').filter(Boolean),
+          });
+        } catch {}
+
+        uploadedProjects.push({
+          title: proj.title,
+          slug: proj.slug,
+          description: aiProjDesc || undefined,
+          location: proj.location,
+          projectYear: proj.projectYear,
+          costRange: proj.costRange,
+          serviceCategory: proj.serviceCategory,
+          sourceUrl: proj.sourceUrl,
+          photos: uploadedPhotos.map(({ r2Key, caption, width, height }) => ({
+            r2Key,
+            caption,
+            width,
+            height,
+          })),
+        });
+      }
+    }
+
+    if (uploadedProjects.length > 0) {
+      await prisma.providerProject.deleteMany({
+        where: { providerProfileId: p.id },
+      });
+
+      for (let projIdx = 0; projIdx < uploadedProjects.length; projIdx++) {
+        const up = uploadedProjects[projIdx];
+        await prisma.providerProject.create({
           data: {
-            coverImageUrl: finalPhotos[0].url,
+            providerProfileId: p.id,
+            title: up.title,
+            slug: up.slug,
+            description: up.description || null,
+            location: up.location || null,
+            projectYear: up.projectYear || null,
+            costRange: up.costRange || null,
+            serviceCategory: up.serviceCategory || null,
+            sourceUrl: up.sourceUrl || null,
+            coverImageUrl: up.photos[0].r2Key,
+            photoCount: up.photos.length,
+            orderIndex: projIdx,
+            photos: {
+              create: up.photos.map((ph, phIdx) => ({
+                imageUrl: ph.r2Key,
+                caption: ph.caption || null,
+                width: ph.width || null,
+                height: ph.height || null,
+                orderIndex: phIdx,
+              })),
+            },
           },
         });
       }
 
-      console.log(`   💾 Saved ${finalPhotos.length} project photos for ${p.businessName}`);
+      totalProjectsSaved += uploadedProjects.length;
+
+      const showcasePhotos: Array<{ r2Key: string; caption: string }> = [];
+      const seenKeys = new Set<string>();
+      const maxDepth = Math.max(...uploadedProjects.map((x) => x.photos.length));
+
+      for (let depth = 0; depth < maxDepth && showcasePhotos.length < 12; depth++) {
+        for (const up of uploadedProjects) {
+          if (showcasePhotos.length >= 12) break;
+          const ph = up.photos[depth];
+          if (!ph || seenKeys.has(ph.r2Key)) continue;
+          seenKeys.add(ph.r2Key);
+          showcasePhotos.push({
+            r2Key: ph.r2Key,
+            caption: ph.caption || up.title,
+          });
+        }
+      }
+
+      if (primaryListing && showcasePhotos.length > 0) {
+        await prisma.listingPhoto.deleteMany({
+          where: { listingId: primaryListing.id },
+        });
+        await prisma.listingPhoto.createMany({
+          data: showcasePhotos.map((sp, idx) => ({
+            listingId: primaryListing.id,
+            imageUrl: sp.r2Key,
+            caption: sp.caption,
+            category: idx === 0 ? PhotoCategory.HERO : PhotoCategory.PORTFOLIO,
+            orderIndex: idx,
+          })),
+        });
+        await prisma.providerProfile.update({
+          where: { id: p.id },
+          data: { coverImageUrl: showcasePhotos[0].r2Key },
+        });
+      }
+
+      console.log(
+        `   ✅ Saved ${uploadedProjects.length} AI-rewritten project album(s) [${brandAndProjects.sourceUsed}] into R2 + DB`
+      );
+    } else {
+      console.log(`   ⚠️  0 structured project albums found for ${p.businessName}`);
     }
-  } finally {
-    await browser.close();
-    await prisma.$disconnect();
   }
+
+  console.log('\n===================================================================');
+  console.log(
+    `🎉 Done! Saved ${totalProjectsSaved} project albums (${totalPhotosSaved} R2 photos) & ${totalTeamSaved} team member(s).`
+  );
+  console.log('===================================================================');
 }
 
-main().catch((err) => {
-  console.error('Fatal error in scrape-project-photos:', err);
-  process.exit(1);
-});
-
+main()
+  .catch((e) => {
+    console.error('❌ Project/Brand/Team scraping failed:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

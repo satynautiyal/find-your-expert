@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
         destination:
           process.env.NODE_ENV === 'production'
             ? 'https://api.prosvetted.com/api/:path*'
-            : 'http://127.0.0.1:4000/api/:path*',
+            : 'http://localhost:4000/api/:path*',
       },
     ];
   },

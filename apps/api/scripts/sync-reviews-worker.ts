@@ -12,6 +12,9 @@ import { YelpReviewsScraperService } from '../src/scrapers/yelp/yelp-reviews-scr
 import { HomeAdvisorReviewsScraperService } from '../src/scrapers/homeadvisor/homeadvisor-reviews-scraper.service';
 import { HouzzReviewsScraperService } from '../src/scrapers/houzz/houzz-reviews-scraper.service';
 import { ReviewsScraperService } from '../src/scrapers/reviews-scraper.service';
+import { ScraperHttpUtil } from '../src/scrapers/utils/scraper-http.util';
+import { AiReviewSummaryService } from '../src/providers/ai-review-summary.service';
+import { ingestImageToR2, hashAssetUrl } from './utils/r2-upload';
 
 const prisma = new PrismaClient();
 const googleScraper = new GoogleReviewsScraperService();
@@ -22,12 +25,32 @@ const orchestrator = new ReviewsScraperService(
   googleScraper,
   yelpScraper,
   homeAdvisorScraper,
-  houzzScraper,
+  houzzScraper
 );
+const aiService = new AiReviewSummaryService();
 
-async function syncSingleProvider(profile: any) {
+async function ensureReviewColumns() {
+  try {
+    const cols = await prisma.$queryRawUnsafe<Array<{ Field: string }>>(
+      `SHOW COLUMNS FROM \`scraped_reviews\` LIKE 'photo_urls'`
+    );
+    if (!Array.isArray(cols) || cols.length === 0) {
+      await prisma.$executeRawUnsafe(
+        `ALTER TABLE \`scraped_reviews\` ADD COLUMN \`photo_urls\` JSON NULL`
+      );
+    }
+    await prisma
+      .$executeRawUnsafe(`ALTER TABLE \`platform_reviews\` MODIFY COLUMN \`profileUrl\` TEXT NOT NULL`)
+      .catch(() => {});
+    await prisma
+      .$executeRawUnsafe(`ALTER TABLE \`scraped_reviews\` MODIFY COLUMN \`sourceUrl\` TEXT NULL`)
+      .catch(() => {});
+  } catch {}
+}
+
+export async function syncSingleProviderReviews(profile: any, maxReviews = 2000) {
   console.log(`\n===========================================================`);
-  console.log(`🚀 Syncing reviews for: "${profile.businessName}" (${profile.slug})`);
+  console.log(`🚀 Syncing up to ${maxReviews} reviews (+ R2 photos) for: "${profile.businessName}" (${profile.slug})`);
   console.log(`   Location: ${profile.borough || profile.city || 'NYC'}`);
   console.log(`===========================================================`);
 
@@ -47,130 +70,112 @@ async function syncSingleProvider(profile: any) {
         homeAdvisorUrl,
         houzzUrl,
       },
-      30
+      maxReviews
     );
 
     console.log(`📊 Scrape Result:`);
     console.log(`   - Composite Rating: ${scraped.compositeRating} ⭐`);
     console.log(`   - Total Reviews Count: ${scraped.totalReviews}`);
-    console.log(`   - Comments Extracted: ${scraped.allReviews.length}`);
+    console.log(`   - Written Reviews Extracted: ${scraped.allReviews.length}`);
+
+    // Persist discovered official website URL if provider had none
+    const existingSite = ScraperHttpUtil.normalizeOfficialWebsiteUrl(profile.websiteUrl);
+    if (!existingSite && scraped.discoveredWebsiteUrl) {
+      const cleanDiscovered = ScraperHttpUtil.normalizeOfficialWebsiteUrl(scraped.discoveredWebsiteUrl);
+      if (cleanDiscovered) {
+        await prisma.providerProfile.update({
+          where: { id: profile.id },
+          data: { websiteUrl: cleanDiscovered },
+        });
+        console.log(`   🌐 Saved discovered official website: ${cleanDiscovered}`);
+      }
+    }
 
     // 1. Update Platform Reviews
-    if (scraped.platforms.google && scraped.platforms.google.totalReviews > 0) {
-      await prisma.platformReview.upsert({
-        where: {
-          providerProfileId_platform: {
-            providerProfileId: profile.id,
-            platform: 'GOOGLE',
+    const platformEntries: Array<[ReviewPlatform, any]> = [
+      ['GOOGLE', scraped.platforms.google],
+      ['YELP', scraped.platforms.yelp],
+      ['HOMEADVISOR', scraped.platforms.homeadvisor],
+      ['HOUZZ', scraped.platforms.houzz],
+    ];
+    for (const [plat, data] of platformEntries) {
+      if (data && data.totalReviews > 0) {
+        await prisma.platformReview.upsert({
+          where: {
+            providerProfileId_platform: {
+              providerProfileId: profile.id,
+              platform: plat,
+            },
           },
-        },
-        update: {
-          rating: scraped.platforms.google.rating,
-          reviewCount: scraped.platforms.google.totalReviews,
-          profileUrl: scraped.platforms.google.profileUrl,
-          lastScrapedAt: new Date(),
-        },
-        create: {
-          providerProfileId: profile.id,
-          platform: 'GOOGLE',
-          rating: scraped.platforms.google.rating,
-          reviewCount: scraped.platforms.google.totalReviews,
-          profileUrl: scraped.platforms.google.profileUrl,
-          lastScrapedAt: new Date(),
-        },
-      });
-      console.log(`   ✓ Saved Google platform ratings`);
+          update: {
+            rating: data.rating,
+            reviewCount: data.totalReviews,
+            profileUrl: data.profileUrl,
+            lastScrapedAt: new Date(),
+          },
+          create: {
+            providerProfileId: profile.id,
+            platform: plat,
+            rating: data.rating,
+            reviewCount: data.totalReviews,
+            profileUrl: data.profileUrl,
+            lastScrapedAt: new Date(),
+          },
+        });
+      }
     }
 
-    if (scraped.platforms.yelp && scraped.platforms.yelp.totalReviews > 0) {
-      await prisma.platformReview.upsert({
-        where: {
-          providerProfileId_platform: {
-            providerProfileId: profile.id,
-            platform: 'YELP',
-          },
-        },
-        update: {
-          rating: scraped.platforms.yelp.rating,
-          reviewCount: scraped.platforms.yelp.totalReviews,
-          profileUrl: scraped.platforms.yelp.profileUrl,
-          lastScrapedAt: new Date(),
-        },
-        create: {
-          providerProfileId: profile.id,
-          platform: 'YELP',
-          rating: scraped.platforms.yelp.rating,
-          reviewCount: scraped.platforms.yelp.totalReviews,
-          profileUrl: scraped.platforms.yelp.profileUrl,
-          lastScrapedAt: new Date(),
-        },
-      });
-      console.log(`   ✓ Saved Yelp platform ratings`);
-    }
-
-    if (scraped.platforms.homeadvisor && scraped.platforms.homeadvisor.totalReviews > 0) {
-      await prisma.platformReview.upsert({
-        where: {
-          providerProfileId_platform: {
-            providerProfileId: profile.id,
-            platform: 'HOMEADVISOR',
-          },
-        },
-        update: {
-          rating: scraped.platforms.homeadvisor.rating,
-          reviewCount: scraped.platforms.homeadvisor.totalReviews,
-          profileUrl: scraped.platforms.homeadvisor.profileUrl,
-          lastScrapedAt: new Date(),
-        },
-        create: {
-          providerProfileId: profile.id,
-          platform: 'HOMEADVISOR',
-          rating: scraped.platforms.homeadvisor.rating,
-          reviewCount: scraped.platforms.homeadvisor.totalReviews,
-          profileUrl: scraped.platforms.homeadvisor.profileUrl,
-          lastScrapedAt: new Date(),
-        },
-      });
-      console.log(`   ✓ Saved HomeAdvisor platform ratings`);
-    }
-
-    if (scraped.platforms.houzz && scraped.platforms.houzz.totalReviews > 0) {
-      await prisma.platformReview.upsert({
-        where: {
-          providerProfileId_platform: {
-            providerProfileId: profile.id,
-            platform: 'HOUZZ',
-          },
-        },
-        update: {
-          rating: scraped.platforms.houzz.rating,
-          reviewCount: scraped.platforms.houzz.totalReviews,
-          profileUrl: scraped.platforms.houzz.profileUrl,
-          lastScrapedAt: new Date(),
-        },
-        create: {
-          providerProfileId: profile.id,
-          platform: 'HOUZZ',
-          rating: scraped.platforms.houzz.rating,
-          reviewCount: scraped.platforms.houzz.totalReviews,
-          profileUrl: scraped.platforms.houzz.profileUrl,
-          lastScrapedAt: new Date(),
-        },
-      });
-      console.log(`   ✓ Saved Houzz platform ratings`);
-    }
-
-    // 2. Save individual review comments
+    // 2. Save individual review comments + upload ALL reviewer avatars & customer-shared review photos into R2
     let savedComments = 0;
-    for (let idx = 0; idx < scraped.allReviews.length; idx++) {
-      const rev = scraped.allReviews[idx];
+    let uploadedReviewPhotos = 0;
+    const avatarCache = new Map<string, string | null>();
+    const reviewPhotoCache = new Map<string, string | null>();
+    const cappedReviews = scraped.allReviews.slice(0, maxReviews);
+
+    for (let idx = 0; idx < cappedReviews.length; idx++) {
+      const rev = cappedReviews[idx];
       if (!rev.comment || rev.comment.trim().length < 5) continue;
       const platformEnum = rev.platform as ReviewPlatform;
       const intRating = Math.min(5, Math.max(1, Math.round(Number(rev.rating) || 5)));
       const safeAuthorName = (rev.authorName || '').trim() || `Verified Reviewer #${idx + 1}`;
+      const rawAvatar = (rev.authorAvatarUrl || '').trim();
+      let storedAvatarKey: string | null = null;
+      if (rawAvatar) {
+        if (avatarCache.has(rawAvatar)) {
+          storedAvatarKey = avatarCache.get(rawAvatar) ?? null;
+        } else {
+          storedAvatarKey = await ingestImageToR2(
+            rawAvatar,
+            `providers/avatars/${hashAssetUrl(rawAvatar)}`
+          );
+          avatarCache.set(rawAvatar, storedAvatarKey);
+        }
+      }
+
+      const storedPhotoKeys: string[] = [];
+      if (Array.isArray(rev.photoUrls) && rev.photoUrls.length > 0) {
+        for (const rawPh of rev.photoUrls.slice(0, 8)) {
+          const cleanPh = (rawPh || '').trim();
+          if (!cleanPh) continue;
+          let phKey: string | null = null;
+          if (reviewPhotoCache.has(cleanPh)) {
+            phKey = reviewPhotoCache.get(cleanPh) ?? null;
+          } else {
+            phKey = await ingestImageToR2(
+              cleanPh,
+              `providers/review-photos/${profile.slug}/${hashAssetUrl(cleanPh)}`
+            );
+            reviewPhotoCache.set(cleanPh, phKey);
+          }
+          if (phKey) {
+            storedPhotoKeys.push(phKey);
+            uploadedReviewPhotos++;
+          }
+        }
+      }
 
       try {
-        await prisma.scrapedReview.upsert({
+        const upserted = await prisma.scrapedReview.upsert({
           where: {
             providerProfileId_platform_authorName_rating: {
               providerProfileId: profile.id,
@@ -181,7 +186,7 @@ async function syncSingleProvider(profile: any) {
           },
           update: {
             comment: rev.comment,
-            authorAvatarUrl: rev.authorAvatarUrl || null,
+            ...(storedAvatarKey ? { authorAvatarUrl: storedAvatarKey } : {}),
             reviewDate: rev.reviewDate || null,
             sourceUrl: rev.sourceUrl || null,
           },
@@ -189,7 +194,7 @@ async function syncSingleProvider(profile: any) {
             providerProfileId: profile.id,
             platform: platformEnum,
             authorName: safeAuthorName,
-            authorAvatarUrl: rev.authorAvatarUrl || null,
+            authorAvatarUrl: storedAvatarKey,
             rating: intRating,
             comment: rev.comment,
             reviewDate: rev.reviewDate || null,
@@ -197,23 +202,77 @@ async function syncSingleProvider(profile: any) {
             isVerified: rev.isVerified ?? true,
           },
         });
-        savedComments++;
-      } catch {
-        // Silently skip duplicate constraint errors
-      }
-    }
-    console.log(`   ✓ Saved ${savedComments} individual review comments`);
 
-    // 3. Update Provider Profile summary
-    if (scraped.totalReviews > 0) {
+        if (storedPhotoKeys.length > 0) {
+          await prisma.$executeRawUnsafe(
+            `UPDATE \`scraped_reviews\` SET \`photo_urls\` = ? WHERE \`id\` = ?`,
+            JSON.stringify(storedPhotoKeys),
+            upserted.id
+          );
+        }
+        savedComments++;
+      } catch {}
+    }
+
+    console.log(
+      `   ✓ Saved ${savedComments} review comments (${uploadedReviewPhotos} customer review photos in R2)`
+    );
+
+    // 3. Recompute compositeRating & totalReviews from DB PlatformReviews
+    const allPlats = await prisma.platformReview.findMany({
+      where: { providerProfileId: profile.id, reviewCount: { gt: 0 } },
+    });
+    const totalRevCount = allPlats.reduce((acc, p) => acc + p.reviewCount, 0);
+    const compRating =
+      totalRevCount > 0
+        ? Math.round(
+            (allPlats.reduce((acc, p) => acc + Number(p.rating) * p.reviewCount, 0) /
+              totalRevCount) *
+              10
+          ) / 10
+        : scraped.compositeRating;
+
+    if (totalRevCount > 0) {
       await prisma.providerProfile.update({
         where: { id: profile.id },
         data: {
-          compositeRating: scraped.compositeRating,
-          totalReviews: scraped.totalReviews,
+          compositeRating: compRating,
+          totalReviews: totalRevCount,
         },
       });
-      console.log(`   ✓ Updated Provider composite rating to ${scraped.compositeRating}`);
+    }
+
+    // 4. Refresh progressive AI review summary if provider has reviews
+    const dbReviews = await prisma.scrapedReview.findMany({
+      where: { providerProfileId: profile.id },
+      orderBy: { createdAt: 'desc' },
+      take: 120,
+    });
+    if (dbReviews.length > 0) {
+      try {
+        const summary = await aiService.generateProgressiveSummary(
+          profile.businessName,
+          dbReviews.map((r) => ({
+            comment: r.comment,
+            rating: r.rating,
+            authorName: r.authorName,
+            platform: r.platform,
+            reviewDate: r.reviewDate || undefined,
+          }))
+        );
+        if (summary && summary.length >= 40) {
+          await prisma.providerProfile.update({
+            where: { id: profile.id },
+            data: {
+              aiReviewSummary: summary,
+              aiSummaryUpdatedAt: new Date(),
+            },
+          });
+          console.log(`   🤖 Updated progressive AI review summary`);
+        }
+      } catch (aiErr: any) {
+        console.warn(`   ⚠️ AI summary skipped: ${aiErr.message}`);
+      }
     }
 
     console.log(`🎉 Finished syncing: ${profile.businessName}`);
@@ -224,54 +283,48 @@ async function syncSingleProvider(profile: any) {
 
 async function run() {
   const args = process.argv.slice(2);
-  const slugArg = args.find((a) => a.startsWith('--slug='))?.replace('--slug=', '') || args[0];
+  const slugArg = args.find((a) => a.startsWith('--slug='))?.replace('--slug=', '') || args.find((a) => !a.startsWith('--'));
+  const maxArg = args.find((a) => a.startsWith('--max='))?.replace('--max=', '');
+  const maxReviews = maxArg ? Number(maxArg) : 2000;
   const isAll = args.includes('--all') || slugArg === 'all';
 
   console.log('🔗 Connecting to database...');
   await prisma.$connect();
+  await ensureReviewColumns();
 
   try {
     if (isAll) {
       const providers = await prisma.providerProfile.findMany({
         where: { isActive: true },
         include: { platformReviews: true },
-        orderBy: { totalReviews: 'desc' },
+        orderBy: { compositeRating: 'desc' },
       });
-
-      console.log(`Found ${providers.length} active providers to sync.`);
-      for (let i = 0; i < providers.length; i++) {
-        const p = providers[i];
-        console.log(`\n[${i + 1}/${providers.length}] Starting: ${p.businessName}`);
-        await syncSingleProvider(p);
-        // Small delay between providers to be polite to servers
-        await new Promise((r) => setTimeout(r, 3000));
+      console.log(`📋 Found ${providers.length} active providers to sync.`);
+      for (const p of providers) {
+        await syncSingleProviderReviews(p, maxReviews);
       }
     } else if (slugArg) {
       const provider = await prisma.providerProfile.findUnique({
         where: { slug: slugArg },
         include: { platformReviews: true },
       });
-
       if (!provider) {
-        console.error(`❌ Provider with slug "${slugArg}" not found in database.`);
+        console.error(`❌ No provider found with slug: "${slugArg}"`);
         process.exit(1);
       }
-
-      await syncSingleProvider(provider);
+      await syncSingleProviderReviews(provider, maxReviews);
     } else {
-      console.log('\nUsage:');
-      console.log('  npx ts-node scripts/sync-reviews-worker.ts --slug=<provider-slug>');
-      console.log('  npx ts-node scripts/sync-reviews-worker.ts --all');
-      process.exit(0);
+      console.log(`
+Usage:
+  npm run sync:reviews -- --slug=<contractor-slug> [--max=2000]
+  npm run sync:reviews -- --all [--max=2000]
+      `);
     }
-
-    console.log('\n✅ Sync task completed successfully!');
   } finally {
     await prisma.$disconnect();
   }
 }
 
-run().catch((err) => {
-  console.error('\n💥 Fatal Error:', err);
-  process.exit(1);
-});
+if (require.main === module) {
+  run();
+}

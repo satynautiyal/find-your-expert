@@ -6,6 +6,8 @@
     "build": "prisma generate && nest build",
     "scrape": "ts-node scripts/scrape-providers.ts",
     "scrape:cabinets": "ts-node scripts/scrape-houzz-cabinets.ts",
+    "scrape:projects": "ts-node scripts/scrape-project-photos.ts",
+    "scrape:full": "ts-node scripts/scrape-full-pipeline.ts",
     "sync:reviews": "ts-node scripts/sync-reviews-worker.ts",
     "sync:yelp-homeadvisor": "ts-node scripts/sync-yelp-homeadvisor.ts",
     "format": "prettier --write \"src/**/*.ts\"",

@@ -32,28 +32,32 @@ export class ReviewsScraperService {
   /**
    * Scrapes Google reviews directly
    */
-  async scrapeGoogle(queryOrUrl: string, maxReviews = 100): Promise<PlatformScrapedResult> {
-    return this.googleScraper.scrapeReviews(queryOrUrl, maxReviews);
+  async scrapeGoogle(
+    queryOrUrl: string,
+    maxReviews = 2000,
+    searchHint?: string
+  ): Promise<PlatformScrapedResult> {
+    return this.googleScraper.scrapeReviews(queryOrUrl, maxReviews, searchHint);
   }
 
   /**
    * Scrapes Yelp reviews directly
    */
-  async scrapeYelp(urlOrSlug: string, maxReviews = 100): Promise<PlatformScrapedResult> {
+  async scrapeYelp(urlOrSlug: string, maxReviews = 2000): Promise<PlatformScrapedResult> {
     return this.yelpScraper.scrapeReviews(urlOrSlug, maxReviews);
   }
 
   /**
    * Scrapes HomeAdvisor ratings and homeowner reviews directly
    */
-  async scrapeHomeAdvisor(urlOrQuery: string, maxReviews = 100): Promise<PlatformScrapedResult> {
+  async scrapeHomeAdvisor(urlOrQuery: string, maxReviews = 2000): Promise<PlatformScrapedResult> {
     return this.homeAdvisorScraper.scrapeReviews(urlOrQuery, maxReviews);
   }
 
   /**
    * Scrapes Houzz recommendations and reviews directly
    */
-  async scrapeHouzz(urlOrSlug: string, maxReviews = 100): Promise<PlatformScrapedResult> {
+  async scrapeHouzz(urlOrSlug: string, maxReviews = 2000): Promise<PlatformScrapedResult> {
     return this.houzzScraper.scrapeReviews(urlOrSlug, maxReviews);
   }
 
@@ -62,10 +66,10 @@ export class ReviewsScraperService {
    */
   async scrapeAllPlatforms(
     target: ProviderScrapeTarget,
-    maxPerPlatform = 50,
+    maxPerPlatform = 2000,
     platforms?: string[]
   ): Promise<MultiPlatformScrapeResult> {
-    const { businessName, city, borough, yelpUrl, homeAdvisorUrl, houzzUrl } = target;
+    const { businessName, city, borough, googleUrl, yelpUrl, homeAdvisorUrl, houzzUrl } = target;
     const locationStr = borough || city || 'New York';
     const enabled =
       platforms && platforms.length > 0
@@ -73,28 +77,60 @@ export class ReviewsScraperService {
         : new Set(['GOOGLE', 'YELP', 'HOMEADVISOR', 'HOUZZ']);
 
     this.logger.log(
-      `🚀 [All-Scraper] Initiating review sync (${[...enabled].join(', ')}) for: "${businessName}"`
+      `🚀 [All-Scraper] Initiating review sync (${[...enabled].join(', ')}) for: "${businessName}" (Max/Platform: ${maxPerPlatform})`
     );
 
-    const googleQuery = `${businessName} ${locationStr} NY`;
-    const yelpTarget = yelpUrl || `${businessName} ${locationStr} NY`;
-    const homeAdvisorTarget = homeAdvisorUrl || `${businessName} ${locationStr} NY`;
-    const houzzTarget = houzzUrl || `${businessName} ${locationStr} NY`;
+    const isCompleteGooglePlaceUrl =
+      Boolean(googleUrl) &&
+      (googleUrl!.includes('place_id:') ||
+        (/google\.com\/maps\/place\//i.test(googleUrl!) &&
+          googleUrl!.length < 190 &&
+          (googleUrl!.includes('!3m') || googleUrl!.includes('0x'))));
 
-    const [googleRes, yelpRes, homeAdvisorRes, houzzRes] = await Promise.allSettled([
-      enabled.has('GOOGLE')
-        ? this.googleScraper.scrapeReviews(googleQuery, maxPerPlatform)
-        : Promise.resolve(null),
+    const searchHint = `${businessName} ${locationStr} NY`;
+    const googleQuery = isCompleteGooglePlaceUrl ? googleUrl! : searchHint;
+    const yelpTarget = yelpUrl || searchHint;
+    const homeAdvisorTarget = homeAdvisorUrl || searchHint;
+    const houzzTarget = houzzUrl || searchHint;
+
+    // Run lightweight HTTP/Serper scrapers (Yelp + HomeAdvisor) alongside sequential free Puppeteer scrapers (Google -> Houzz)
+    // so at most ONE Chromium instance runs at a time, eliminating dual-browser memory spikes.
+    const runBrowserScrapersSequentially = async () => {
+      const g = enabled.has('GOOGLE')
+        ? await this.googleScraper
+            .scrapeReviews(googleQuery, maxPerPlatform, searchHint)
+            .catch((e) => {
+              this.logger.warn(`Google scrape error: ${e.message}`);
+              return null;
+            })
+        : null;
+      const hz = enabled.has('HOUZZ')
+        ? await this.houzzScraper.scrapeReviews(houzzTarget, maxPerPlatform).catch((e) => {
+            this.logger.warn(`Houzz scrape error: ${e.message}`);
+            return null;
+          })
+        : null;
+      return { g, hz };
+    };
+
+    const [browserPair, yelpRes, homeAdvisorRes] = await Promise.allSettled([
+      runBrowserScrapersSequentially(),
       enabled.has('YELP')
         ? this.yelpScraper.scrapeReviews(yelpTarget, maxPerPlatform)
         : Promise.resolve(null),
       enabled.has('HOMEADVISOR')
         ? this.homeAdvisorScraper.scrapeReviews(homeAdvisorTarget, maxPerPlatform)
         : Promise.resolve(null),
-      enabled.has('HOUZZ')
-        ? this.houzzScraper.scrapeReviews(houzzTarget, maxPerPlatform)
-        : Promise.resolve(null),
     ]);
+
+    const googleRes =
+      browserPair.status === 'fulfilled'
+        ? ({ status: 'fulfilled', value: browserPair.value.g } as const)
+        : ({ status: 'rejected', reason: browserPair.reason } as const);
+    const houzzRes =
+      browserPair.status === 'fulfilled'
+        ? ({ status: 'fulfilled', value: browserPair.value.hz } as const)
+        : ({ status: 'rejected', reason: browserPair.reason } as const);
 
     const result: MultiPlatformScrapeResult = {
       businessName,
@@ -151,6 +187,10 @@ export class ReviewsScraperService {
     // Calculate overall composite rating
     result.totalReviews = totalCount;
     result.compositeRating = totalCount > 0 ? Math.round((totalScore / totalCount) * 10) / 10 : 0;
+    result.discoveredWebsiteUrl =
+      result.platforms.google?.discoveredWebsiteUrl ||
+      result.platforms.houzz?.discoveredWebsiteUrl ||
+      undefined;
 
     this.logger.log(
       `🎉 [All-Scraper] Completed 4-platform scrape for "${businessName}": Total Reviews: ${result.totalReviews}, Composite Rating: ${result.compositeRating}, Collected Review Comments: ${result.allReviews.length}`

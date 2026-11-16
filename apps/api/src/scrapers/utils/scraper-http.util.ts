@@ -81,4 +81,118 @@ export class ScraperHttpUtil {
     }
     return 5;
   }
+
+  private static readonly DIRECTORY_AND_SOCIAL_DOMAINS = [
+    'houzz.com',
+    'yelp.com',
+    'google.com',
+    'goo.gl',
+    'g.page',
+    'business.site',
+    'homeadvisor.com',
+    'angi.com',
+    'angieslist.com',
+    'bbb.org',
+    'facebook.com',
+    'fb.com',
+    'instagram.com',
+    'linkedin.com',
+    'youtube.com',
+    'tiktok.com',
+    'pinterest.com',
+    'twitter.com',
+    'x.com',
+    'thumbtack.com',
+    'porch.com',
+    'buildzoom.com',
+    'manta.com',
+    'yellowpages.com',
+    'superpages.com',
+    'mapquest.com',
+    'nextdoor.com',
+    'bark.com',
+    'birdeye.com',
+    'trustpilot.com',
+    'tripadvisor.com',
+    'expertise.com',
+    'networx.com',
+    'chamberofcommerce.com',
+    'buzzfile.com',
+    'dnb.com',
+    'zoominfo.com',
+  ];
+
+  public static isDirectoryOrSocialDomain(hostname: string): boolean {
+    const h = (hostname || '').toLowerCase().replace(/^www\./, '');
+    if (!h || !h.includes('.')) return true;
+    return this.DIRECTORY_AND_SOCIAL_DOMAINS.some(
+      (d) => h === d || h.endsWith(`.${d}`)
+    );
+  }
+
+  /**
+   * Unwraps Google/Houzz redirect wrappers, rejects social/directory domains (Houzz, Yelp, Facebook, etc.),
+   * strips tracking query parameters, and returns the contractor's clean official website URL.
+   */
+  public static normalizeOfficialWebsiteUrl(rawUrl?: string | null): string | null {
+    if (!rawUrl || typeof rawUrl !== 'string') return null;
+    let u = rawUrl.trim();
+    if (!u || /^(mailto:|tel:|javascript:)/i.test(u)) return null;
+    if (u.startsWith('//')) u = `https:${u}`;
+    if (!/^https?:\/\//i.test(u)) {
+      if (/^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}(\/.*)?$/i.test(u)) {
+        u = `https://${u}`;
+      } else {
+        return null;
+      }
+    }
+
+    try {
+      let parsed = new URL(u);
+
+      // Unwrap Google redirect URLs (e.g. https://www.google.com/url?q=https://...)
+      if (parsed.hostname.includes('google.') && parsed.pathname === '/url') {
+        const inner = parsed.searchParams.get('q') || parsed.searchParams.get('url');
+        if (inner && /^https?:\/\//i.test(inner)) {
+          parsed = new URL(inner);
+        }
+      }
+
+      // Unwrap Houzz outbound redirect links if present
+      if (parsed.hostname.includes('houzz.com')) {
+        const inner =
+          parsed.searchParams.get('url') ||
+          parsed.searchParams.get('redirect') ||
+          parsed.searchParams.get('target');
+        if (inner && /^https?:\/\//i.test(inner)) {
+          parsed = new URL(inner);
+        }
+      }
+
+      if (this.isDirectoryOrSocialDomain(parsed.hostname)) {
+        return null;
+      }
+
+      // Strip noisy tracking params
+      const stripParams = [
+        'utm_source',
+        'utm_medium',
+        'utm_campaign',
+        'utm_term',
+        'utm_content',
+        'fbclid',
+        'gclid',
+        'trk',
+        'hz_ref',
+      ];
+      for (const p of stripParams) {
+        parsed.searchParams.delete(p);
+      }
+      parsed.hash = '';
+
+      return parsed.toString();
+    } catch {
+      return null;
+    }
+  }
 }

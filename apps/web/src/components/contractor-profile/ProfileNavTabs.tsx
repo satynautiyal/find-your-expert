@@ -6,6 +6,7 @@ import {
   Star,
   Layers,
   Wrench,
+  Users,
   MapPin,
   HelpCircle,
 } from 'lucide-react';
@@ -15,6 +16,7 @@ interface ProfileNavTabsProps {
   onTabChange: (tabId: string) => void;
   reviewCount?: number;
   projectCount?: number;
+  teamCount?: number;
 }
 
 export default function ProfileNavTabs({
@@ -22,6 +24,7 @@ export default function ProfileNavTabs({
   onTabChange,
   reviewCount = 0,
   projectCount = 0,
+  teamCount = 0,
 }: ProfileNavTabsProps) {
   const [isStuck, setIsStuck] = useState(false);
   const navRef = useRef<HTMLDivElement | null>(null);
@@ -32,6 +35,23 @@ export default function ProfileNavTabs({
     () => [
       { id: 'overview', label: 'Overview', icon: FileText, href: '#overview' },
       { id: 'services', label: 'Services', icon: Wrench, href: '#services' },
+      {
+        id: 'service-areas',
+        label: 'Service Areas',
+        icon: MapPin,
+        href: '#service-areas',
+      },
+      ...(teamCount > 0
+        ? [
+            {
+              id: 'team',
+              label: 'The team',
+              count: teamCount,
+              icon: Users,
+              href: '#team',
+            },
+          ]
+        : []),
       {
         id: 'reviews',
         label: 'Reviews',
@@ -50,15 +70,9 @@ export default function ProfileNavTabs({
             },
           ]
         : []),
-      {
-        id: 'service-areas',
-        label: 'Service Areas',
-        icon: MapPin,
-        href: '#service-areas',
-      },
       { id: 'faq', label: 'Q&A', icon: HelpCircle, href: '#faq' },
     ],
-    [reviewCount, projectCount]
+    [reviewCount, projectCount, teamCount]
   );
 
   // Scroll-spy + sticky shadow detection

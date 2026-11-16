@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, ChevronRight, Plus } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronRight, HelpCircle } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
 
 interface ProfileServiceAreasAndFaqProps {
@@ -12,32 +12,15 @@ export default function ProfileServiceAreasAndFaq({
   provider,
 }: ProfileServiceAreasAndFaqProps) {
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
-  const [showAllAreas, setShowAllAreas] = useState(false);
 
-  const borough = provider.borough && provider.borough !== 'All' ? provider.borough : 'Manhattan';
-  const isRoofing = provider.services?.some((s) => /Roof/i.test(s)) ?? true;
+  const borough =
+    provider.borough && provider.borough !== 'All'
+      ? provider.borough
+      : provider.city || 'Manhattan';
+  const isCabinets =
+    /Cabinet|Millwork|Closet/i.test(provider.category || '') ||
+    Boolean(provider.services?.some((s) => /Cabinet|Millwork|Closet/i.test(s)));
 
-  // Dynamic Service Areas from DB (ListingServiceArea / servesArea) with NYC fallback
-  const dbAreas =
-    provider.serviceAreas && provider.serviceAreas.length > 0
-      ? provider.serviceAreas
-      : provider.servesArea
-      ? provider.servesArea
-          .split(',')
-          .map((a) => a.trim())
-          .filter(Boolean)
-      : [];
-
-  const nycAreas = [
-    borough,
-    ...['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'].filter((b) => b !== borough),
-  ];
-
-  const allAreas = dbAreas.length > 0 ? dbAreas : nycAreas;
-  const initialAreas = allAreas.slice(0, 10);
-  const remainingAreas = allAreas.slice(10);
-
-  // Dynamic FAQs based on trade and location
   const roofingFaqs = [
     {
       q: `How much does a new roof cost in ${borough}?`,
@@ -49,11 +32,11 @@ export default function ProfileServiceAreasAndFaq({
     },
     {
       q: 'Do you offer free estimates?',
-      a: `Yes, ${provider.name} provides 100% free, no-obligation comprehensive estimates including drone inspections and written material breakdowns.`,
+      a: `Yes, ${provider.name} provides 100% free, no-obligation comprehensive estimates including thorough roof inspections and written material breakdowns.`,
     },
     {
       q: 'Do you handle insurance claims for storm damage?',
-      a: 'Yes, our team works directly with all major insurance carriers, preparing detailed itemized Xactimate loss estimates and documentation to ensure fair claim coverage.',
+      a: 'Yes, our team works directly with major insurance carriers, preparing detailed itemized loss estimates and documentation to support fair claim coverage.',
     },
   ];
 
@@ -72,117 +55,72 @@ export default function ProfileServiceAreasAndFaq({
     },
     {
       q: 'Do you provide 3D CAD drawings before fabrication?',
-      a: 'Yes, every project includes detailed 3D CAD renders and shop drawings so you can review door profiles, interior configurations, and finishes before fabrication begins.',
+      a: 'Yes, projects include detailed 3D CAD renders and shop drawings so you can review door profiles, interior configurations, and finishes before fabrication begins.',
     },
   ];
 
-  const faqs = isRoofing ? roofingFaqs : cabinetFaqs;
+  const faqs = isCabinets ? cabinetFaqs : roofingFaqs;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      {/* ========================================================= */}
-      {/* LEFT COLUMN: SERVICE AREAS (col-span-12 lg:col-span-6) */}
-      {/* ========================================================= */}
-      <div id="service-areas" className="lg:col-span-6 bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 space-y-4 shadow-xs">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight">
-            Service Areas
-          </h2>
-          <p className="text-xs sm:text-sm text-gray-500 mt-1">
-            Proudly serving {borough} and surrounding communities.
-          </p>
+    <section
+      id="faq"
+      className="bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 space-y-4 shadow-xs scroll-mt-36"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-[#EBF7F2] text-[#0B3B2C] flex items-center justify-center shrink-0">
+            <HelpCircle className="w-4 h-4" />
+          </div>
+          <div>
+            <h2 className="text-lg sm:text-xl font-black text-gray-950 tracking-tight">
+              Frequently Asked Questions
+            </h2>
+            <p className="text-xs text-gray-500">
+              Common project, pricing, and timeline questions for {provider.name}.
+            </p>
+          </div>
         </div>
 
-        {/* Neighborhood Tags / Pills */}
-        <div className="flex flex-wrap gap-2 pt-1">
-          {/* Main Primary Area Badge */}
-          <span className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#0B3B2C] text-white shadow-xs">
-            {allAreas[0]}
-          </span>
+        <a
+          href="/blog"
+          className="text-xs font-bold text-primary hover:underline inline-flex items-center gap-0.5"
+        >
+          <span>Explore homeowner guides</span>
+          <ChevronRight className="w-3.5 h-3.5" />
+        </a>
+      </div>
 
-          {/* Secondary Areas */}
-          {initialAreas.slice(1).map((area, idx) => (
-            <span
+      {/* Balanced 2-Column Accordion Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 items-start">
+        {faqs.map((faq, idx) => {
+          const isOpen = openFaqIndex === idx;
+          return (
+            <div
               key={idx}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-gray-700 transition-colors"
+              className="border border-gray-200/90 rounded-xl overflow-hidden bg-white transition-colors"
             >
-              {area}
-            </span>
-          ))}
-
-          {/* Expanded Remaining Areas */}
-          {showAllAreas &&
-            remainingAreas.map((area, idx) => (
-              <span
-                key={`rem-${idx}`}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-gray-700 animate-in fade-in duration-200"
+              <button
+                type="button"
+                onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
+                className="w-full text-left p-3.5 flex items-center justify-between gap-3 text-xs sm:text-[13px] font-bold text-gray-900 hover:text-primary hover:bg-gray-50/60 transition-colors cursor-pointer"
               >
-                {area}
-              </span>
-            ))}
-
-          {/* + More Areas Toggle Button */}
-          {remainingAreas.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowAllAreas(!showAllAreas)}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold text-[#EA580C] hover:bg-orange-50 border border-orange-200 transition-colors flex items-center gap-1 cursor-pointer"
-            >
-              <span>{showAllAreas ? 'Show Less' : `+ More Areas (${remainingAreas.length})`}</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* ========================================================= */}
-      {/* RIGHT COLUMN: FAQS (col-span-12 lg:col-span-6) */}
-      {/* ========================================================= */}
-      <div id="faq" className="lg:col-span-6 bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 space-y-4 shadow-xs">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight">
-            Frequently Asked Questions
-          </h2>
-          <a
-            href="/blog"
-            className="text-xs font-bold text-primary hover:underline flex items-center gap-0.5"
-          >
-            <span>View all FAQs</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </a>
-        </div>
-
-        {/* Accordions */}
-        <div className="space-y-2 pt-1">
-          {faqs.map((faq, idx) => {
-            const isOpen = openFaqIndex === idx;
-            return (
-              <div
-                key={idx}
-                className="border border-gray-200/90 rounded-xl overflow-hidden transition-colors"
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpenFaqIndex(isOpen ? null : idx)}
-                  className="w-full text-left p-3.5 flex items-center justify-between gap-3 text-xs sm:text-[13px] font-bold text-gray-900 hover:text-primary hover:bg-gray-50/50 transition-colors cursor-pointer"
-                >
-                  <span>{faq.q}</span>
-                  {isOpen ? (
-                    <ChevronUp className="w-4 h-4 text-gray-500 shrink-0" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-                  )}
-                </button>
-
-                {isOpen && (
-                  <div className="px-3.5 pb-3.5 pt-0 text-xs sm:text-[13px] text-gray-600 leading-relaxed border-t border-gray-100 bg-slate-50/40 animate-in fade-in duration-150">
-                    <p className="pt-2">{faq.a}</p>
-                  </div>
+                <span>{faq.q}</span>
+                {isOpen ? (
+                  <ChevronUp className="w-4 h-4 text-gray-500 shrink-0" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
                 )}
-              </div>
-            );
-          })}
-        </div>
+              </button>
+
+              {isOpen && (
+                <div className="px-3.5 pb-3.5 pt-0 text-xs sm:text-[13px] text-gray-600 leading-relaxed border-t border-gray-100 bg-slate-50/50">
+                  <p className="pt-2.5">{faq.a}</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 }

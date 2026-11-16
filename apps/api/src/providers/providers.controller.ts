@@ -69,13 +69,81 @@ export class ProvidersController {
   }
 
   /**
-   * POST /api/providers/:slug/sync-reviews
-   * Scrape and update live ratings/reviews from Google, Yelp, HomeAdvisor and Houzz
+   * POST /api/providers/projects/sync-all
+   * Scrape authentic project albums, website brand logo, website About AI bio, and website Team across all active providers
    */
-  @Post(':slug/sync-reviews')
-  async syncProviderReviews(
-    @Param('slug') slug: string,
-    @Query('platforms') platformsCsv?: string
+  @Post('projects/sync-all')
+  async syncAllProjects() {
+    const result = await this.providersService.syncAllProviderProjects();
+    return {
+      success: true,
+      data: result,
+      message: 'Synchronized contractor project albums, brand logos, AI bios, and website teams into R2 and MariaDB.',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/brand-team/sync-all
+   * Fast sync of official website brand logo, AI-rewritten website About description, and website "The team" members
+   */
+  @Post('brand-team/sync-all')
+  async syncAllBrandAndTeam() {
+    const result = await this.providersService.syncAllProviderBrandAndTeam();
+    return {
+      success: true,
+      data: result,
+      message: `Synchronized website brand, AI descriptions, and ${result.totalTeamMembersSaved} team members across ${result.totalProviders} providers.`,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/sync-full-all
+   * Run complete permanent scraper pipeline (Website + R2 Logo + AI Bio + R2 Team + Website/Houzz Projects + 2k Reviews + R2 Review Photos + AI Summary)
+   */
+  @Post('sync-full-all')
+  async syncFullAllProviders(@Query('maxReviews') maxReviews?: string) {
+    const result = await this.providersService.syncFullAllProviders(
+      maxReviews ? Number(maxReviews) : 2000
+    );
+    return {
+      success: true,
+      data: result,
+      message: 'Completed full permanent scraper pipeline across all active providers.',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/projects/rewrite-descriptions
+   * Enrich & AI-rewrite all project descriptions into 100% original, SEO-safe prose
+   */
+  @Post('projects/rewrite-descriptions')
+  async rewriteProjectDescriptions(
+    @Query('slug') slug?: string,
+    @Query('force') force?: string
+  ) {
+    const result = await this.providersService.rewriteAllProjectDescriptions({
+      slug: slug || undefined,
+      force: force === undefined ? true : force !== 'false',
+    });
+    return {
+      success: true,
+      data: result,
+      message: `AI-rewrote ${result.rewrittenAndSaved}/${result.targetedProjects} project descriptions.`,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/reviews/sync-all
+   * Scrape up to 2,000 live reviews per contractor across all active providers
+   */
+  @Post('reviews/sync-all')
+  async syncAllProviderReviews(
+    @Query('platforms') platformsCsv?: string,
+    @Query('maxReviews') maxReviews?: string
   ) {
     const platforms = platformsCsv
       ? platformsCsv
@@ -83,7 +151,97 @@ export class ProvidersController {
           .map((p) => p.trim())
           .filter(Boolean)
       : undefined;
-    const result = await this.providersService.syncReviews(slug, platforms);
+    const result = await this.providersService.syncAllProviderReviews(
+      platforms,
+      maxReviews ? Number(maxReviews) : 2000
+    );
+    return {
+      success: true,
+      data: result,
+      message: 'Synchronized reviews across all active providers.',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/:slug/sync-brand-team
+   * Fast sync of official website brand logo, AI-rewritten website About description, and website "The team" members
+   */
+  @Post(':slug/sync-brand-team')
+  async syncProviderBrandAndTeam(@Param('slug') slug: string) {
+    const result = await this.providersService.syncProviderBrandAndTeam(slug);
+    return {
+      success: true,
+      data: result,
+      message: `Synchronized website brand, AI description, and ${result.teamMembersSaved} team member(s) for ${result.businessName}.`,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/:slug/sync-full
+   * Run complete permanent scraper pipeline for a single contractor
+   */
+  @Post(':slug/sync-full')
+  async syncFullProvider(
+    @Param('slug') slug: string,
+    @Query('maxReviews') maxReviews?: string
+  ) {
+    const result = await this.providersService.syncFullProvider(
+      slug,
+      maxReviews ? Number(maxReviews) : 2000
+    );
+    return {
+      success: true,
+      data: result,
+      message: `Completed full permanent scrape for ${result.businessName}.`,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/:slug/sync-projects
+   * Scrape authentic project albums for a single contractor and upload 100% of photos to R2
+   */
+  @Post(':slug/sync-projects')
+  async syncProviderProjects(
+    @Param('slug') slug: string,
+    @Query('maxProjects') maxProjects?: string,
+    @Query('maxPhotos') maxPhotos?: string
+  ) {
+    const result = await this.providersService.syncProviderProjects(slug, {
+      maxProjects: maxProjects ? Number(maxProjects) : undefined,
+      maxPhotosPerProject: maxPhotos ? Number(maxPhotos) : undefined,
+    });
+    return {
+      success: true,
+      data: result,
+      message: `Synchronized ${result.projectsSaved} project albums (${result.photosUploadedToR2} R2 photos) for ${result.businessName}.`,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/:slug/sync-reviews
+   * Scrape and update live ratings/reviews (up to 2,000 max) from Google, Yelp, HomeAdvisor and Houzz
+   */
+  @Post(':slug/sync-reviews')
+  async syncProviderReviews(
+    @Param('slug') slug: string,
+    @Query('platforms') platformsCsv?: string,
+    @Query('maxReviews') maxReviews?: string
+  ) {
+    const platforms = platformsCsv
+      ? platformsCsv
+          .split(',')
+          .map((p) => p.trim())
+          .filter(Boolean)
+      : undefined;
+    const result = await this.providersService.syncReviews(
+      slug,
+      platforms,
+      maxReviews ? Number(maxReviews) : 2000
+    );
     return {
       success: true,
       data: result,
@@ -117,6 +275,21 @@ export class ProvidersController {
     return {
       success: true,
       data: result,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/media/migrate-to-bucket
+   * Download all external provider logos, project photos, cover images, and avatars into R2 bucket
+   */
+  @Post('media/migrate-to-bucket')
+  async migrateMediaToBucket() {
+    const result = await this.providersService.migrateExternalMediaToBucket();
+    return {
+      success: true,
+      data: result,
+      message: 'All external images migrated into Cloudflare R2 bucket successfully.',
       timestamp: new Date().toISOString(),
     };
   }

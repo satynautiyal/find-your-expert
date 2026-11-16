@@ -7,6 +7,7 @@ import {
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -339,6 +340,216 @@ export class StorageService {
       this.logger.error(`Failed to transfer image from ${remoteUrl} to R2: ${err.message}`);
       return remoteUrl;
     }
+  }
+
+  /**
+   * Detect image MIME type and file extension from buffer magic bytes + HTTP Content-Type.
+   * Returns null if buffer is HTML, empty, or not a valid image.
+   */
+  public detectImageFormat(
+    buffer: Buffer,
+    headerContentType?: string | null
+  ): { contentType: string; ext: string } | null {
+    if (!buffer || buffer.length < 150) return null;
+
+    // Magic bytes check
+    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+      return { contentType: 'image/jpeg', ext: 'jpg' };
+    }
+    if (
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47
+    ) {
+      return { contentType: 'image/png', ext: 'png' };
+    }
+    if (
+      buffer.length >= 12 &&
+      buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+    ) {
+      return { contentType: 'image/webp', ext: 'webp' };
+    }
+    if (buffer.subarray(0, 4).toString('ascii') === 'GIF8') {
+      return { contentType: 'image/gif', ext: 'gif' };
+    }
+    if (buffer.length >= 12 && buffer.subarray(4, 12).toString('ascii').startsWith('ftypav')) {
+      return { contentType: 'image/avif', ext: 'avif' };
+    }
+
+    const headText = buffer.subarray(0, 256).toString('utf8').trimStart();
+    if (/^<!doctype\s+html|^<html/i.test(headText)) {
+      return null;
+    }
+    if (headText.startsWith('<svg') || (headText.startsWith('<?xml') && headText.includes('<svg'))) {
+      return { contentType: 'image/svg+xml', ext: 'svg' };
+    }
+
+    const ct = (headerContentType || '').split(';')[0].trim().toLowerCase();
+    if (ct === 'image/jpeg' || ct === 'image/jpg') return { contentType: 'image/jpeg', ext: 'jpg' };
+    if (ct === 'image/png') return { contentType: 'image/png', ext: 'png' };
+    if (ct === 'image/webp') return { contentType: 'image/webp', ext: 'webp' };
+    if (ct === 'image/gif') return { contentType: 'image/gif', ext: 'gif' };
+    if (ct === 'image/avif') return { contentType: 'image/avif', ext: 'avif' };
+    if (ct === 'image/svg+xml') return { contentType: 'image/svg+xml', ext: 'svg' };
+
+    return null;
+  }
+
+  /**
+   * Build ordered candidate download URLs for an external image (upgrading thumbnails,
+   * stripping JXL query params, and adding direct origin fallbacks for /_next/image).
+   */
+  private buildRemoteFetchCandidates(rawUrl: string): string[] {
+    let url = rawUrl.trim();
+    if (url.startsWith('//')) url = `https:${url}`;
+
+    // Strip Duda JPEG-XL negotiation params so standard PNG/JPG is returned
+    url = url
+      .replace(/\?jxl(&v=jxl)?$/i, '')
+      .replace(/&jxl(&v=jxl)?/gi, '');
+
+    const candidates: string[] = [];
+
+    // Upgrade Houzz simgs avatar/logo to sharp 500x500 (_10-) first, fallback to original
+    if (url.includes('st.hzcdn.com/simgs/') && /_(?:0|1|2|3|4)-(\d+)/.test(url)) {
+      candidates.push(url.replace(/_(?:0|1|2|3|4)-(\d+)/, '_10-$1'));
+    }
+
+    // Upgrade Houzz fimgs project photo from small grid size to sharp 990x660 first, fallback to original
+    if (url.includes('st.hzcdn.com/fimgs/') && /-w(?:390|585)-h(?:260|390)-/.test(url)) {
+      candidates.push(url.replace(/-w(?:390|585)-h(?:260|390)-b0-p0--?-?\.jpg/i, '-w990-h660-b0-p0---.jpg'));
+    }
+
+    // WordPress uploaded thumbnails (-300x200.jpg / -768x512.webp): try uncropped full-res original FIRST, keep thumb fallback
+    if (/\/wp-content\/uploads\/.+-\d{2,4}x\d{2,4}\.(?:jpe?g|png|webp)(\?.*)?$/i.test(url)) {
+      candidates.push(
+        url.replace(/-\d{2,4}x\d{2,4}(?=\.(?:jpe?g|png|webp)(?:\?.*)?$)/i, '')
+      );
+    }
+
+    // Squarespace CDN: try crisp 1500w first, fallback to original
+    if (url.includes('squarespace-cdn.com') && /[?&]format=\d+w/i.test(url)) {
+      candidates.push(url.replace(/([?&]format=)\d+w/i, '$11500w'));
+    }
+
+    candidates.push(url);
+
+    // Google Maps signed review photos (googleusercontent.com/geougc-cs or /gps-cs-s or /p/):
+    // if =w1200-h900-no or =s1200 fails on a signed URL, fallback to =s800 and =w600-h450-p
+    if (url.includes('googleusercontent.com')) {
+      if (/=(?:w\d+-h\d+[^&"'\s)]*|s\d+[^&"'\s)]*)/i.test(url)) {
+        candidates.push(url.replace(/=(?:w\d+-h\d+[^&"'\s)]*|s\d+[^&"'\s)]*)/i, '=s800'));
+        candidates.push(url.replace(/=(?:w\d+-h\d+[^&"'\s)]*|s\d+[^&"'\s)]*)/i, '=w600-h450-p'));
+      }
+    }
+
+    // If Next.js /_next/image wrapper, add direct underlying asset URL as fallback
+    if (url.includes('/_next/image')) {
+      try {
+        const parsed = new URL(url);
+        const inner = parsed.searchParams.get('url');
+        if (inner) {
+          const resolved = inner.startsWith('http')
+            ? inner
+            : `${parsed.origin}${inner.startsWith('/') ? '' : '/'}${inner}`;
+          candidates.push(resolved);
+        }
+      } catch {
+        // Ignore URL parse error
+      }
+    }
+
+    return [...new Set(candidates)];
+  }
+
+  /**
+   * Downloads an external image URL, validates its image bytes, uploads it into Cloudflare R2,
+   * and returns the clean R2 object key (e.g. "providers/logos/nykb.jpg") for DB storage.
+   *
+   * - If `remoteUrl` is already an R2 object key or R2 bucket URL, returns the clean key without re-uploading.
+   * - Never returns an external hotlink URL: returns `null` if download/validation fails.
+   */
+  async ingestRemoteImage(remoteUrl: string | null | undefined, keyBase: string): Promise<string | null> {
+    if (!remoteUrl) return null;
+    const trimmed = remoteUrl.trim();
+    if (!trimmed) return null;
+
+    // Skip generic blank silhouette avatars
+    if (
+      trimmed.includes('user_0.png') ||
+      trimmed.includes('user_60_square.png') ||
+      trimmed.includes('user_medium_square.png') ||
+      trimmed.includes('default_avatar')
+    ) {
+      return null;
+    }
+
+    // Already stored in our bucket or as a clean R2 object key
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://') && !trimmed.startsWith('//')) {
+      return this.extractCleanKey(trimmed) || null;
+    }
+    if (
+      trimmed.includes('.r2.cloudflarestorage.com') ||
+      trimmed.includes('.amazonaws.com') ||
+      trimmed.includes('/api/storage/')
+    ) {
+      return this.extractCleanKey(trimmed) || null;
+    }
+
+    const candidates = this.buildRemoteFetchCandidates(trimmed);
+    const strippedBase = keyBase.replace(/^\/+/, '').replace(/\.(jpg|jpeg|png|webp|gif|avif|svg)$/i, '');
+
+    for (const candidateUrl of candidates) {
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      try {
+        const controller = new AbortController();
+        timer = setTimeout(() => controller.abort(), 15000);
+        let originReferer = '';
+        try {
+          originReferer = `${new URL(candidateUrl).origin}/`;
+        } catch {
+          originReferer = '';
+        }
+
+        const res = await fetch(candidateUrl, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            Accept: 'image/webp,image/png,image/jpeg,image/avif,image/*;q=0.9,*/*;q=0.5',
+            ...(originReferer ? { Referer: originReferer } : {}),
+          },
+        });
+        clearTimeout(timer);
+        timer = null;
+
+        if (!res.ok) continue;
+
+        const arrayBuffer = await res.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const detected = this.detectImageFormat(buffer, res.headers.get('content-type'));
+        if (!detected) continue;
+
+        const finalKey = `${strippedBase}.${detected.ext}`;
+        await this.putObject(buffer, finalKey, detected.contentType);
+        return finalKey;
+      } catch (err: any) {
+        if (timer) clearTimeout(timer);
+        this.logger.warn(`⚠️ ingestRemoteImage candidate failed (${candidateUrl}): ${err.message}`);
+      }
+    }
+
+    this.logger.warn(`❌ Could not ingest external image into R2 (all candidates failed): ${trimmed}`);
+    return null;
+  }
+
+  /**
+   * Deterministic short SHA-1 hash helper for deduplicating asset keys
+   */
+  public hashUrl(url: string): string {
+    return createHash('sha1').update(url.trim()).digest('hex').slice(0, 12);
   }
 
   /**

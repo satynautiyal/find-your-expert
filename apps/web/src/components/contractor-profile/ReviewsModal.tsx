@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   X,
   Star,
@@ -9,6 +9,10 @@ import {
   CheckCircle2,
   CornerDownRight,
   SlidersHorizontal,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  ArrowRight,
 } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
 import { fetchProviderBySlug, type ScrapedReviewItemDto } from '@/lib/api';
@@ -26,6 +30,59 @@ interface ReviewsModalProps {
   provider: RooferProvider;
   scrapedReviews?: ScrapedReviewItemDto[];
   initialPlatform?: string;
+}
+
+function ExpandableReviewText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [isOverflowing, setIsOverflowing] = useState((text || '').length > 180);
+  const pRef = useRef<HTMLParagraphElement | null>(null);
+
+  useEffect(() => {
+    const el = pRef.current;
+    if (!el || expanded) return;
+    const check = () => {
+      if (el) {
+        setIsOverflowing(el.scrollHeight > el.clientHeight + 1);
+      }
+    };
+    check();
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(check);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+  }, [text, expanded]);
+
+  return (
+    <div className="space-y-1.5">
+      <p
+        ref={pRef}
+        className={`text-[13px] sm:text-sm text-gray-700 leading-relaxed whitespace-pre-line ${expanded ? '' : 'line-clamp-3'
+          }`}
+      >
+        {text}
+      </p>
+      {(isOverflowing || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          className="group/rm inline-flex items-center gap-1 text-xs font-bold text-[#EA580C] hover:text-[#D94F0A] transition-colors cursor-pointer"
+        >
+          {expanded ? (
+            <>
+              <span>Show less</span>
+              <ChevronUp className="w-3.5 h-3.5" />
+            </>
+          ) : (
+            <>
+              <span>Read more</span>
+              <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover/rm:translate-x-0.5" />
+            </>
+          )}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function formatReviewDate(rawDate?: string | null): string {
@@ -46,7 +103,7 @@ function formatReviewDate(rawDate?: string | null): string {
 }
 
 function cleanReviewerName(rawName?: string): string {
-  const name = (rawName || '').trim();
+  const name = (rawName || '').replace(/\s*·\s*#\d+$/, '').trim();
   if (!name) return 'Verified Homeowner';
   if (/^HU-\d+$/i.test(name)) return 'Verified Houzz Homeowner';
   // Strip Houzz obfuscated hash token prefix before real surname (e.g. "E2Isk.../TlN Levine" -> "Levine")
@@ -110,9 +167,16 @@ export default function ReviewsModal({
   const [sortBy, setSortBy] = useState<'RELEVANT' | 'HIGHEST' | 'LOWEST'>('RELEVANT');
   const [lazyScrapedReviews, setLazyScrapedReviews] = useState<ScrapedReviewItemDto[]>([]);
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+  const [renderedCount, setRenderedCount] = useState(60);
+  const [lightboxState, setLightboxState] = useState<{
+    photos: string[];
+    index: number;
+    authorName: string;
+  } | null>(null);
 
   useEffect(() => {
     setLazyScrapedReviews([]);
+    setLightboxState(null);
   }, [provider.slug]);
 
   useEffect(() => {
@@ -120,8 +184,16 @@ export default function ReviewsModal({
       setSelectedPlatform(initialPlatform || 'ALL');
       setSearchQuery('');
       setSortBy('RELEVANT');
+      setRenderedCount(60);
+      setLightboxState(null);
+    } else {
+      setLightboxState(null);
     }
   }, [isOpen, initialPlatform]);
+
+  useEffect(() => {
+    setRenderedCount(60);
+  }, [selectedPlatform, searchQuery, sortBy]);
 
   // Lazy-fetch full scraped reviews when opened from listing/category cards where scrapedReviews aren't preloaded
   useEffect(() => {
@@ -138,7 +210,7 @@ export default function ReviewsModal({
           setLazyScrapedReviews(fullProvider.scrapedReviews as ScrapedReviewItemDto[]);
         }
       })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => {
         if (!cancelled) setIsLoadingReviews(false);
       });
@@ -148,13 +220,38 @@ export default function ReviewsModal({
     };
   }, [isOpen, provider.slug, provider.scrapedReviews, scrapedReviews]);
 
-  // Body scroll lock & Escape handler
+  // Body scroll lock & Escape / Lightbox arrow handler
   useEffect(() => {
     if (!isOpen) return;
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (lightboxState) {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          setLightboxState(null);
+        } else if (e.key === 'ArrowLeft' && lightboxState.photos.length > 1) {
+          setLightboxState((prev) =>
+            prev
+              ? {
+                ...prev,
+                index: (prev.index - 1 + prev.photos.length) % prev.photos.length,
+              }
+              : null
+          );
+        } else if (e.key === 'ArrowRight' && lightboxState.photos.length > 1) {
+          setLightboxState((prev) =>
+            prev
+              ? {
+                ...prev,
+                index: (prev.index + 1) % prev.photos.length,
+              }
+              : null
+          );
+        }
+        return;
+      }
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -163,7 +260,7 @@ export default function ReviewsModal({
       document.body.style.overflow = originalOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, lightboxState]);
 
   const formattedReviewsUpdated = useMemo(() => {
     if (!provider.reviewsLastUpdatedAt) return null;
@@ -200,6 +297,7 @@ export default function ReviewsModal({
           date: formatReviewDate(parsed.extractedDate),
           customerComment: parsed.customerComment,
           ownerReply: parsed.ownerReply,
+          photoUrls: Array.isArray(sr.photoUrls) ? sr.photoUrls.filter(Boolean) : [],
         };
       }),
     [effectiveScrapedReviews, provider.name]
@@ -331,7 +429,19 @@ export default function ReviewsModal({
     }
   };
 
+  const handleFeedScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (
+      renderedCount < visibleReviews.length &&
+      el.scrollHeight - el.scrollTop - el.clientHeight < 650
+    ) {
+      setRenderedCount((prev) => Math.min(visibleReviews.length, prev + 60));
+    }
+  };
+
   if (!isOpen) return null;
+
+  const slicedReviews = visibleReviews.slice(0, renderedCount);
 
   const reviewsFeedContent = isLoadingReviews ? (
     <div className="space-y-3 sm:space-y-4">
@@ -359,80 +469,126 @@ export default function ReviewsModal({
       ))}
     </div>
   ) : visibleReviews.length > 0 ? (
-    visibleReviews.map((rev, idx) => (
-      <article
-        key={`${rev.platform}-${rev.authorName}-${idx}`}
-        className="p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 bg-white shadow-sm space-y-2.5 sm:space-y-3"
-      >
-        {/* Reviewer Identity Row */}
-        <div className="flex items-start justify-between gap-2.5 sm:gap-3">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            {rev.authorAvatarUrl ? (
-              <img
-                src={rev.authorAvatarUrl}
-                alt={rev.authorName}
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-gray-200 shrink-0"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-100 border border-gray-200 flex items-center justify-center text-xs font-black text-gray-700 shrink-0">
-                {rev.authorName.charAt(0).toUpperCase()}
-              </div>
-            )}
-
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-bold text-[13px] sm:text-sm text-gray-950 truncate max-w-[160px] xs:max-w-[210px] sm:max-w-none">
-                  {rev.authorName}
-                </span>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <div className="flex items-center text-amber-500">
-                  {[...Array(5)].map((_, i) => (
-                    <Star
-                      key={i}
-                      className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${
-                        i < Math.round(rev.rating || 5)
-                          ? 'fill-amber-400 text-amber-400'
-                          : 'fill-gray-200 text-gray-200'
-                      }`}
-                    />
-                  ))}
+    <>
+      {slicedReviews.map((rev, idx) => (
+        <article
+          key={`${rev.platform}-${rev.authorName}-${idx}`}
+          className="p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 bg-white shadow-sm space-y-2.5 sm:space-y-3"
+        >
+          {/* Reviewer Identity Row */}
+          <div className="flex items-start justify-between gap-2.5 sm:gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              {rev.authorAvatarUrl ? (
+                <img
+                  src={rev.authorAvatarUrl}
+                  alt={rev.authorName}
+                  loading="lazy"
+                  decoding="async"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-gray-200 shrink-0"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-100 border border-gray-200 flex items-center justify-center text-xs font-black text-gray-700 shrink-0">
+                  {rev.authorName.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-[11px] text-gray-400 font-medium">
-                  {rev.date}
-                </span>
+              )}
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-[13px] sm:text-sm text-gray-950 truncate max-w-[160px] xs:max-w-[210px] sm:max-w-none">
+                    {rev.authorName}
+                  </span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <div className="flex items-center text-amber-500">
+                    {[...Array(5)].map((_, i) => (
+                      <Star
+                        key={i}
+                        className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${i < Math.round(rev.rating || 5)
+                            ? 'fill-amber-400 text-amber-400'
+                            : 'fill-gray-200 text-gray-200'
+                          }`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-[11px] text-gray-400 font-medium">
+                    {rev.date}
+                  </span>
+                </div>
               </div>
             </div>
+
+            {/* Platform Badge */}
+            <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full bg-slate-50 border border-gray-200/90 text-[10.5px] sm:text-[11px] font-bold text-gray-700 shrink-0">
+              {renderPlatformIcon(rev.platform)}
+              <span>{formatPlatformName(rev.platform)}</span>
+            </span>
           </div>
 
-          {/* Platform Badge */}
-          <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full bg-slate-50 border border-gray-200/90 text-[10.5px] sm:text-[11px] font-bold text-gray-700 shrink-0">
-            {renderPlatformIcon(rev.platform)}
-            <span>{formatPlatformName(rev.platform)}</span>
-          </span>
-        </div>
+          {/* 3-Line Review Comment + Read more -> Toggle */}
+          <ExpandableReviewText text={rev.customerComment} />
 
-        {/* Full Untruncated Review Comment */}
-        <p className="text-[13px] sm:text-sm text-gray-700 leading-relaxed whitespace-pre-line">
-          {rev.customerComment}
-        </p>
-
-        {/* Business Owner Reply (if present in review data) */}
-        {rev.ownerReply && (
-          <div className="ml-1.5 sm:ml-4 pl-3 sm:pl-3.5 py-2.5 pr-3 rounded-xl bg-slate-50 border-l-2 border-primary/70 space-y-1">
-            <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-900">
-              <CornerDownRight className="w-3.5 h-3.5 text-primary shrink-0" />
-              <span>Response from {provider.name}</span>
+          {/* Customer-Shared Review Photos (100% Served from Cloudflare R2 Bucket) */}
+          {rev.photoUrls && rev.photoUrls.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap pt-0.5">
+              {rev.photoUrls.map((photoUrl, pIdx) => (
+                <button
+                  key={`${photoUrl}-${pIdx}`}
+                  type="button"
+                  onClick={() =>
+                    setLightboxState({
+                      photos: rev.photoUrls,
+                      index: pIdx,
+                      authorName: rev.authorName,
+                    })
+                  }
+                  aria-label={`View photo ${pIdx + 1} shared by ${rev.authorName}`}
+                  className="group relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border border-gray-200/90 bg-slate-100 hover:border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#0B3B2C]/30 transition-all cursor-pointer shrink-0"
+                >
+                  <img
+                    src={photoUrl}
+                    alt={`Photo ${pIdx + 1} shared by ${rev.authorName}`}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                  />
+                </button>
+              ))}
             </div>
-            <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">
-              {rev.ownerReply}
-            </p>
-          </div>
-        )}
-      </article>
-    ))
+          )}
+
+          {/* Business Owner Reply (if present in review data) */}
+          {rev.ownerReply && (
+            <div className="ml-1.5 sm:ml-4 pl-3 sm:pl-3.5 py-2.5 pr-3 rounded-xl bg-slate-50 border-l-2 border-primary/70 space-y-1">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-900">
+                <CornerDownRight className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span>Response from {provider.name}</span>
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-line">
+                {rev.ownerReply}
+              </p>
+            </div>
+          )}
+        </article>
+      ))}
+
+      {renderedCount < visibleReviews.length && (
+        <div className="pt-2 pb-1 text-center">
+          <button
+            type="button"
+            onClick={() =>
+              setRenderedCount((prev) => Math.min(visibleReviews.length, prev + 80))
+            }
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-gray-800 transition-colors cursor-pointer"
+          >
+            <span>
+              Showing {renderedCount} of {visibleReviews.length} reviews — Show more
+            </span>
+          </button>
+        </div>
+      )}
+    </>
   ) : searchQuery.trim() ? (
     <div className="py-10 sm:py-12 text-center space-y-2">
       <p className="text-sm font-bold text-gray-900">
@@ -532,7 +688,10 @@ export default function ReviewsModal({
         {/* ========================================================= */}
         {/* MOBILE BODY (< md): UNIFIED SCROLL + STICKY FILTER RAIL   */}
         {/* ========================================================= */}
-        <div className="md:hidden flex-1 min-h-0 overflow-y-auto overscroll-contain bg-white">
+        <div
+          onScroll={handleFeedScroll}
+          className="md:hidden flex-1 min-h-0 overflow-y-auto overscroll-contain bg-white"
+        >
           {/* 1. Compact Side-by-Side Score & Distribution Strip (Scrolls away naturally as you read) */}
           <div className="bg-[#F8FAFC] px-4 py-3 border-b border-gray-200/80 flex items-center gap-4">
             <div className="shrink-0 text-center min-w-[82px]">
@@ -543,11 +702,10 @@ export default function ReviewsModal({
                 {[...Array(5)].map((_, i) => (
                   <Star
                     key={i}
-                    className={`w-3 h-3 ${
-                      i < Math.round(compositeRating)
+                    className={`w-3 h-3 ${i < Math.round(compositeRating)
                         ? 'fill-amber-400 text-amber-400'
                         : 'fill-gray-200 text-gray-200'
-                    }`}
+                      }`}
                   />
                 ))}
               </div>
@@ -585,17 +743,15 @@ export default function ReviewsModal({
               <button
                 type="button"
                 onClick={() => setSelectedPlatform('ALL')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold shrink-0 transition-colors cursor-pointer ${
-                  selectedPlatform === 'ALL'
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold shrink-0 transition-colors cursor-pointer ${selectedPlatform === 'ALL'
                     ? 'bg-[#0B3B2C] text-white border-[#0B3B2C]'
                     : 'bg-white text-gray-800 border-gray-200/90'
-                }`}
+                  }`}
               >
                 <span>All</span>
                 <span
-                  className={`text-[10.5px] font-semibold ${
-                    selectedPlatform === 'ALL' ? 'text-white/80' : 'text-gray-400'
-                  }`}
+                  className={`text-[10.5px] font-semibold ${selectedPlatform === 'ALL' ? 'text-white/80' : 'text-gray-400'
+                    }`}
                 >
                   ({normalizedReviews.length || totalReviews})
                 </span>
@@ -612,21 +768,21 @@ export default function ReviewsModal({
                     key={plat.key}
                     type="button"
                     onClick={() => setSelectedPlatform(plat.key)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs shrink-0 transition-colors cursor-pointer ${
-                      isActive
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs shrink-0 transition-colors cursor-pointer ${isActive
                         ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] font-bold'
                         : 'bg-white text-gray-800 border-gray-200/90 font-semibold'
-                    }`}
+                      }`}
                   >
                     {renderPlatformIcon(plat.key)}
                     <span>{plat.label}</span>
                     <span className="font-bold">{plat.rating.toFixed(1)}</span>
                     <span
-                      className={`text-[10.5px] ${
-                        isActive ? 'text-white/80' : 'text-gray-400'
-                      }`}
+                      className={`text-[10.5px] ${isActive ? 'text-white/80' : 'text-gray-400'
+                        }`}
                     >
-                      ({savedForPlat > 0 ? `${savedForPlat}/${plat.count}` : plat.count})
+                      ({savedForPlat > 0 && savedForPlat < plat.count
+                        ? `${savedForPlat}/${plat.count}`
+                        : Math.max(savedForPlat, plat.count)})
                     </span>
                   </button>
                 );
@@ -691,11 +847,10 @@ export default function ReviewsModal({
                     {[...Array(5)].map((_, i) => (
                       <Star
                         key={i}
-                        className={`w-4 h-4 ${
-                          i < Math.round(compositeRating)
+                        className={`w-4 h-4 ${i < Math.round(compositeRating)
                             ? 'fill-amber-400 text-amber-400'
                             : 'fill-gray-200 text-gray-200'
-                        }`}
+                          }`}
                       />
                     ))}
                   </div>
@@ -736,20 +891,20 @@ export default function ReviewsModal({
                 <button
                   type="button"
                   onClick={() => setSelectedPlatform('ALL')}
-                  className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                    selectedPlatform === 'ALL'
+                  className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${selectedPlatform === 'ALL'
                       ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] shadow-sm'
                       : 'bg-white hover:bg-gray-50 text-gray-800 border-gray-200/90'
-                  }`}
+                    }`}
                 >
                   <span>All Platforms</span>
                   <span
-                    className={`text-[11px] font-semibold ${
-                      selectedPlatform === 'ALL' ? 'text-white/80' : 'text-gray-500'
-                    }`}
+                    className={`text-[11px] font-semibold ${selectedPlatform === 'ALL' ? 'text-white/80' : 'text-gray-500'
+                      }`}
                   >
                     {normalizedReviews.length > 0
-                      ? `${normalizedReviews.length} saved • ${totalReviews} total`
+                      ? normalizedReviews.length >= totalReviews
+                        ? `${normalizedReviews.length} verified`
+                        : `${normalizedReviews.length} saved • ${totalReviews} total`
                       : `${totalReviews} total`}
                   </span>
                 </button>
@@ -765,11 +920,10 @@ export default function ReviewsModal({
                       key={plat.key}
                       type="button"
                       onClick={() => setSelectedPlatform(plat.key)}
-                      className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs transition-all cursor-pointer ${
-                        isActive
+                      className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs transition-all cursor-pointer ${isActive
                           ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] shadow-sm font-bold'
                           : 'bg-white hover:bg-gray-50 text-gray-800 border-gray-200/90 font-semibold'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         {renderPlatformIcon(plat.key)}
@@ -780,11 +934,12 @@ export default function ReviewsModal({
                         <Star className="w-3 h-3 fill-amber-400 text-amber-400 shrink-0" />
                         <span className="font-bold">{plat.rating.toFixed(1)}</span>
                         <span
-                          className={`text-[11px] ${
-                            isActive ? 'text-white/80' : 'text-gray-400'
-                          }`}
+                          className={`text-[11px] ${isActive ? 'text-white/80' : 'text-gray-400'
+                            }`}
                         >
-                          ({savedForPlat > 0 ? `${savedForPlat}/${plat.count}` : plat.count})
+                          ({savedForPlat > 0 && savedForPlat < plat.count
+                            ? `${savedForPlat}/${plat.count}`
+                            : Math.max(savedForPlat, plat.count)})
                         </span>
                       </div>
                     </button>
@@ -835,12 +990,102 @@ export default function ReviewsModal({
             </div>
 
             {/* Scrollable Reviews List */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div onScroll={handleFeedScroll} className="flex-1 overflow-y-auto p-5 space-y-4">
               {reviewsFeedContent}
             </div>
           </div>
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* FULL-SCREEN LIGHTBOX FOR CUSTOMER-SHARED REVIEW PHOTOS    */}
+      {/* ========================================================= */}
+      {lightboxState && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-8"
+          onClick={(e) => {
+            e.stopPropagation();
+            setLightboxState(null);
+          }}
+        >
+          {/* Top Lightbox Bar */}
+          <div
+            className="w-full max-w-5xl flex items-center justify-between gap-3 pb-3 text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-bold truncate">
+                Photo shared by {lightboxState.authorName}
+              </p>
+              {lightboxState.photos.length > 1 && (
+                <p className="text-xs text-white/70">
+                  {lightboxState.index + 1} of {lightboxState.photos.length}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setLightboxState(null)}
+              aria-label="Close photo preview"
+              className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors cursor-pointer shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Main Image Stage */}
+          <div
+            className="relative flex-1 w-full max-w-5xl min-h-0 flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {lightboxState.photos.length > 1 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setLightboxState((prev) =>
+                    prev
+                      ? {
+                        ...prev,
+                        index: (prev.index - 1 + prev.photos.length) % prev.photos.length,
+                      }
+                      : null
+                  )
+                }
+                aria-label="Previous photo"
+                className="absolute left-1 sm:left-3 z-10 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+            )}
+
+            <img
+              src={lightboxState.photos[lightboxState.index]}
+              alt={`Customer review photo ${lightboxState.index + 1}`}
+              className="max-w-full max-h-[76dvh] object-contain rounded-xl shadow-2xl select-none"
+            />
+
+            {lightboxState.photos.length > 1 && (
+              <button
+                type="button"
+                onClick={() =>
+                  setLightboxState((prev) =>
+                    prev
+                      ? {
+                        ...prev,
+                        index: (prev.index + 1) % prev.photos.length,
+                      }
+                      : null
+                  )
+                }
+                aria-label="Next photo"
+                className="absolute right-1 sm:right-3 z-10 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 border border-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

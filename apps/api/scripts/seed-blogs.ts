@@ -1,6 +1,7 @@
 import { PrismaClient, PostStatus } from '@prisma/client';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { ingestImageToR2 } from './utils/r2-upload';
 
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
@@ -131,12 +132,20 @@ async function main() {
   ];
 
   for (const post of samples) {
+    const r2CoverKey = post.coverImageUrl
+      ? await ingestImageToR2(post.coverImageUrl, `blogs/covers/${post.slug}`)
+      : null;
+    const postData = {
+      ...post,
+      coverImageUrl: r2CoverKey,
+      ogImageUrl: r2CoverKey,
+    };
     await prisma.blogPost.upsert({
       where: { slug: post.slug },
-      update: post,
-      create: post,
+      update: postData,
+      create: postData,
     });
-    console.log(`✅ Seeded blog: ${post.title}`);
+    console.log(`✅ Seeded blog: ${post.title} (cover: ${r2CoverKey})`);
   }
 
   console.log('🎉 Seeding completed successfully!');

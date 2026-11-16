@@ -4,6 +4,38 @@ export interface PlatformReviewData {
   url: string;
 }
 
+export interface ProviderProjectPhotoItem {
+  id: string;
+  url: string;
+  caption?: string;
+  width?: number;
+  height?: number;
+}
+
+export interface ProviderProjectItem {
+  id: string;
+  title: string;
+  slug: string;
+  description?: string;
+  location?: string;
+  projectYear?: number;
+  costRange?: string;
+  serviceCategory?: string;
+  sourceUrl?: string;
+  coverUrl: string;
+  photoCount: number;
+  photos: ProviderProjectPhotoItem[];
+}
+
+export interface ProviderTeamMemberItem {
+  id: string;
+  name: string;
+  role?: string;
+  credentials?: string;
+  bio?: string;
+  photoUrl?: string;
+}
+
 export interface RooferProvider {
   id: string;
   name: string;
@@ -22,6 +54,10 @@ export interface RooferProvider {
     caption?: string;
     category?: string;
   }>;
+  projectCount?: number;
+  projects?: ProviderProjectItem[];
+  teamCount?: number;
+  teamMembers?: ProviderTeamMemberItem[];
   borough: string;
   city?: string;
   state?: string;
@@ -66,5 +102,6 @@ export interface RooferProvider {
     reviewDate?: string;
     platform: 'GOOGLE' | 'YELP' | 'HOMEADVISOR' | 'HOUZZ' | 'FACEBOOK' | string;
     sourceUrl?: string;
+    photoUrls?: string[];
   }>;
 }
