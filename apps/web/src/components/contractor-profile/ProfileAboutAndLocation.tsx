@@ -195,7 +195,7 @@ export default function ProfileAboutAndLocation({
       {/* ========================================================= */}
       {/* LEFT COLUMN: COMPANY OVERVIEW & BUSINESS DETAILS (7 COLS) */}
       {/* ========================================================= */}
-      <div className="lg:col-span-7 bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 shadow-sm flex flex-col justify-between gap-6">
+      <div className="lg:col-span-7 bg-white rounded-2xl border border-gray-300/85 p-5 sm:p-6 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.11),0_4px_10px_-2px_rgba(15,23,42,0.06)] flex flex-col justify-between gap-6">
         {/* Top Bio Section */}
         <div className="space-y-3.5">
           <div className="space-y-1">
@@ -276,7 +276,7 @@ export default function ProfileAboutAndLocation({
       {/* ========================================================= */}
       {/* RIGHT COLUMN: REAL INTERACTIVE LOCATION MAP (5 COLS)      */}
       {/* ========================================================= */}
-      <div className="lg:col-span-5 bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 shadow-sm flex flex-col justify-between gap-4">
+      <div className="lg:col-span-5 bg-white rounded-2xl border border-gray-300/85 p-5 sm:p-6 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.11),0_4px_10px_-2px_rgba(15,23,42,0.06)] flex flex-col justify-between gap-4">
         {/* Header Row */}
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">

@@ -36,6 +36,13 @@ export interface ProviderTeamMemberItem {
   photoUrl?: string;
 }
 
+export interface ProviderReviewStats {
+  totalSaved: number;
+  withPhotosCount: number;
+  platformCounts: Record<string, number>;
+  starDistribution: Array<{ stars: number; count: number; pct: number }>;
+}
+
 export interface RooferProvider {
   id: string;
   name: string;
@@ -94,6 +101,7 @@ export interface RooferProvider {
   reviewsLastUpdatedAt?: string;
   aiReviewSummary?: string;
   aiSummaryUpdatedAt?: string;
+  reviewStats?: ProviderReviewStats;
   scrapedReviews?: Array<{
     authorName: string;
     authorAvatarUrl?: string;
@@ -101,7 +109,6 @@ export interface RooferProvider {
     comment: string;
     reviewDate?: string;
     platform: 'GOOGLE' | 'YELP' | 'HOMEADVISOR' | 'HOUZZ' | 'FACEBOOK' | string;
-    sourceUrl?: string;
     photoUrls?: string[];
   }>;
 }

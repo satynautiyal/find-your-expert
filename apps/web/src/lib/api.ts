@@ -261,8 +261,76 @@ export interface ScrapedReviewItemDto {
   comment: string;
   reviewDate?: string;
   platform: 'GOOGLE' | 'YELP' | 'HOMEADVISOR' | 'HOUZZ' | 'FACEBOOK';
-  sourceUrl?: string;
   photoUrls?: string[];
+}
+
+export interface PaginatedReviewsResponse {
+  items: ScrapedReviewItemDto[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalMatching: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
+  stats: {
+    totalSaved: number;
+    withPhotosCount: number;
+    platformCounts: Record<string, number>;
+    starDistribution: Array<{ stars: number; count: number; pct: number }>;
+  };
+}
+
+/**
+ * Fetch server-side paginated verified reviews (50 per page default, 100% R2 media)
+ */
+export async function fetchProviderReviews(
+  slug: string,
+  options?: {
+    page?: number;
+    limit?: number;
+    platform?: string;
+    withPhotos?: boolean;
+    sortBy?: string;
+    search?: string;
+  }
+): Promise<PaginatedReviewsResponse> {
+  const page = options?.page ?? 1;
+  const limit = options?.limit ?? 50;
+  const platform = options?.platform || 'ALL';
+  const withPhotos = options?.withPhotos ? 'true' : undefined;
+  const sortBy = options?.sortBy || 'RELEVANT';
+  const search = options?.search?.trim() || undefined;
+
+  const url = buildApiUrl(`providers/${encodeURIComponent(slug)}/reviews`, {
+    page,
+    limit,
+    platform,
+    withPhotos,
+    sortBy,
+    search,
+  });
+
+  const cacheKey = `providers:reviews:${slug}:${page}:${limit}:${platform}:${withPhotos || '0'}:${sortBy}:${search || ''}`;
+
+  return cachedRequest(cacheKey, async () => {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch reviews (HTTP ${response.status})`);
+    }
+
+    const json: ApiResponse<PaginatedReviewsResponse> = await response.json();
+    if (!json.success || !json.data) {
+      throw new Error(json.error || 'Failed to load paginated reviews');
+    }
+
+    return json.data;
+  });
 }
 
 export interface SyncReviewsResult {

@@ -64,7 +64,7 @@ export default function ProfileServiceAreasAndFaq({
   return (
     <section
       id="faq"
-      className="bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 space-y-4 shadow-xs scroll-mt-36"
+      className="bg-white rounded-2xl border border-gray-300/85 p-5 sm:p-6 space-y-4 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.11),0_4px_10px_-2px_rgba(15,23,42,0.06)] scroll-mt-36"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
@@ -97,7 +97,7 @@ export default function ProfileServiceAreasAndFaq({
           return (
             <div
               key={idx}
-              className="border border-gray-200/90 rounded-xl overflow-hidden bg-white transition-colors"
+              className="border border-gray-300/80 rounded-xl overflow-hidden bg-white shadow-sm transition-colors"
             >
               <button
                 type="button"

@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Query, Param, Header } from '@nestjs/common';
 import { ProvidersService } from './providers.service';
 import { GetProvidersQueryDto } from './dto/get-providers.dto';
+import { BrowserPoolUtil } from '../scrapers/utils/browser-pool.util';
 
 const PUBLIC_CACHE_HEADER = 'public, max-age=0, s-maxage=60, stale-while-revalidate=300';
 
@@ -54,6 +55,36 @@ export class ProvidersController {
   }
 
   /**
+   * GET /api/providers/:slug/reviews
+   * Paginated verified customer reviews (50 per page default, 100% R2 media, zero static/third-party URLs)
+   */
+  @Get(':slug/reviews')
+  @Header('Cache-Control', PUBLIC_CACHE_HEADER)
+  async getProviderReviews(
+    @Param('slug') slug: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('platform') platform?: string,
+    @Query('withPhotos') withPhotos?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('search') search?: string
+  ) {
+    const result = await this.providersService.getPaginatedReviews(slug, {
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 50,
+      platform,
+      withPhotos: withPhotos === 'true' || withPhotos === '1',
+      sortBy,
+      search,
+    });
+    return {
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
    * GET /api/providers/:slug
    * Retrieve single provider by slug
    */
@@ -68,17 +99,47 @@ export class ProvidersController {
     };
   }
 
+  @Post('houzz-session/open')
+  async openHouzzVisibleSession(@Body('url') url?: string) {
+    const target =
+      url ||
+      'https://www.houzz.com/professionals/cabinets-and-cabinetry/manhattan-cabinets-inc-pfvwus-pf~914367236';
+    const data = await BrowserPoolUtil.openSharedVisibleBrowser(target);
+    return { success: true, data };
+  }
+
   /**
    * POST /api/providers/projects/sync-all
    * Scrape authentic project albums, website brand logo, website About AI bio, and website Team across all active providers
    */
   @Post('projects/sync-all')
-  async syncAllProjects() {
-    const result = await this.providersService.syncAllProviderProjects();
+  async syncAllProjects(
+    @Query('projectsOnly') projectsOnly?: string,
+    @Query('skipHouzz') skipHouzz?: string
+  ) {
+    const result = await this.providersService.syncAllProviderProjects({
+      projectsOnly: projectsOnly === 'true' || projectsOnly === '1',
+      skipHouzz: skipHouzz === 'true' || skipHouzz === '1',
+    });
     return {
       success: true,
       data: result,
       message: 'Synchronized contractor project albums, brand logos, AI bios, and website teams into R2 and MariaDB.',
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/logos/normalize-all
+   * Auto-trim empty whitespace/transparent margins and convert white-on-transparent logos across all active R2 logos
+   */
+  @Post('logos/normalize-all')
+  async normalizeAllLogos() {
+    const result = await this.providersService.normalizeAllProviderLogos();
+    return {
+      success: true,
+      data: result,
+      message: `Normalized ${result.logosNormalized}/${result.totalProviders} contractor logos in Cloudflare R2.`,
       timestamp: new Date().toISOString(),
     };
   }
@@ -207,16 +268,46 @@ export class ProvidersController {
   async syncProviderProjects(
     @Param('slug') slug: string,
     @Query('maxProjects') maxProjects?: string,
-    @Query('maxPhotos') maxPhotos?: string
+    @Query('maxPhotos') maxPhotos?: string,
+    @Query('projectsOnly') projectsOnly?: string,
+    @Query('skipHouzz') skipHouzz?: string
   ) {
     const result = await this.providersService.syncProviderProjects(slug, {
       maxProjects: maxProjects ? Number(maxProjects) : undefined,
       maxPhotosPerProject: maxPhotos ? Number(maxPhotos) : undefined,
+      projectsOnly: projectsOnly === 'true' || projectsOnly === '1',
+      skipHouzz: skipHouzz === 'true' || skipHouzz === '1',
     });
     return {
       success: true,
       data: result,
       message: `Synchronized ${result.projectsSaved} project albums (${result.photosUploadedToR2} R2 photos) for ${result.businessName}.`,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * POST /api/providers/:slug/restore-r2-projects
+   * Restore R2-backed project albums stored under providers/projects/<slug>/<albumSlug>/
+   */
+  @Post(':slug/restore-r2-projects')
+  async restoreR2Projects(
+    @Param('slug') slug: string,
+    @Body('albums')
+    albums: Array<{
+      slug: string;
+      title: string;
+      location?: string;
+      projectYear?: number;
+      costRange?: string;
+      serviceCategory?: string;
+      sourceUrl?: string;
+    }>
+  ) {
+    const result = await this.providersService.restoreR2ProjectAlbums(slug, albums || []);
+    return {
+      success: true,
+      data: result,
       timestamp: new Date().toISOString(),
     };
   }

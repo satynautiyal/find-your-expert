@@ -45,6 +45,35 @@ export interface FormattedProviderTeamMember {
   photoUrl?: string;
 }
 
+export interface ProviderReviewStats {
+  totalSaved: number;
+  withPhotosCount: number;
+  platformCounts: Record<string, number>;
+  starDistribution: Array<{ stars: number; count: number; pct: number }>;
+}
+
+export interface FormattedReviewItem {
+  authorName: string;
+  authorAvatarUrl?: string;
+  rating: number;
+  comment: string;
+  reviewDate?: string;
+  platform: string;
+  photoUrls?: string[];
+}
+
+export interface PaginatedProviderReviewsResult {
+  items: FormattedReviewItem[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalMatching: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
+  stats: ProviderReviewStats;
+}
+
 export interface FormattedProvider {
   id: string;
   name: string;
@@ -103,16 +132,8 @@ export interface FormattedProvider {
   reviewsLastUpdatedAt?: string;
   aiReviewSummary?: string;
   aiSummaryUpdatedAt?: string;
-  scrapedReviews?: Array<{
-    authorName: string;
-    authorAvatarUrl?: string;
-    rating: number;
-    comment: string;
-    reviewDate?: string;
-    platform: string;
-    sourceUrl?: string;
-    photoUrls?: string[];
-  }>;
+  reviewStats?: ProviderReviewStats;
+  scrapedReviews?: FormattedReviewItem[];
 }
 
 @Injectable()
@@ -293,10 +314,54 @@ export class ProvidersService implements OnApplicationBootstrap {
   }
 
   /**
-   * Batch-load customer-shared review photos (`scraped_reviews.photo_urls`) and resolve
-   * strictly R2-hosted keys into presigned Cloudflare R2 URLs (zero third-party hotlinks).
+   * Strictly resolves ONLY R2 object keys (`providers/...`) into presigned Cloudflare R2 URLs.
+   * Rejects 100% of third-party external URLs so no external hotlink can ever leak in review payloads.
    */
-  private async loadReviewPhotoMap(
+  private async resolveStrictR2Url(rawKeyOrUrl?: string | null): Promise<string | undefined> {
+    if (!rawKeyOrUrl) return undefined;
+    const trimmed = rawKeyOrUrl.trim();
+    if (!trimmed) return undefined;
+
+    let r2Key = trimmed;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      const extracted = this.storageService.extractCleanKey(trimmed);
+      if (!extracted || !extracted.startsWith('providers/')) {
+        return undefined;
+      }
+      r2Key = extracted;
+    } else if (!trimmed.startsWith('providers/')) {
+      return undefined;
+    }
+
+    const url = await this.storageService.getPresignedUrl(r2Key);
+    if (!url) return undefined;
+    if (
+      url.startsWith('http') &&
+      !url.includes('.r2.cloudflarestorage.com') &&
+      !url.includes('.amazonaws.com') &&
+      !url.includes('/api/storage/')
+    ) {
+      return undefined;
+    }
+    return url;
+  }
+
+  private isCleanReviewComment(rawComment?: string | null): boolean {
+    const c = String(rawComment || '').trim();
+    if (c.length < 8) return false;
+    if (c === 'Great roofing service, highly recommended!') return false;
+    if (/^Average rating:/i.test(c)) return false;
+    if (/^[A-Za-z0-9+/]{24,}$/.test(c)) return false;
+    if (/\b\d+\s+Photos\b/i.test(c) && /\bMon\s*-/i.test(c)) return false;
+    if (/^\d+\s+[A-Za-z0-9\s.,#-]+NY\s+\d{5}$/i.test(c)) return false;
+    return true;
+  }
+
+  /**
+   * Batch-load raw R2 photo keys (`providers/...`) from `scraped_reviews.photo_urls`
+   * WITHOUT presigning upfront — allowing instant O(N) stats + fast 50-item pagination.
+   */
+  private async loadRawReviewPhotoKeysMap(
     providerIds: string[]
   ): Promise<Map<string, string[]>> {
     const map = new Map<string, string[]>();
@@ -315,54 +380,100 @@ export class ProvidersService implements OnApplicationBootstrap {
 
       if (!Array.isArray(rows) || rows.length === 0) return map;
 
-      await Promise.all(
-        rows.map(async (row) => {
-          let parsed: unknown = row.photo_urls;
-          if (typeof parsed === 'string') {
-            try {
-              parsed = JSON.parse(parsed);
-            } catch {
-              parsed = [];
-            }
+      for (const row of rows) {
+        let parsed: unknown = row.photo_urls;
+        if (typeof parsed === 'string') {
+          try {
+            parsed = JSON.parse(parsed);
+          } catch {
+            parsed = [];
           }
-          if (!Array.isArray(parsed) || parsed.length === 0) return;
+        }
+        if (!Array.isArray(parsed) || parsed.length === 0) continue;
 
-          // Strictly resolve R2 object keys only — NEVER expose raw external URLs
-          const cleanKeys = parsed
-            .filter((k): k is string => typeof k === 'string')
-            .map((k) => k.trim())
-            .filter((k) => k.startsWith('providers/'));
+        const cleanKeys = parsed
+          .filter((k): k is string => typeof k === 'string')
+          .map((k) => k.trim())
+          .filter((k) => k.startsWith('providers/'));
 
-          if (cleanKeys.length === 0) return;
-
-          const resolvedUrls = (
-            await Promise.all(
-              cleanKeys.map(async (r2Key) => {
-                const url = await this.storageService.getPresignedUrl(r2Key);
-                if (!url) return null;
-                if (
-                  url.startsWith('http') &&
-                  !url.includes('.r2.cloudflarestorage.com') &&
-                  !url.includes('.amazonaws.com') &&
-                  !url.includes('/api/storage/')
-                ) {
-                  return null;
-                }
-                return url;
-              })
-            )
-          ).filter((u): u is string => Boolean(u));
-
-          if (resolvedUrls.length > 0) {
-            map.set(row.id, resolvedUrls);
-          }
-        })
-      );
+        if (cleanKeys.length > 0) {
+          map.set(row.id, cleanKeys);
+        }
+      }
     } catch (err: any) {
-      this.logger.warn(`loadReviewPhotoMap warning: ${err?.message || err}`);
+      this.logger.warn(`loadRawReviewPhotoKeysMap warning: ${err?.message || err}`);
     }
 
     return map;
+  }
+
+  private computeReviewStats(
+    cleanRows: Array<{ id: string; rating: number; platform: string }>,
+    rawPhotoKeysMap: Map<string, string[]>
+  ): ProviderReviewStats {
+    const totalSaved = cleanRows.length;
+    let withPhotosCount = 0;
+    const platformCounts: Record<string, number> = {};
+    const bucketCounts: Record<number, number> = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+
+    for (const row of cleanRows) {
+      const plat = String(row.platform || 'GOOGLE').toUpperCase();
+      platformCounts[plat] = (platformCounts[plat] || 0) + 1;
+      if ((rawPhotoKeysMap.get(row.id)?.length || 0) > 0) {
+        withPhotosCount++;
+      }
+      const rounded = Math.min(5, Math.max(1, Math.round(Number(row.rating) || 5)));
+      bucketCounts[rounded] = (bucketCounts[rounded] || 0) + 1;
+    }
+
+    const starDistribution = [5, 4, 3, 2, 1].map((stars) => {
+      const count = bucketCounts[stars] || 0;
+      const pct = totalSaved > 0 ? Math.round((count / totalSaved) * 100) : 0;
+      return { stars, count, pct };
+    });
+
+    return {
+      totalSaved,
+      withPhotosCount,
+      platformCounts,
+      starDistribution,
+    };
+  }
+
+  private async signReviewSlice(
+    rows: Array<{
+      id: string;
+      authorName: string;
+      authorAvatarUrl?: string | null;
+      rating: number;
+      comment: string;
+      reviewDate?: string | null;
+      platform: string;
+    }>,
+    rawPhotoKeysMap: Map<string, string[]>
+  ): Promise<FormattedReviewItem[]> {
+    return Promise.all(
+      rows.map(async (sr) => {
+        const avatarUrl = await this.resolveStrictR2Url(sr.authorAvatarUrl);
+        const rawKeys = rawPhotoKeysMap.get(sr.id) || [];
+        const resolvedPhotos =
+          rawKeys.length > 0
+            ? (await Promise.all(rawKeys.map((k) => this.resolveStrictR2Url(k)))).filter(
+                (u): u is string => Boolean(u)
+              )
+            : [];
+
+        return {
+          authorName: sr.authorName,
+          ...(avatarUrl ? { authorAvatarUrl: avatarUrl } : {}),
+          rating: sr.rating,
+          comment: sr.comment,
+          ...(sr.reviewDate ? { reviewDate: sr.reviewDate } : {}),
+          platform: sr.platform,
+          ...(resolvedPhotos.length > 0 ? { photoUrls: resolvedPhotos } : {}),
+        };
+      })
+    );
   }
 
   /**
@@ -474,21 +585,22 @@ export class ProvidersService implements OnApplicationBootstrap {
       this.findAll({ category: 'Roofing', limit: 50 } as GetProvidersQueryDto),
     ]);
 
-    // Pre-warm individual slug profiles in 1 batch query so clicking "View Profile" is <2ms from the very first click
+    // Pre-warm individual slug profiles in 1 batch query (only 6 preview reviews signed per provider!)
     if (allRes?.items?.length) {
       const ids = allRes.items.map((p) => p.id);
-      const [allScraped, projectsByProvider, reviewPhotoMap, teamByProvider] = await Promise.all([
+      const [allScraped, projectsByProvider, rawPhotoKeysMap, teamByProvider] = await Promise.all([
         this.prisma.scrapedReview.findMany({
           where: { providerProfileId: { in: ids } },
           orderBy: { createdAt: 'desc' },
         }),
         this.formatProjectsForProviders(ids),
-        this.loadReviewPhotoMap(ids),
+        this.loadRawReviewPhotoKeysMap(ids),
         this.formatTeamMembersForProviders(ids),
       ]);
-      const reviewsByProvider = new Map<string, any[]>();
+      const rawReviewsByProvider = new Map<string, any[]>();
       const latestScrapedMsByProvider = new Map<string, number>();
       for (const sr of allScraped) {
+        if (!this.isCleanReviewComment(sr.comment)) continue;
         const ts = sr.updatedAt
           ? new Date(sr.updatedAt).getTime()
           : sr.createdAt
@@ -497,23 +609,10 @@ export class ProvidersService implements OnApplicationBootstrap {
         if (ts > (latestScrapedMsByProvider.get(sr.providerProfileId) || 0)) {
           latestScrapedMsByProvider.set(sr.providerProfileId, ts);
         }
-        const arr = reviewsByProvider.get(sr.providerProfileId) || [];
+        const arr = rawReviewsByProvider.get(sr.providerProfileId) || [];
         if (arr.length < 2000) {
-          const resolvedAvatar = sr.authorAvatarUrl
-            ? await this.storageService.getPresignedUrl(sr.authorAvatarUrl)
-            : undefined;
-          const resolvedPhotos = reviewPhotoMap.get(sr.id);
-          arr.push({
-            authorName: sr.authorName,
-            authorAvatarUrl: resolvedAvatar || undefined,
-            rating: sr.rating,
-            comment: sr.comment,
-            reviewDate: sr.reviewDate || undefined,
-            platform: sr.platform,
-            sourceUrl: sr.sourceUrl || undefined,
-            ...(resolvedPhotos && resolvedPhotos.length > 0 ? { photoUrls: resolvedPhotos } : {}),
-          });
-          reviewsByProvider.set(sr.providerProfileId, arr);
+          arr.push(sr);
+          rawReviewsByProvider.set(sr.providerProfileId, arr);
         }
       }
       for (const item of allRes.items) {
@@ -524,6 +623,35 @@ export class ProvidersService implements OnApplicationBootstrap {
         const bestMs = Math.max(existingMs, scrapedMs);
         const providerProjects = projectsByProvider.get(item.id) || [];
         const providerTeam = teamByProvider.get(item.id) || [];
+        const provRawReviews = rawReviewsByProvider.get(item.id) || [];
+        const provPhotoEntries: Array<[string, string[]]> = [];
+        for (const r of provRawReviews) {
+          const keys = rawPhotoKeysMap.get(r.id);
+          if (keys && keys.length > 0) {
+            provPhotoEntries.push([r.id, keys]);
+          }
+        }
+        const reviewStats = this.computeReviewStats(provRawReviews, rawPhotoKeysMap);
+        const rankedPreviewRows = provRawReviews
+          .map((r, idx) => ({ r, idx, hasPh: (rawPhotoKeysMap.get(r.id)?.length || 0) > 0 ? 1 : 0 }))
+          .sort((a, b) => (b.hasPh !== a.hasPh ? b.hasPh - a.hasPh : a.idx - b.idx))
+          .slice(0, 6)
+          .map((x) => x.r);
+        const previewReviews = await this.signReviewSlice(rankedPreviewRows, rawPhotoKeysMap);
+
+        this.cache.set(
+          `providers:raw-reviews:${item.slug}`,
+          {
+            cleanRows: provRawReviews,
+            photoEntries: provPhotoEntries,
+            stats: reviewStats,
+          },
+          {
+            ttlMs: ProvidersService.LIST_CACHE_TTL_MS,
+            swrMs: ProvidersService.LIST_CACHE_SWR_MS,
+          }
+        );
+
         this.cache.set(
           `providers:slug:${item.slug}`,
           {
@@ -533,7 +661,8 @@ export class ProvidersService implements OnApplicationBootstrap {
             teamCount: providerTeam.length,
             teamMembers: providerTeam,
             reviewsLastUpdatedAt: bestMs > 0 ? new Date(bestMs).toISOString() : item.reviewsLastUpdatedAt,
-            scrapedReviews: reviewsByProvider.get(item.id) || [],
+            reviewStats,
+            scrapedReviews: previewReviews,
           },
           {
             ttlMs: ProvidersService.LIST_CACHE_TTL_MS,
@@ -670,34 +799,29 @@ export class ProvidersService implements OnApplicationBootstrap {
         ? new Date(Math.max(...scrapeTimestamps)).toISOString()
         : undefined;
 
-    // Format saved scraped reviews (filtering out any legacy DOM/directory noise rows)
-    const filteredRawReviews = (provider.scrapedReviews || []).filter((sr: any) => {
-      const c = String(sr.comment || '').trim();
-      if (c.length < 8) return false;
-      if (c === 'Great roofing service, highly recommended!') return false;
-      if (/^Average rating:/i.test(c)) return false;
-      if (/^[A-Za-z0-9+/]{24,}$/.test(c)) return false;
-      if (/\b\d+\s+Photos\b/i.test(c) && /\bMon\s*-/i.test(c)) return false;
-      if (/^\d+\s+[A-Za-z0-9\s.,#-]+NY\s+\d{5}$/i.test(c)) return false;
-      return true;
-    });
-
-    const scrapedReviews = await Promise.all(
-      filteredRawReviews.map(async (sr: any) => ({
-        authorName: sr.authorName,
-        authorAvatarUrl: sr.authorAvatarUrl
-          ? (await this.storageService.getPresignedUrl(sr.authorAvatarUrl)) || undefined
-          : undefined,
-        rating: sr.rating,
-        comment: sr.comment,
-        reviewDate: sr.reviewDate || undefined,
-        platform: sr.platform,
-        sourceUrl: sr.sourceUrl || undefined,
-        ...(Array.isArray(sr.resolvedPhotoUrls) && sr.resolvedPhotoUrls.length > 0
-          ? { photoUrls: sr.resolvedPhotoUrls }
-          : {}),
-      }))
+    // Format saved scraped reviews: compute full DB stats, but only sign & return top 6 preview reviews on profile payload
+    const filteredRawReviews = (provider.scrapedReviews || []).filter((sr: any) =>
+      this.isCleanReviewComment(sr.comment)
     );
+    const rawPhotoKeysMap: Map<string, string[]> =
+      provider.rawPhotoKeysMap instanceof Map ? provider.rawPhotoKeysMap : new Map();
+
+    const reviewStats =
+      filteredRawReviews.length > 0
+        ? this.computeReviewStats(filteredRawReviews, rawPhotoKeysMap)
+        : undefined;
+
+    const rankedPreviewRows = filteredRawReviews
+      .map((r: any, idx: number) => ({
+        r,
+        idx,
+        hasPh: (rawPhotoKeysMap.get(r.id)?.length || 0) > 0 ? 1 : 0,
+      }))
+      .sort((a: any, b: any) => (b.hasPh !== a.hasPh ? b.hasPh - a.hasPh : a.idx - b.idx))
+      .slice(0, 6)
+      .map((x: any) => x.r);
+
+    const scrapedReviews = await this.signReviewSlice(rankedPreviewRows, rawPhotoKeysMap);
 
     const activePlatforms = [google, yelp, homeadvisor, houzz].filter(
       (p: any) => p && Number(p.reviewCount) > 0
@@ -799,6 +923,7 @@ export class ProvidersService implements OnApplicationBootstrap {
       reviewsLastUpdatedAt,
       aiReviewSummary: provider.aiReviewSummary || undefined,
       aiSummaryUpdatedAt: provider.aiSummaryUpdatedAt ? provider.aiSummaryUpdatedAt.toISOString() : undefined,
+      ...(reviewStats ? { reviewStats } : {}),
       scrapedReviews,
     };
   }
@@ -819,7 +944,7 @@ export class ProvidersService implements OnApplicationBootstrap {
       listings,
       platformReviews,
       scrapedReviews,
-      reviewPhotoMap,
+      rawPhotoKeysMap,
       projectsByProvider,
       projectCountsGroup,
       teamByProvider,
@@ -840,7 +965,7 @@ export class ProvidersService implements OnApplicationBootstrap {
           })
         : Promise.resolve([]),
       includeScrapedReviews
-        ? this.loadReviewPhotoMap(providerIds)
+        ? this.loadRawReviewPhotoKeysMap(providerIds)
         : Promise.resolve(new Map<string, string[]>()),
       includeScrapedReviews
         ? this.formatProjectsForProviders(providerIds)
@@ -938,12 +1063,7 @@ export class ProvidersService implements OnApplicationBootstrap {
     const scrapedByProvider = new Map<string, any[]>();
     for (const sr of scrapedReviews) {
       const arr = scrapedByProvider.get(sr.providerProfileId) || [];
-      const resolvedPhotoUrls = reviewPhotoMap.get(sr.id);
-      arr.push(
-        resolvedPhotoUrls && resolvedPhotoUrls.length > 0
-          ? { ...sr, resolvedPhotoUrls }
-          : sr
-      );
+      arr.push(sr);
       scrapedByProvider.set(sr.providerProfileId, arr);
     }
 
@@ -954,6 +1074,7 @@ export class ProvidersService implements OnApplicationBootstrap {
           listings: listingsByProvider.get(p.id) || [],
           platformReviews: platformByProvider.get(p.id) || [],
           scrapedReviews: scrapedByProvider.get(p.id) || [],
+          rawPhotoKeysMap,
           formattedProjects: includeScrapedReviews
             ? projectsByProvider.get(p.id) || []
             : undefined,
@@ -1329,6 +1450,124 @@ export class ProvidersService implements OnApplicationBootstrap {
         swrMs: ProvidersService.LIST_CACHE_SWR_MS,
       }
     );
+  }
+
+  /**
+   * Fast server-side paginated reviews endpoint (default 50 reviews per page).
+   * - Filters, searches, and sorts across up to 2,000 real DB reviews per contractor.
+   * - Signs R2 presigned URLs ONLY for the requested 50-review slice.
+   * - Enforces 100% zero static data and 100% zero third-party URLs.
+   */
+  async getPaginatedReviews(
+    slug: string,
+    options?: {
+      page?: number;
+      limit?: number;
+      platform?: string;
+      withPhotos?: boolean;
+      sortBy?: string;
+      search?: string;
+    }
+  ): Promise<PaginatedProviderReviewsResult> {
+    const page = Math.max(1, Number(options?.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(options?.limit) || 50));
+    const platform = (options?.platform || 'ALL').trim().toUpperCase();
+    const withPhotos = Boolean(options?.withPhotos);
+    const sortBy = (options?.sortBy || 'RELEVANT').trim().toUpperCase();
+    const search = (options?.search || '').trim().toLowerCase();
+
+    const rawDataset = await this.cache.getOrSet(
+      `providers:raw-reviews:${slug}`,
+      async () => {
+        const profile = await this.prisma.providerProfile.findUnique({
+          where: { slug },
+          select: { id: true },
+        });
+        if (!profile) {
+          throw new NotFoundException(`Provider with slug "${slug}" not found`);
+        }
+
+        const [rows, photoMap] = await Promise.all([
+          this.prisma.scrapedReview.findMany({
+            where: { providerProfileId: profile.id },
+            orderBy: { createdAt: 'desc' },
+            take: 2000,
+          }),
+          this.loadRawReviewPhotoKeysMap([profile.id]),
+        ]);
+
+        const cleanRows = rows.filter((r) => this.isCleanReviewComment(r.comment));
+        const stats = this.computeReviewStats(cleanRows, photoMap);
+
+        return {
+          cleanRows,
+          photoEntries: Array.from(photoMap.entries()),
+          stats,
+        };
+      },
+      {
+        ttlMs: ProvidersService.LIST_CACHE_TTL_MS,
+        swrMs: ProvidersService.LIST_CACHE_SWR_MS,
+      }
+    );
+
+    const rawPhotoKeysMap = new Map<string, string[]>(rawDataset.photoEntries);
+    let filtered = rawDataset.cleanRows.map((row, origIdx) => ({
+      row,
+      origIdx,
+      hasPhotos: (rawPhotoKeysMap.get(row.id)?.length || 0) > 0 ? 1 : 0,
+    }));
+
+    if (platform && platform !== 'ALL') {
+      filtered = filtered.filter((x) => String(x.row.platform).toUpperCase() === platform);
+    }
+
+    if (withPhotos) {
+      filtered = filtered.filter((x) => x.hasPhotos === 1);
+    }
+
+    if (search) {
+      filtered = filtered.filter(
+        (x) =>
+          x.row.comment.toLowerCase().includes(search) ||
+          x.row.authorName.toLowerCase().includes(search)
+      );
+    }
+
+    if (sortBy === 'RELEVANT') {
+      filtered.sort((a, b) =>
+        b.hasPhotos !== a.hasPhotos ? b.hasPhotos - a.hasPhotos : a.origIdx - b.origIdx
+      );
+    } else if (sortBy === 'HIGHEST') {
+      filtered.sort((a, b) =>
+        b.row.rating !== a.row.rating ? b.row.rating - a.row.rating : a.origIdx - b.origIdx
+      );
+    } else if (sortBy === 'LOWEST') {
+      filtered.sort((a, b) =>
+        a.row.rating !== b.row.rating ? a.row.rating - b.row.rating : a.origIdx - b.origIdx
+      );
+    }
+    // sortBy === 'RECENT' preserves chronological `createdAt desc` order (`origIdx`)
+
+    const totalMatching = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(totalMatching / limit));
+    const safePage = Math.min(page, totalPages);
+    const offset = (safePage - 1) * limit;
+    const pageSlice = filtered.slice(offset, offset + limit).map((x) => x.row);
+
+    const signedItems = await this.signReviewSlice(pageSlice, rawPhotoKeysMap);
+
+    return {
+      items: signedItems,
+      pagination: {
+        page: safePage,
+        limit,
+        totalMatching,
+        totalPages,
+        hasMore: safePage < totalPages,
+      },
+      stats: rawDataset.stats,
+    };
   }
 
   /**
@@ -2252,12 +2491,19 @@ export class ProvidersService implements OnApplicationBootstrap {
    */
   async syncProviderProjects(
     slug: string,
-    options?: { maxProjects?: number; maxPhotosPerProject?: number; skipProjects?: boolean }
+    options?: {
+      maxProjects?: number;
+      maxPhotosPerProject?: number;
+      skipProjects?: boolean;
+      projectsOnly?: boolean;
+      skipHouzz?: boolean;
+    }
   ): Promise<{
     slug: string;
     businessName: string;
     officialWebsiteUrl: string | null;
     sourceUsed: 'WEBSITE' | 'HOUZZ' | 'NONE';
+    houzzChallengeBlocked: boolean;
     logoUpdated: boolean;
     descriptionRewritten: boolean;
     teamMembersSaved: number;
@@ -2265,11 +2511,18 @@ export class ProvidersService implements OnApplicationBootstrap {
     photosUploadedToR2: number;
     provider: FormattedProvider;
   }> {
+    const projectsOnly = options?.projectsOnly ?? false;
+    const skipHouzz = options?.skipHouzz ?? false;
     const profile = await this.prisma.providerProfile.findUnique({
       where: { slug },
       include: {
         platformReviews: true,
-        projects: { select: { id: true } },
+        projects: {
+          orderBy: { orderIndex: 'asc' },
+          include: {
+            photos: { orderBy: { orderIndex: 'asc' } },
+          },
+        },
         listings: {
           include: {
             category: true,
@@ -2297,9 +2550,11 @@ export class ProvidersService implements OnApplicationBootstrap {
       boroughOrCity: profile.borough || profile.city,
       houzzUrl,
       websiteUrl: profile.websiteUrl,
-      maxProjects: options?.maxProjects ?? 12,
-      maxPhotosPerProject: options?.maxPhotosPerProject ?? 12,
+      maxProjects: options?.maxProjects ?? 300,
+      maxPhotosPerProject: options?.maxPhotosPerProject ?? 100,
       skipProjects: options?.skipProjects ?? false,
+      projectsOnly,
+      skipHouzz,
     });
 
     const scrapedProjects = brandAndProjects.projects;
@@ -2319,83 +2574,91 @@ export class ProvidersService implements OnApplicationBootstrap {
 
     // Persist Official Website URL + Official Website Brand Logo into Cloudflare R2
     let newLogoKey: string | null = null;
-    if (brandAndProjects.logoSourceUrl) {
-      const logoHash = this.storageService.hashUrl(brandAndProjects.logoSourceUrl).slice(0, 8);
-      newLogoKey = await this.storageService.ingestRemoteImage(
-        brandAndProjects.logoSourceUrl,
-        `providers/logos/${profile.slug}-site-${logoHash}`
-      );
-    }
-    if (
-      !newLogoKey &&
-      brandAndProjects.logoPngBuffer &&
-      brandAndProjects.logoPngBuffer.length > 200
-    ) {
-      const bufHash = this.storageService
-        .hashUrl(
-          `${profile.slug}-${brandAndProjects.officialWebsiteUrl || 'site'}-${brandAndProjects.logoPngBuffer.length}`
-        )
-        .slice(0, 8);
-      const candidateKey = `providers/logos/${profile.slug}-site-${bufHash}.png`;
-      await this.storageService.putObject(
-        brandAndProjects.logoPngBuffer,
-        candidateKey,
-        'image/png'
-      );
-      newLogoKey = candidateKey;
-    }
-
-    // AI-rewrite Contractor "About" Business Description (prioritizing official website About copy)
-    const primaryCategoryName = profile.listings?.[0]?.category?.name || undefined;
-    const providerServiceNames =
-      profile.listings?.flatMap(
-        (l: any) => l.subServices?.map((ss: any) => ss.subService?.name).filter(Boolean) || []
-      ) || [];
-    const providerServiceAreas =
-      profile.listings?.flatMap(
-        (l: any) => l.serviceAreas?.map((sa: any) => sa.areaName).filter(Boolean) || []
-      ) || [];
-
     let aiBusinessDesc: string | null = null;
-    try {
-      const rewrittenAbout = await this.aiReviewSummaryService.rewriteBusinessDescription({
-        businessName: profile.businessName,
-        category: primaryCategoryName,
-        services: providerServiceNames,
-        boroughOrCity: profile.borough || profile.city || undefined,
-        serviceAreas: providerServiceAreas,
-        sinceYear: profile.sinceYear,
-        isLicensed: profile.isLicensed,
-        isInsured: profile.isInsured,
-        hasWarranty: profile.hasWarranty,
-        rawWebsiteAbout: brandAndProjects.websiteAboutDescription,
-        fallbackBio: profile.description,
-      });
-      if (rewrittenAbout && rewrittenAbout.length >= 35) {
-        aiBusinessDesc = rewrittenAbout;
-      }
-    } catch (aiDescErr: any) {
-      this.logger.warn(
-        `⚠️ [AI About Rewrite] Could not rewrite business description for "${profile.businessName}": ${aiDescErr.message}`
-      );
-    }
-
     const existingCleanSite = ScraperHttpUtil.normalizeOfficialWebsiteUrl(profile.websiteUrl);
     const finalWebsiteUrl = brandAndProjects.officialWebsiteUrl || existingCleanSite || null;
-    const profileBrandUpdate: Prisma.ProviderProfileUpdateInput = {};
-    if (finalWebsiteUrl !== (profile.websiteUrl || null)) {
-      profileBrandUpdate.websiteUrl = finalWebsiteUrl;
-    }
-    if (newLogoKey) {
-      profileBrandUpdate.logoUrl = newLogoKey;
-    }
-    if (aiBusinessDesc) {
-      profileBrandUpdate.description = aiBusinessDesc;
-    }
-    if (Object.keys(profileBrandUpdate).length > 0) {
+
+    if (!projectsOnly) {
+      if (brandAndProjects.logoSourceUrl) {
+        const logoHash = this.storageService.hashUrl(brandAndProjects.logoSourceUrl).slice(0, 8);
+        newLogoKey = await this.storageService.ingestRemoteImage(
+          brandAndProjects.logoSourceUrl,
+          `providers/logos/${profile.slug}-site-${logoHash}`
+        );
+      }
+      if (
+        !newLogoKey &&
+        brandAndProjects.logoPngBuffer &&
+        brandAndProjects.logoPngBuffer.length > 200
+      ) {
+        const bufHash = this.storageService
+          .hashUrl(
+            `${profile.slug}-${brandAndProjects.officialWebsiteUrl || 'site'}-${brandAndProjects.logoPngBuffer.length}`
+          )
+          .slice(0, 8);
+        const candidateKey = `providers/logos/${profile.slug}-site-${bufHash}.png`;
+        await this.storageService.putObject(
+          brandAndProjects.logoPngBuffer,
+          candidateKey,
+          'image/png'
+        );
+        newLogoKey = candidateKey;
+      }
+
+      // AI-rewrite Contractor "About" Business Description (prioritizing official website About copy)
+      const primaryCategoryName = profile.listings?.[0]?.category?.name || undefined;
+      const providerServiceNames =
+        profile.listings?.flatMap(
+          (l: any) => l.subServices?.map((ss: any) => ss.subService?.name).filter(Boolean) || []
+        ) || [];
+      const providerServiceAreas =
+        profile.listings?.flatMap(
+          (l: any) => l.serviceAreas?.map((sa: any) => sa.areaName).filter(Boolean) || []
+        ) || [];
+
+      try {
+        const rewrittenAbout = await this.aiReviewSummaryService.rewriteBusinessDescription({
+          businessName: profile.businessName,
+          category: primaryCategoryName,
+          services: providerServiceNames,
+          boroughOrCity: profile.borough || profile.city || undefined,
+          serviceAreas: providerServiceAreas,
+          sinceYear: profile.sinceYear,
+          isLicensed: profile.isLicensed,
+          isInsured: profile.isInsured,
+          hasWarranty: profile.hasWarranty,
+          rawWebsiteAbout: brandAndProjects.websiteAboutDescription,
+          fallbackBio: profile.description,
+        });
+        if (rewrittenAbout && rewrittenAbout.length >= 35) {
+          aiBusinessDesc = rewrittenAbout;
+        }
+      } catch (aiDescErr: any) {
+        this.logger.warn(
+          `⚠️ [AI About Rewrite] Could not rewrite business description for "${profile.businessName}": ${aiDescErr.message}`
+        );
+      }
+
+      const profileBrandUpdate: Prisma.ProviderProfileUpdateInput = {};
+      if (finalWebsiteUrl !== (profile.websiteUrl || null)) {
+        profileBrandUpdate.websiteUrl = finalWebsiteUrl;
+      }
+      if (newLogoKey) {
+        profileBrandUpdate.logoUrl = newLogoKey;
+      }
+      if (aiBusinessDesc) {
+        profileBrandUpdate.description = aiBusinessDesc;
+      }
+      if (Object.keys(profileBrandUpdate).length > 0) {
+        await this.prisma.providerProfile.update({
+          where: { id: profile.id },
+          data: profileBrandUpdate,
+        });
+      }
+    } else if (finalWebsiteUrl && finalWebsiteUrl !== (profile.websiteUrl || null)) {
       await this.prisma.providerProfile.update({
         where: { id: profile.id },
-        data: profileBrandUpdate,
+        data: { websiteUrl: finalWebsiteUrl },
       });
     }
 
@@ -2414,89 +2677,114 @@ export class ProvidersService implements OnApplicationBootstrap {
       await Promise.all(runners);
     };
 
-    // Persist Website "The team" Members (100% R2 headshots + AI-rewritten bios; 0 rows if contractor has no team on website)
+    // Persist Website "The team" Members (when !projectsOnly)
     await this.ensureTeamMembersTable();
     let teamMembersSaved = 0;
-    if (brandAndProjects.officialWebsiteUrl) {
-      const preparedTeam: Array<{
-        order: number;
-        name: string;
-        role: string | null;
-        credentials: string | null;
-        bio: string | null;
-        r2ImageKey: string | null;
-        sourceUrl: string | null;
-      }> = [];
+    if (!projectsOnly) {
+      if (brandAndProjects.officialWebsiteUrl) {
+        const preparedTeam: Array<{
+          order: number;
+          name: string;
+          role: string | null;
+          credentials: string | null;
+          bio: string | null;
+          r2ImageKey: string | null;
+          sourceUrl: string | null;
+        }> = [];
 
-      await runWithConcurrency(brandAndProjects.teamMembers, 4, async (member, mIdx) => {
-        let r2ImageKey: string | null = null;
-        if (member.photoSourceUrl) {
-          const memberSlug = this.projectsScraperService.slugify(member.name) || `member-${mIdx + 1}`;
-          const photoHash = this.storageService.hashUrl(member.photoSourceUrl).slice(0, 8);
-          r2ImageKey = await this.storageService.ingestRemoteImage(
-            member.photoSourceUrl,
-            `providers/team/${profile.slug}/${memberSlug}-${photoHash}`
-          );
-        }
+        await runWithConcurrency(brandAndProjects.teamMembers, 4, async (member, mIdx) => {
+          let r2ImageKey: string | null = null;
+          if (member.photoSourceUrl) {
+            const memberSlug =
+              this.projectsScraperService.slugify(member.name) || `member-${mIdx + 1}`;
+            const photoHash = this.storageService.hashUrl(member.photoSourceUrl).slice(0, 8);
+            r2ImageKey = await this.storageService.ingestRemoteImage(
+              member.photoSourceUrl,
+              `providers/team/${profile.slug}/${memberSlug}-${photoHash}`
+            );
+          }
 
-        let cleanBio: string | null = null;
-        if (member.bio && member.bio.trim().length >= 20) {
-          try {
-            const rewrittenMemberBio = await this.aiReviewSummaryService.rewriteTeamMemberBio({
-              businessName: profile.businessName,
-              memberName: member.name,
-              role: member.role,
-              credentials: member.credentials,
-              rawBio: member.bio,
-            });
-            if (rewrittenMemberBio && rewrittenMemberBio.length >= 15) {
-              cleanBio = rewrittenMemberBio;
-            }
-          } catch {}
-        }
+          let cleanBio: string | null = null;
+          if (member.bio && member.bio.trim().length >= 20) {
+            try {
+              const rewrittenMemberBio = await this.aiReviewSummaryService.rewriteTeamMemberBio({
+                businessName: profile.businessName,
+                memberName: member.name,
+                role: member.role,
+                credentials: member.credentials,
+                rawBio: member.bio,
+              });
+              if (rewrittenMemberBio && rewrittenMemberBio.length >= 15) {
+                cleanBio = rewrittenMemberBio;
+              }
+            } catch {}
+          }
 
-        preparedTeam.push({
-          order: mIdx,
-          name: member.name.slice(0, 180),
-          role: member.role ? member.role.slice(0, 180) : null,
-          credentials: member.credentials ? member.credentials.slice(0, 180) : null,
-          bio: cleanBio,
-          r2ImageKey,
-          sourceUrl: member.sourceUrl || finalWebsiteUrl,
+          preparedTeam.push({
+            order: mIdx,
+            name: member.name.slice(0, 180),
+            role: member.role ? member.role.slice(0, 180) : null,
+            credentials: member.credentials ? member.credentials.slice(0, 180) : null,
+            bio: cleanBio,
+            r2ImageKey,
+            sourceUrl: member.sourceUrl || finalWebsiteUrl,
+          });
         });
-      });
 
-      preparedTeam.sort((a, b) => a.order - b.order);
+        preparedTeam.sort((a, b) => a.order - b.order);
 
-      await this.prisma.$executeRawUnsafe(
-        `DELETE FROM \`provider_team_members\` WHERE \`providerProfileId\` = ?`,
-        profile.id
-      );
-
-      for (let tIdx = 0; tIdx < preparedTeam.length; tIdx++) {
-        const tm = preparedTeam[tIdx];
         await this.prisma.$executeRawUnsafe(
-          `INSERT INTO \`provider_team_members\` (\`id\`, \`providerProfileId\`, \`name\`, \`role\`, \`credentials\`, \`bio\`, \`imageUrl\`, \`sourceUrl\`, \`orderIndex\`, \`createdAt\`, \`updatedAt\`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))`,
-          randomUUID(),
-          profile.id,
-          tm.name,
-          tm.role,
-          tm.credentials,
-          tm.bio,
-          tm.r2ImageKey,
-          tm.sourceUrl,
-          tIdx
+          `DELETE FROM \`provider_team_members\` WHERE \`providerProfileId\` = ?`,
+          profile.id
         );
-        teamMembersSaved++;
+
+        for (let tIdx = 0; tIdx < preparedTeam.length; tIdx++) {
+          const tm = preparedTeam[tIdx];
+          await this.prisma.$executeRawUnsafe(
+            `INSERT INTO \`provider_team_members\` (\`id\`, \`providerProfileId\`, \`name\`, \`role\`, \`credentials\`, \`bio\`, \`imageUrl\`, \`sourceUrl\`, \`orderIndex\`, \`createdAt\`, \`updatedAt\`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(3), NOW(3))`,
+            randomUUID(),
+            profile.id,
+            tm.name,
+            tm.role,
+            tm.credentials,
+            tm.bio,
+            tm.r2ImageKey,
+            tm.sourceUrl,
+            tIdx
+          );
+          teamMembersSaved++;
+        }
+      } else {
+        await this.prisma.$executeRawUnsafe(
+          `DELETE FROM \`provider_team_members\` WHERE \`providerProfileId\` = ?`,
+          profile.id
+        );
       }
-    } else {
-      await this.prisma.$executeRawUnsafe(
-        `DELETE FROM \`provider_team_members\` WHERE \`providerProfileId\` = ?`,
-        profile.id
-      );
     }
 
-    const uploadedProjects: Array<{
+    // Build fast lookup of already-uploaded R2 project photos & clean AI descriptions for incremental reuse
+    const existingR2PhotoByHash = new Map<string, string>();
+    const existingCleanAiDescByKey = new Map<string, string>();
+    for (const oldProj of profile.projects || []) {
+      if (
+        oldProj.description &&
+        oldProj.description.trim().length >= 30 &&
+        !/\b(houzz|yelp|homeadvisor)\b/i.test(oldProj.description)
+      ) {
+        if (oldProj.sourceUrl) existingCleanAiDescByKey.set(oldProj.sourceUrl, oldProj.description);
+        existingCleanAiDescByKey.set(`slug:${oldProj.slug}`, oldProj.description);
+      }
+      for (const oldPh of oldProj.photos || []) {
+        const key = (oldPh.imageUrl || '').trim();
+        if (!key.startsWith('providers/')) continue;
+        const hashMatch = key.match(/-([a-f0-9]{8,16})\.[a-z0-9]+$/i);
+        if (hashMatch) {
+          existingR2PhotoByHash.set(hashMatch[1].toLowerCase(), key);
+        }
+      }
+    }
+
+    const orderedUploadedProjects: Array<{
       title: string;
       slug: string;
       description?: string;
@@ -2511,11 +2799,17 @@ export class ProvidersService implements OnApplicationBootstrap {
         width?: number;
         height?: number;
       }>;
-    }> = [];
+    } | null> = new Array(scrapedProjects.length).fill(null);
 
     let totalUploadedPhotos = 0;
+    const primaryCatName = profile.listings?.[0]?.category?.name || undefined;
+    const verifiedServiceNames =
+      profile.listings?.flatMap(
+        (l: any) => l.subServices?.map((ss: any) => ss.subService?.name).filter(Boolean) || []
+      ) || [];
 
-    for (const proj of scrapedProjects) {
+    // Process up to 5 project albums in parallel (each uploading up to 8 R2 photos concurrently + incremental R2 reuse)
+    await runWithConcurrency(scrapedProjects, 5, async (proj, projIdx) => {
       const uploadedPhotos: Array<{
         order: number;
         r2Key: string;
@@ -2524,13 +2818,26 @@ export class ProvidersService implements OnApplicationBootstrap {
         height?: number;
       }> = [];
 
-      await runWithConcurrency(proj.photos, 6, async (photo, pIdx) => {
+      await runWithConcurrency(proj.photos, 8, async (photo, pIdx) => {
         const shortHash = this.storageService.hashUrl(photo.sourceUrl);
+        const reusedKey = existingR2PhotoByHash.get(shortHash.toLowerCase());
+        if (reusedKey) {
+          uploadedPhotos.push({
+            order: pIdx,
+            r2Key: reusedKey,
+            caption: photo.caption,
+            width: photo.width,
+            height: photo.height,
+          });
+          return;
+        }
+
         const keyBase = `providers/projects/${profile.slug}/${proj.slug}/${String(
           pIdx + 1
         ).padStart(2, '0')}-${shortHash}`;
         const r2Key = await this.storageService.ingestRemoteImage(photo.sourceUrl, keyBase);
         if (r2Key) {
+          existingR2PhotoByHash.set(shortHash.toLowerCase(), r2Key);
           uploadedPhotos.push({
             order: pIdx,
             r2Key,
@@ -2542,17 +2849,15 @@ export class ProvidersService implements OnApplicationBootstrap {
       });
 
       uploadedPhotos.sort((a, b) => a.order - b.order);
+      if (uploadedPhotos.length === 0) return;
 
-      if (uploadedPhotos.length > 0) {
-        totalUploadedPhotos += uploadedPhotos.length;
+      totalUploadedPhotos += uploadedPhotos.length;
 
-        const primaryCatName = profile.listings?.[0]?.category?.name || undefined;
-        const verifiedServiceNames =
-          profile.listings?.flatMap(
-            (l: any) => l.subServices?.map((ss: any) => ss.subService?.name).filter(Boolean) || []
-          ) || [];
+      let seoOriginalDesc: string | undefined =
+        (proj.sourceUrl ? existingCleanAiDescByKey.get(proj.sourceUrl) : undefined) ||
+        existingCleanAiDescByKey.get(`slug:${proj.slug}`);
 
-        let seoOriginalDesc: string | undefined;
+      if (!seoOriginalDesc) {
         try {
           seoOriginalDesc = await this.aiReviewSummaryService.rewriteProjectDescription({
             businessName: profile.businessName,
@@ -2565,30 +2870,70 @@ export class ProvidersService implements OnApplicationBootstrap {
             projectYear: proj.projectYear,
             costRange: proj.costRange,
             photoCount: uploadedPhotos.length,
-            photoCaptions: uploadedPhotos
-              .map((ph) => ph.caption || '')
-              .filter(Boolean),
+            photoCaptions: uploadedPhotos.map((ph) => ph.caption || '').filter(Boolean),
           });
         } catch (aiErr: any) {
           this.logger.warn(
             `⚠️ [AI Project Rewrite] Could not rewrite "${proj.title}": ${aiErr.message}`
           );
         }
+      }
 
+      orderedUploadedProjects[projIdx] = {
+        title: proj.title,
+        slug: proj.slug,
+        description: seoOriginalDesc || undefined,
+        location: proj.location,
+        projectYear: proj.projectYear,
+        costRange: proj.costRange,
+        serviceCategory: proj.serviceCategory,
+        sourceUrl: proj.sourceUrl,
+        photos: uploadedPhotos.map(({ r2Key, caption, width, height }) => ({
+          r2Key,
+          caption,
+          width,
+          height,
+        })),
+      };
+    });
+
+    const uploadedProjects = orderedUploadedProjects.filter(
+      (x): x is NonNullable<typeof x> => Boolean(x)
+    );
+
+    // Non-destructive safeguard: if Houzz was skipped or blocked by a CAPTCHA challenge,
+    // preserve any existing R2-backed project albums not already present in uploadedProjects!
+    if (
+      !options?.skipProjects &&
+      (skipHouzz || brandAndProjects.houzzChallengeBlocked) &&
+      (profile.projects?.length || 0) > 0
+    ) {
+      const seenSlugs = new Set(uploadedProjects.map((u) => u.slug));
+      const websiteTitles = new Set(
+        uploadedProjects.map((u) => u.title.toLowerCase().replace(/[^a-z0-9]/g, ''))
+      );
+      for (const oldProj of profile.projects || []) {
+        const cleanPhotos = (oldProj.photos || []).filter((ph) =>
+          (ph.imageUrl || '').startsWith('providers/')
+        );
+        if (cleanPhotos.length === 0) continue;
+        const normTitle = oldProj.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (seenSlugs.has(oldProj.slug) || (normTitle && websiteTitles.has(normTitle))) continue;
+        seenSlugs.add(oldProj.slug);
         uploadedProjects.push({
-          title: proj.title,
-          slug: proj.slug,
-          description: seoOriginalDesc || undefined,
-          location: proj.location,
-          projectYear: proj.projectYear,
-          costRange: proj.costRange,
-          serviceCategory: proj.serviceCategory,
-          sourceUrl: proj.sourceUrl,
-          photos: uploadedPhotos.map(({ r2Key, caption, width, height }) => ({
-            r2Key,
-            caption,
-            width,
-            height,
+          title: oldProj.title,
+          slug: oldProj.slug,
+          description: oldProj.description || undefined,
+          location: oldProj.location || undefined,
+          projectYear: oldProj.projectYear || undefined,
+          costRange: oldProj.costRange || undefined,
+          serviceCategory: oldProj.serviceCategory || undefined,
+          sourceUrl: oldProj.sourceUrl || undefined,
+          photos: cleanPhotos.map((ph) => ({
+            r2Key: ph.imageUrl,
+            caption: ph.caption || undefined,
+            width: ph.width || undefined,
+            height: ph.height || undefined,
           })),
         });
       }
@@ -2708,6 +3053,7 @@ export class ProvidersService implements OnApplicationBootstrap {
       businessName: profile.businessName,
       officialWebsiteUrl: finalWebsiteUrl,
       sourceUsed: brandAndProjects.sourceUsed,
+      houzzChallengeBlocked: Boolean(brandAndProjects.houzzChallengeBlocked),
       logoUpdated: Boolean(newLogoKey),
       descriptionRewritten: Boolean(aiBusinessDesc),
       teamMembersSaved,
@@ -2806,7 +3152,8 @@ export class ProvidersService implements OnApplicationBootstrap {
       teamMembersSaved: brandAndProjectsRes.teamMembersSaved,
       projectsSaved: brandAndProjectsRes.projectsSaved,
       photosUploadedToR2: brandAndProjectsRes.photosUploadedToR2,
-      reviewsSaved: finalProvider.scrapedReviews?.length || 0,
+      reviewsSaved:
+        finalProvider.reviewStats?.totalSaved ?? finalProvider.scrapedReviews?.length ?? 0,
       totalAggregateReviews: finalProvider.totalReviews || 0,
       aiSummaryGenerated,
       provider: finalProvider,
@@ -2849,7 +3196,7 @@ export class ProvidersService implements OnApplicationBootstrap {
   /**
    * Sync projects across all active providers sequentially.
    */
-  async syncAllProviderProjects() {
+  async syncAllProviderProjects(options?: { projectsOnly?: boolean; skipHouzz?: boolean }) {
     const activeProviders = await this.prisma.providerProfile.findMany({
       where: { isActive: true },
       select: { slug: true, businessName: true },
@@ -2861,6 +3208,7 @@ export class ProvidersService implements OnApplicationBootstrap {
       businessName: string;
       officialWebsiteUrl?: string | null;
       sourceUsed?: string;
+      houzzChallengeBlocked?: boolean;
       logoUpdated?: boolean;
       projectsSaved: number;
       photosUploadedToR2: number;
@@ -2869,12 +3217,16 @@ export class ProvidersService implements OnApplicationBootstrap {
 
     for (const prov of activeProviders) {
       try {
-        const res = await this.syncProviderProjects(prov.slug);
+        const res = await this.syncProviderProjects(prov.slug, {
+          projectsOnly: options?.projectsOnly,
+          skipHouzz: options?.skipHouzz,
+        });
         results.push({
           slug: res.slug,
           businessName: res.businessName,
           officialWebsiteUrl: res.officialWebsiteUrl,
           sourceUsed: res.sourceUsed,
+          houzzChallengeBlocked: res.houzzChallengeBlocked,
           logoUpdated: res.logoUpdated,
           projectsSaved: res.projectsSaved,
           photosUploadedToR2: res.photosUploadedToR2,
@@ -2896,6 +3248,7 @@ export class ProvidersService implements OnApplicationBootstrap {
       totalProviders: activeProviders.length,
       totalProjectsSaved: results.reduce((acc, r) => acc + r.projectsSaved, 0),
       totalPhotosUploadedToR2: results.reduce((acc, r) => acc + r.photosUploadedToR2, 0),
+      houzzBlockedProviders: results.filter((r) => r.houzzChallengeBlocked).map((r) => r.slug),
       results,
     };
   }
@@ -2926,7 +3279,8 @@ export class ProvidersService implements OnApplicationBootstrap {
           slug: prov.slug,
           businessName: prov.businessName,
           scrapedNow: res.scrapedSummary.allReviews.length,
-          totalSavedInDb: res.provider.scrapedReviews?.length || 0,
+          totalSavedInDb:
+            res.provider.reviewStats?.totalSaved ?? res.provider.scrapedReviews?.length ?? 0,
           totalAggregateReviews: res.provider.totalReviews || 0,
         });
       } catch (err: any) {
@@ -3055,6 +3409,216 @@ export class ProvidersService implements OnApplicationBootstrap {
       rawSourceNotesExtracted: rawSourceFoundCount,
       rewrittenAndSaved: updatedCount,
       errors,
+    };
+  }
+
+  /**
+   * Re-hydrates existing R2 project albums (under providers/projects/<slug>/<albumSlug>/) into MariaDB
+   * without deleting existing albums, generating fresh SEO-original AI descriptions via OpenRouter Mistral.
+   */
+  async restoreR2ProjectAlbums(
+    slug: string,
+    albumSpecs: Array<{
+      slug: string;
+      title: string;
+      location?: string;
+      projectYear?: number;
+      costRange?: string;
+      serviceCategory?: string;
+      sourceUrl?: string;
+    }>
+  ) {
+    const profile = await this.prisma.providerProfile.findUnique({
+      where: { slug },
+      include: {
+        projects: {
+          orderBy: { orderIndex: 'asc' },
+          include: { photos: { orderBy: { orderIndex: 'asc' } } },
+        },
+        listings: {
+          include: {
+            category: true,
+            subServices: { include: { subService: true } },
+            photos: { orderBy: { orderIndex: 'asc' } },
+          },
+        },
+      },
+    });
+    if (!profile) throw new NotFoundException(`Provider "${slug}" not found`);
+
+    const prefix = `providers/projects/${profile.slug}/`;
+    const allKeys = await this.storageService.listObjectKeys(prefix);
+    const keysByAlbumSlug = new Map<string, string[]>();
+    for (const k of allKeys) {
+      const rel = k.slice(prefix.length);
+      const slashIdx = rel.indexOf('/');
+      if (slashIdx <= 0) continue;
+      const albSlug = rel.slice(0, slashIdx);
+      const arr = keysByAlbumSlug.get(albSlug) || [];
+      arr.push(k);
+      keysByAlbumSlug.set(albSlug, arr);
+    }
+
+    const existingSlugs = new Set((profile.projects || []).map((p) => p.slug));
+    const categoryName = profile.listings?.[0]?.category?.name || undefined;
+    const serviceNames =
+      profile.listings?.flatMap(
+        (l) => l.subServices?.map((ss) => ss.subService?.name).filter(Boolean) || []
+      ) || [];
+
+    let nextOrder = (profile.projects || []).length;
+    let restoredCount = 0;
+
+    for (const spec of albumSpecs) {
+      if (existingSlugs.has(spec.slug)) continue;
+      const r2Keys = (keysByAlbumSlug.get(spec.slug) || []).sort();
+      if (r2Keys.length === 0) continue;
+
+      let aiDesc: string | null = null;
+      try {
+        aiDesc = await this.aiReviewSummaryService.rewriteProjectDescription({
+          businessName: profile.businessName,
+          category: categoryName,
+          services: serviceNames,
+          boroughOrCity: profile.borough || profile.city || undefined,
+          title: spec.title,
+          location: spec.location,
+          projectYear: spec.projectYear,
+          costRange: spec.costRange,
+          photoCount: r2Keys.length,
+        });
+      } catch {}
+
+      await this.prisma.providerProject.create({
+        data: {
+          providerProfileId: profile.id,
+          title: spec.title,
+          slug: spec.slug,
+          description: aiDesc,
+          location: spec.location || null,
+          projectYear: spec.projectYear || null,
+          costRange: spec.costRange || null,
+          serviceCategory: spec.serviceCategory || null,
+          sourceUrl: spec.sourceUrl || null,
+          coverImageUrl: r2Keys[0],
+          photoCount: r2Keys.length,
+          orderIndex: nextOrder++,
+          photos: {
+            create: r2Keys.map((k, idx) => ({
+              imageUrl: k,
+              caption: spec.title,
+              orderIndex: idx,
+            })),
+          },
+        },
+      });
+      existingSlugs.add(spec.slug);
+      restoredCount++;
+    }
+
+    // Refresh diverse round-robin ListingPhoto showcase across all restored + existing albums
+    const allNow = await this.prisma.providerProject.findMany({
+      where: { providerProfileId: profile.id },
+      orderBy: { orderIndex: 'asc' },
+      include: { photos: { orderBy: { orderIndex: 'asc' } } },
+    });
+    const primaryListing = profile.listings?.[0];
+    if (primaryListing && allNow.length > 0) {
+      const showcasePhotos: Array<{ r2Key: string; caption: string }> = [];
+      const seenKeys = new Set<string>();
+      const maxDepth = Math.max(...allNow.map((p) => p.photos.length));
+      for (let depth = 0; depth < maxDepth && showcasePhotos.length < 12; depth++) {
+        for (const p of allNow) {
+          if (showcasePhotos.length >= 12) break;
+          const ph = p.photos[depth];
+          if (!ph || seenKeys.has(ph.imageUrl)) continue;
+          seenKeys.add(ph.imageUrl);
+          showcasePhotos.push({ r2Key: ph.imageUrl, caption: ph.caption || p.title });
+        }
+      }
+      if (showcasePhotos.length > 0) {
+        await this.prisma.listingPhoto.deleteMany({ where: { listingId: primaryListing.id } });
+        await this.prisma.listingPhoto.createMany({
+          data: showcasePhotos.map((sp, idx) => ({
+            listingId: primaryListing.id,
+            imageUrl: sp.r2Key,
+            caption: sp.caption,
+            category: idx === 0 ? PhotoCategory.HERO : PhotoCategory.PORTFOLIO,
+            orderIndex: idx,
+          })),
+        });
+        await this.prisma.providerProfile.update({
+          where: { id: profile.id },
+          data: { coverImageUrl: showcasePhotos[0].r2Key },
+        });
+      }
+    }
+
+    await this.clearCache();
+    return {
+      slug: profile.slug,
+      restoredCount,
+      totalProjects: allNow.length,
+      availableR2AlbumSlugs: Array.from(keysByAlbumSlug.keys()),
+    };
+  }
+
+  /**
+   * Auto-trims empty margins and normalizes white-on-transparent logos across all active R2 contractor logos.
+   */
+  async normalizeAllProviderLogos() {
+    const providers = await this.prisma.providerProfile.findMany({
+      where: { isActive: true },
+      select: { id: true, slug: true, businessName: true, logoUrl: true },
+    });
+
+    const loadedItems: Array<{
+      id: string;
+      slug: string;
+      buffer: Buffer;
+      contentType: string;
+    }> = [];
+
+    await Promise.all(
+      providers.map(async (p) => {
+        if (!p.logoUrl) return;
+        const obj = await this.storageService.getObjectBuffer(p.logoUrl);
+        if (obj && obj.buffer.length >= 150) {
+          loadedItems.push({
+            id: p.id,
+            slug: p.slug,
+            buffer: obj.buffer,
+            contentType: obj.contentType,
+          });
+        }
+      })
+    );
+
+    const normalizedMap = await this.projectsScraperService.normalizeLogoBuffersBatch(
+      loadedItems.map(({ slug, buffer, contentType }) => ({ slug, buffer, contentType }))
+    );
+
+    let normalizedCount = 0;
+    for (const item of loadedItems) {
+      const cleanBuf = normalizedMap.get(item.slug);
+      if (!cleanBuf) continue;
+      const hash = this.storageService
+        .hashUrl(`${item.slug}-trimmed-${cleanBuf.length}`)
+        .slice(0, 8);
+      const newKey = `providers/logos/${item.slug}-clean-${hash}.png`;
+      await this.storageService.putObject(cleanBuf, newKey, 'image/png');
+      await this.prisma.providerProfile.update({
+        where: { id: item.id },
+        data: { logoUrl: newKey },
+      });
+      normalizedCount++;
+    }
+
+    await this.clearCache();
+    return {
+      totalProviders: providers.length,
+      logosLoaded: loadedItems.length,
+      logosNormalized: normalizedCount,
     };
   }
 }

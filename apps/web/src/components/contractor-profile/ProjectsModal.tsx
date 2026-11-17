@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import useEmblaCarousel from 'embla-carousel-react';
 import {
   X,
@@ -12,6 +13,7 @@ import {
   Calendar,
   DollarSign,
   Layers,
+  Search,
 } from 'lucide-react';
 import type { ProviderProjectItem } from '@/data/mockRoofers';
 
@@ -36,6 +38,18 @@ export default function ProjectsModal({
   const [currentPhotoIdx, setCurrentPhotoIdx] = useState(initialPhotoIndex);
   const [viewMode, setViewMode] = useState<'SLIDESHOW' | 'GRID'>('SLIDESHOW');
   const [descExpanded, setDescExpanded] = useState(false);
+  const [projectSearch, setProjectSearch] = useState('');
+
+  const filteredProjectEntries = useMemo(() => {
+    const q = projectSearch.trim().toLowerCase();
+    const entries = projects.map((proj, originalIdx) => ({ proj, originalIdx }));
+    if (!q) return entries;
+    return entries.filter(({ proj }) =>
+      `${proj.title || ''} ${proj.location || ''} ${proj.serviceCategory || ''} ${proj.projectYear || ''}`
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [projects, projectSearch]);
 
   const safeProjectIdx = Math.min(
     Math.max(0, selectedProjectIdx),
@@ -84,6 +98,7 @@ export default function ProjectsModal({
     setCurrentPhotoIdx(initialPhotoIndex || 0);
     setViewMode('SLIDESHOW');
     setDescExpanded(false);
+    setProjectSearch('');
   }, [isOpen, initialProjectIndex, initialPhotoIndex, projects.length]);
 
   useEffect(() => {
@@ -149,13 +164,15 @@ export default function ProjectsModal({
       activeProject.serviceCategory
   );
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={`${providerName} projects`}
       onClick={onClose}
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end lg:items-center justify-center lg:p-6"
+      className="fixed inset-0 !m-0 z-[100] bg-black/75 backdrop-blur-sm flex items-end lg:items-center justify-center lg:p-6"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -183,7 +200,7 @@ export default function ProjectsModal({
                   onClick={() => setViewMode('SLIDESHOW')}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                     viewMode === 'SLIDESHOW'
-                      ? 'bg-white text-gray-950 shadow-2xs'
+                      ? 'bg-white text-gray-950 shadow-sm'
                       : 'text-gray-500 hover:text-gray-800'
                   }`}
                 >
@@ -195,7 +212,7 @@ export default function ProjectsModal({
                   onClick={() => setViewMode('GRID')}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                     viewMode === 'GRID'
-                      ? 'bg-white text-gray-950 shadow-2xs'
+                      ? 'bg-white text-gray-950 shadow-sm'
                       : 'text-gray-500 hover:text-gray-800'
                   }`}
                 >
@@ -230,7 +247,7 @@ export default function ProjectsModal({
                     onClick={() => handleSelectProject(idx)}
                     className={`flex items-center gap-2 pl-1.5 pr-3 py-1 rounded-xl border text-left shrink-0 transition-all cursor-pointer ${
                       isSelected
-                        ? 'bg-white border-primary shadow-2xs ring-1 ring-primary/20'
+                        ? 'bg-white border-primary shadow-sm ring-1 ring-primary/20'
                         : 'bg-white/70 border-gray-200 hover:border-gray-300'
                     }`}
                   >
@@ -265,54 +282,89 @@ export default function ProjectsModal({
         <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
           {/* Desktop Left Project Album Sidebar */}
           {projects.length > 1 && (
-            <aside className="hidden lg:flex lg:w-72 xl:w-80 border-r border-gray-200 bg-slate-50/60 flex-col shrink-0 overflow-y-auto p-3 space-y-2">
-              {projects.map((proj, idx) => {
-                const isSelected = idx === safeProjectIdx;
-                const thumb = proj.coverUrl || proj.photos?.[0]?.url;
-                const count = proj.photoCount || proj.photos?.length || 0;
-                return (
-                  <button
-                    key={proj.id || idx}
-                    type="button"
-                    onClick={() => handleSelectProject(idx)}
-                    className={`w-full flex items-center gap-3 p-2 rounded-xl border text-left transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-white border-primary shadow-xs ring-1 ring-primary/20'
-                        : 'bg-white/60 border-gray-200/80 hover:bg-white hover:border-gray-300'
-                    }`}
-                  >
-                    {thumb && (
-                      <div className="w-16 h-12 rounded-lg overflow-hidden bg-gray-100 shrink-0">
-                        <img
-                          src={thumb}
-                          alt={proj.title}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
+            <aside className="hidden lg:flex lg:w-72 xl:w-80 border-r border-gray-200 bg-slate-50/60 flex-col shrink-0 overflow-hidden">
+              {projects.length > 6 && (
+                <div className="p-3 pb-2 border-b border-gray-200/80 bg-white/80 shrink-0">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={projectSearch}
+                      onChange={(e) => setProjectSearch(e.target.value)}
+                      placeholder={`Search ${projects.length} projects...`}
+                      className="w-full pl-8 pr-7 py-1.5 text-xs font-medium text-gray-900 bg-slate-50 border border-gray-200 rounded-lg focus:outline-none focus:border-primary focus:bg-white transition-colors"
+                    />
+                    {projectSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setProjectSearch('')}
+                        aria-label="Clear project search"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <h4
-                        className={`text-xs font-bold line-clamp-2 leading-snug ${
-                          isSelected ? 'text-primary' : 'text-gray-900'
+                  </div>
+                </div>
+              )}
+
+              <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+                {filteredProjectEntries.length === 0 ? (
+                  <p className="text-xs text-gray-500 text-center py-6">
+                    No matching projects found.
+                  </p>
+                ) : (
+                  filteredProjectEntries.map(({ proj, originalIdx }) => {
+                    const isSelected = originalIdx === safeProjectIdx;
+                    const thumb = proj.coverUrl || proj.photos?.[0]?.url;
+                    const count = proj.photoCount || proj.photos?.length || 0;
+                    return (
+                      <button
+                        key={proj.id || originalIdx}
+                        type="button"
+                        onClick={() => handleSelectProject(originalIdx)}
+                        className={`w-full flex items-center gap-3 p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-white border-primary shadow-sm ring-1 ring-primary/20'
+                            : 'bg-white/60 border-gray-200/80 hover:bg-white hover:border-gray-300'
                         }`}
                       >
-                        {proj.title}
-                      </h4>
-                      <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500">
-                        <span className="font-semibold">
-                          {count} {count === 1 ? 'photo' : 'photos'}
-                        </span>
-                        {proj.location && (
-                          <>
-                            <span>•</span>
-                            <span className="truncate">{proj.location}</span>
-                          </>
+                        {thumb && (
+                          <div className="w-16 h-12 rounded-lg overflow-hidden bg-gray-100 shrink-0">
+                            <img
+                              src={thumb}
+                              alt={proj.title}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
                         )}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+                        <div className="min-w-0 flex-1">
+                          <h4
+                            className={`text-xs font-bold line-clamp-2 leading-snug ${
+                              isSelected ? 'text-primary' : 'text-gray-900'
+                            }`}
+                          >
+                            {proj.title}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500">
+                            <span className="font-semibold">
+                              {count} {count === 1 ? 'photo' : 'photos'}
+                            </span>
+                            {proj.location && (
+                              <>
+                                <span>•</span>
+                                <span className="truncate">{proj.location}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </aside>
           )}
 
@@ -390,7 +442,7 @@ export default function ProjectsModal({
                       type="button"
                       onClick={() => emblaMainApi?.scrollPrev()}
                       aria-label="Previous project photo"
-                      className="absolute left-2 sm:left-4 z-20 p-2 sm:p-2.5 rounded-full bg-black/50 hover:bg-black/75 text-white border border-white/20 backdrop-blur-xs transition-all cursor-pointer active:scale-95"
+                      className="absolute left-2 sm:left-4 z-20 p-2 sm:p-2.5 rounded-full bg-black/50 hover:bg-black/75 text-white border border-white/20 backdrop-blur-sm transition-all cursor-pointer active:scale-95"
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
@@ -401,19 +453,31 @@ export default function ProjectsModal({
                     className="w-full h-full overflow-hidden cursor-grab active:cursor-grabbing"
                   >
                     <div className="flex h-full items-center touch-pan-y">
-                      {activePhotos.map((ph, idx) => (
-                        <div
-                          key={ph.id || idx}
-                          className="flex-[0_0_100%] min-w-0 h-full flex flex-col items-center justify-center px-1 sm:px-12"
-                        >
-                          <img
-                            src={ph.url}
-                            alt={ph.caption || `${activeProject.title} — Photo ${idx + 1}`}
-                            draggable={false}
-                            className="max-h-[46vh] sm:max-h-[54vh] max-w-full object-contain rounded-lg shadow-xl"
-                          />
-                        </div>
-                      ))}
+                      {activePhotos.map((ph, idx) => {
+                        const total = activePhotos.length;
+                        const directDist = Math.abs(idx - currentPhotoIdx);
+                        const loopDist = total > 1 ? Math.min(directDist, total - directDist) : directDist;
+                        const shouldRenderImg = total <= 12 || loopDist <= 3;
+
+                        return (
+                          <div
+                            key={ph.id || idx}
+                            className="flex-[0_0_100%] min-w-0 h-full flex flex-col items-center justify-center px-1 sm:px-12"
+                          >
+                            {shouldRenderImg ? (
+                              <img
+                                src={ph.url}
+                                alt={ph.caption || `${activeProject.title} — Photo ${idx + 1}`}
+                                draggable={false}
+                                decoding="async"
+                                className="max-h-[46vh] sm:max-h-[54vh] max-w-full object-contain rounded-lg shadow-xl"
+                              />
+                            ) : (
+                              <div className="w-48 h-36 rounded-lg bg-white/5" />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -422,7 +486,7 @@ export default function ProjectsModal({
                       type="button"
                       onClick={() => emblaMainApi?.scrollNext()}
                       aria-label="Next project photo"
-                      className="absolute right-2 sm:right-4 z-20 p-2 sm:p-2.5 rounded-full bg-black/50 hover:bg-black/75 text-white border border-white/20 backdrop-blur-xs transition-all cursor-pointer active:scale-95"
+                      className="absolute right-2 sm:right-4 z-20 p-2 sm:p-2.5 rounded-full bg-black/50 hover:bg-black/75 text-white border border-white/20 backdrop-blur-sm transition-all cursor-pointer active:scale-95"
                     >
                       <ChevronRight className="w-5 h-5" />
                     </button>
@@ -478,7 +542,7 @@ export default function ProjectsModal({
                       setCurrentPhotoIdx(idx);
                       setViewMode('SLIDESHOW');
                     }}
-                    className="group relative aspect-4/3 rounded-xl overflow-hidden border border-gray-200 bg-gray-100 cursor-pointer text-left"
+                    className="group relative h-[180px] sm:h-[210px] rounded-xl overflow-hidden border border-gray-200 bg-gray-100 cursor-pointer text-left shadow-sm"
                   >
                     <img
                       src={ph.url}
@@ -486,7 +550,7 @@ export default function ProjectsModal({
                       loading="lazy"
                       className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
-                    <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-black/65 text-white text-[10px] font-bold backdrop-blur-xs">
+                    <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-black/65 text-white text-[10px] font-bold backdrop-blur-sm">
                       #{idx + 1}
                     </span>
                   </button>
@@ -496,7 +560,8 @@ export default function ProjectsModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

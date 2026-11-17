@@ -49,9 +49,7 @@ export default function ContractorProfilePage() {
     fetchProviderBySlug(slug)
       .then((data) => {
         setProvider(data);
-        if (data.scrapedReviews && data.scrapedReviews.length > 0) {
-          setScrapedReviews(data.scrapedReviews as ScrapedReviewItemDto[]);
-        }
+        setScrapedReviews((data.scrapedReviews || []) as ScrapedReviewItemDto[]);
       })
       .catch((err) => {
         console.error('Failed to fetch provider profile:', err);
@@ -118,7 +116,7 @@ export default function ContractorProfilePage() {
   if (!provider) return null;
 
   return (
-    <div className="min-h-screen bg-[#FBFBFB] flex flex-col justify-between selection:bg-primary selection:text-white">
+    <div className="min-h-screen bg-[#F5F7FA] flex flex-col justify-between selection:bg-primary selection:text-white">
       {/* Global Header */}
       <Header onOpenQuoteModal={() => setQuoteModalOpen(true)} />
 

@@ -178,7 +178,7 @@ export default function ProfilePhotoCarousel({
               </span>
             )}
           </div>
-          <span className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/90 border border-gray-200/80 text-[11px] font-semibold text-gray-600 shadow-2xs">
+          <span className="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/90 border border-gray-200/80 text-[11px] font-semibold text-gray-600 shadow-sm">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <span>{tradeLabel} · Official Brand Profile</span>
           </span>
@@ -204,7 +204,7 @@ export default function ProfilePhotoCarousel({
       onKeyDown={handleKeyDown}
     >
       {/* STRICT FIXED-SIZE MAIN SHOWCASE FRAME (Never stretches or changes across contractors) */}
-      <div className="relative w-full h-[228px] sm:h-[320px] lg:h-[304px] xl:h-[348px] rounded-2xl overflow-hidden border border-gray-200/90 bg-slate-100 group select-none shadow-2xs">
+      <div className="relative w-full h-[228px] sm:h-[320px] lg:h-[304px] xl:h-[348px] rounded-2xl overflow-hidden border border-gray-300/80 bg-slate-100 group select-none shadow-sm">
         <div
           ref={emblaMainRef}
           className="h-full w-full overflow-hidden cursor-grab active:cursor-grabbing"
@@ -301,8 +301,8 @@ export default function ProfilePhotoCarousel({
                 aria-current={isSelected ? 'true' : undefined}
                 className={`relative w-full h-full rounded-xl overflow-hidden transition-all duration-200 cursor-pointer bg-slate-100 ${
                   isSelected
-                    ? 'ring-2 ring-[#0B3B2C] shadow-xs opacity-100'
-                    : 'border border-gray-200/90 opacity-80 hover:opacity-100 hover:border-gray-300'
+                    ? 'ring-2 ring-[#0B3B2C] shadow-sm opacity-100'
+                    : 'border border-gray-300/80 opacity-80 hover:opacity-100 hover:border-gray-400'
                 }`}
               >
                 <img

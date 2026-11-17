@@ -32,3 +32,8 @@ pnpm-debug.log*
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Local Scraper Browser Session
+.chrome-houzz/
+apps/api/.chrome-houzz/
+

@@ -42,6 +42,7 @@ export interface ScrapedBrandAndProjectsResult {
   teamMembers: ScrapedTeamMemberInput[];
   projects: ScrapedProjectInput[];
   sourceUsed: 'WEBSITE' | 'HOUZZ' | 'NONE';
+  houzzChallengeBlocked?: boolean;
 }
 
 const NON_WORK_IMAGE_PATTERNS = [
@@ -185,11 +186,11 @@ export class ProjectsScraperService {
   }
 
   /**
-   * Website-First Brand & Portfolio Orchestrator:
+   * Website + Houzz Complete Portfolio Orchestrator:
    *   1. Discovers & validates the contractor's official website URL (never storing directory/Houzz links as websiteUrl).
    *   2. Scrapes the contractor's official brand logo directly from their website (raster URL + retina 2x PNG buffer).
-   *   3. Scrapes structured project/portfolio albums from the contractor's Official Website FIRST.
-   *   4. Falls back to Houzz Project Albums ONLY if the contractor has no website or their website yields 0 portfolio projects.
+   *   3. Scrapes ALL structured project/portfolio albums from the contractor's Official Website FIRST.
+   *   4. Also scrapes ALL structured Houzz Project Albums (clicking "Load Next 6 Projects" until 100% are loaded) and merges them cleanly.
    */
   async scrapeProviderBrandAndProjects(options: {
     businessName: string;
@@ -199,10 +200,14 @@ export class ProjectsScraperService {
     maxProjects?: number;
     maxPhotosPerProject?: number;
     skipProjects?: boolean;
+    projectsOnly?: boolean;
+    skipHouzz?: boolean;
   }): Promise<ScrapedBrandAndProjectsResult> {
-    const maxProjects = options.maxProjects ?? 12;
-    const maxPhotosPerProject = options.maxPhotosPerProject ?? 12;
+    const maxProjects = options.maxProjects ?? 300;
+    const maxPhotosPerProject = options.maxPhotosPerProject ?? 100;
     const skipProjects = options.skipProjects ?? false;
+    const projectsOnly = options.projectsOnly ?? false;
+    const skipHouzz = options.skipHouzz ?? false;
     let houzzUrl = (options.houzzUrl || '').trim();
     const rawWebsite = (options.websiteUrl || '').trim();
 
@@ -217,6 +222,7 @@ export class ProjectsScraperService {
     let websiteAboutDescription: string | null = null;
     let teamMembers: ScrapedTeamMemberInput[] = [];
     let sourceUsed: 'WEBSITE' | 'HOUZZ' | 'NONE' = 'NONE';
+    let houzzChallengeBlocked = false;
     const projects: ScrapedProjectInput[] = [];
 
     let browser: Browser | null = null;
@@ -225,7 +231,7 @@ export class ProjectsScraperService {
       browser = await BrowserPoolUtil.createBrowser();
 
       // 1. If officialWebsiteUrl is missing, try discovering it FREE from their Houzz profile page first
-      if (!officialWebsiteUrl && houzzUrl && houzzUrl.includes('houzz.com')) {
+      if (!officialWebsiteUrl && !skipHouzz && houzzUrl && houzzUrl.includes('houzz.com')) {
         const fromHouzz = await this.discoverWebsiteFromHouzzProfile(browser, houzzUrl);
         if (fromHouzz) {
           this.logger.log(
@@ -259,22 +265,24 @@ export class ProjectsScraperService {
           }
         }
 
-        const brandLogo = await this.scrapeWebsiteBrandLogo(
-          browser,
-          officialWebsiteUrl,
-          options.businessName
-        );
-        logoSourceUrl = brandLogo.logoSourceUrl;
-        logoPngBuffer = brandLogo.logoPngBuffer;
+        if (!projectsOnly) {
+          const brandLogo = await this.scrapeWebsiteBrandLogo(
+            browser,
+            officialWebsiteUrl,
+            options.businessName
+          );
+          logoSourceUrl = brandLogo.logoSourceUrl;
+          logoPngBuffer = brandLogo.logoPngBuffer;
 
-        const aboutAndTeam = await this.scrapeWebsiteAboutAndTeam(
-          browser,
-          officialWebsiteUrl,
-          options.businessName,
-          logoSourceUrl
-        );
-        websiteAboutDescription = aboutAndTeam.websiteAboutDescription;
-        teamMembers = aboutAndTeam.teamMembers;
+          const aboutAndTeam = await this.scrapeWebsiteAboutAndTeam(
+            browser,
+            officialWebsiteUrl,
+            options.businessName,
+            logoSourceUrl
+          );
+          websiteAboutDescription = aboutAndTeam.websiteAboutDescription;
+          teamMembers = aboutAndTeam.teamMembers;
+        }
 
         if (!skipProjects) {
           const siteProjects = await this.scrapeWebsiteProjectAlbums(
@@ -291,30 +299,43 @@ export class ProjectsScraperService {
         }
       }
 
-      // 3. Fallback / Enrichment Strategy:
-      //    - If Official Website yielded >= 4 structured albums, use 100% Website projects.
-      //    - If Official Website yielded 0-3 albums (e.g. brochure site with only a homepage gallery) AND Houzz exists,
-      //      keep Website albums FIRST (#1..) and fill remaining slots up to maxProjects from Houzz Project Albums.
-      if (!skipProjects) {
+      // 3. Complete Portfolio Enrichment:
+      //    Keep Official Website albums FIRST (#1..), AND also scrape ALL structured Houzz Project Albums
+      //    whenever a Houzz profile exists (deduplicating any matching normalized titles) so 0 projects are missed!
+      if (!skipProjects && !skipHouzz && houzzUrl && houzzUrl.includes('houzz.com')) {
         const remainingSlots = maxProjects - projects.length;
-        if (projects.length < 4 && remainingSlots > 0 && houzzUrl && houzzUrl.includes('houzz.com')) {
+        if (remainingSlots > 0) {
           this.logger.log(
-            `🏛️ [${projects.length === 0 ? 'Fallback -> Houzz' : 'Website-First + Houzz Supplement'}] Website yielded ${
+            `🏛️ [${
+              projects.length === 0 ? 'Houzz Full Portfolio' : 'Website-First + Full Houzz Portfolio'
+            }] Website yielded ${
               projects.length
-            } album(s) for "${options.businessName}" — fetching up to ${remainingSlots} structured album(s) from Houzz`
+            } album(s) for "${options.businessName}" — fetching all structured project albums from Houzz (up to ${remainingSlots})`
           );
-          const houzzProjects = await this.scrapeHouzzProjectAlbums(
+          const houzzOut = await this.scrapeHouzzProjectAlbums(
             browser,
             houzzUrl,
             options.businessName,
             remainingSlots,
             maxPhotosPerProject
           );
+          if (houzzOut.challengeBlocked) {
+            houzzChallengeBlocked = true;
+          }
+          const houzzProjects = houzzOut.projects;
           if (houzzProjects.length > 0) {
             if (sourceUsed === 'NONE') {
               sourceUsed = 'HOUZZ';
             }
-            projects.push(...houzzProjects);
+            const websiteTitleKeys = new Set(
+              projects.map((p) => p.title.toLowerCase().replace(/[^a-z0-9]/g, ''))
+            );
+            for (const hp of houzzProjects) {
+              const tKey = hp.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+              if (tKey && websiteTitleKeys.has(tKey)) continue;
+              projects.push(hp);
+              if (projects.length >= maxProjects) break;
+            }
           }
         }
       }
@@ -323,11 +344,7 @@ export class ProjectsScraperService {
         `Failed scraping brand & projects for ${options.businessName}: ${err.message}`
       );
     } finally {
-      if (browser) {
-        try {
-          await browser.close();
-        } catch {}
-      }
+      await BrowserPoolUtil.closeBrowser(browser);
     }
 
     // Deduplicate slugs within provider
@@ -357,6 +374,7 @@ export class ProjectsScraperService {
       teamMembers,
       projects: dedupedProjects,
       sourceUsed,
+      houzzChallengeBlocked,
     };
   }
 
@@ -604,6 +622,38 @@ export class ProjectsScraperService {
         } catch {}
       }
 
+      if (!meta.preferScreenshot && meta.rawSrc) {
+        try {
+          const resp = await fetch(meta.rawSrc, {
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            },
+          });
+          if (resp.ok) {
+            const rawMime = (resp.headers.get('content-type') || 'image/png').split(';')[0].trim();
+            const rawBytes = Buffer.from(await resp.arrayBuffer());
+            if (rawBytes.length >= 250 && !rawMime.includes('svg')) {
+              const normalized = await this.normalizeLogoBufferWithPage(page, rawBytes, rawMime);
+              if (normalized) {
+                return { logoSourceUrl: null, logoPngBuffer: normalized };
+              }
+            }
+          }
+        } catch {}
+      }
+
+      if (logoPngBuffer) {
+        const normalizedShot = await this.normalizeLogoBufferWithPage(
+          page,
+          logoPngBuffer,
+          'image/png'
+        );
+        if (normalizedShot) {
+          logoPngBuffer = normalizedShot;
+        }
+      }
+
       if (meta.preferScreenshot && logoPngBuffer) {
         this.logger.log(
           `🎨 [Website Logo] Captured crisp 2x rendered brand logo from ${websiteUrl} for "${businessName}"`
@@ -620,6 +670,271 @@ export class ProjectsScraperService {
       return { logoSourceUrl: null, logoPngBuffer: null };
     } finally {
       await page.close();
+    }
+  }
+
+  /**
+   * Auto-trims empty transparent/white margins around a brand logo AND converts
+   * white-on-transparent navbar logos into crisp high-contrast dark charcoal (#111827)
+   * while preserving 100% smooth alpha anti-aliasing.
+   */
+  public async normalizeLogoBufferWithPage(
+    page: any,
+    inputBuffer: Buffer,
+    mimeType = 'image/png'
+  ): Promise<Buffer | null> {
+    if (!inputBuffer || inputBuffer.length < 150) return null;
+    try {
+      const dataUri = `data:${mimeType};base64,${inputBuffer.toString('base64')}`;
+      const resultDataUri: string | null = await page.evaluate(async (srcUri: string) => {
+        return await new Promise<string | null>((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const w = img.naturalWidth || img.width;
+              const h = img.naturalHeight || img.height;
+              if (w < 12 || h < 12 || w > 4096 || h > 4096) {
+                resolve(null);
+                return;
+              }
+
+              const canvas = document.createElement('canvas');
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d', { willReadFrequently: true });
+              if (!ctx) {
+                resolve(null);
+                return;
+              }
+              ctx.drawImage(img, 0, 0);
+              const imageData = ctx.getImageData(0, 0, w, h);
+              const d = imageData.data;
+
+              // 1. Inspect perimeter border pixels to detect transparent vs white vs solid-badge background
+              let borderTotal = 0;
+              let borderTransparent = 0;
+              let borderNearWhite = 0;
+
+              const sampleBorderPixel = (px: number, py: number) => {
+                const idx = (py * w + px) * 4;
+                const r = d[idx];
+                const g = d[idx + 1];
+                const b = d[idx + 2];
+                const a = d[idx + 3];
+                borderTotal++;
+                if (a < 28) borderTransparent++;
+                else if (a >= 200 && r >= 242 && g >= 242 && b >= 242) borderNearWhite++;
+              };
+
+              for (let x = 0; x < w; x++) {
+                sampleBorderPixel(x, 0);
+                if (h > 1) sampleBorderPixel(x, h - 1);
+              }
+              for (let y = 1; y < h - 1; y++) {
+                sampleBorderPixel(0, y);
+                if (w > 1) sampleBorderPixel(w - 1, y);
+              }
+
+              const transparentBorderRatio = borderTotal > 0 ? borderTransparent / borderTotal : 0;
+              const whiteBorderRatio = borderTotal > 0 ? borderNearWhite / borderTotal : 0;
+
+              // 2. Detect invisible white-on-transparent monochrome logos and convert foreground to crisp #111827
+              if (transparentBorderRatio >= 0.45) {
+                let opaqueCount = 0;
+                let veryLightMonochromeCount = 0;
+                let sumLum = 0;
+
+                for (let i = 0; i < d.length; i += 4) {
+                  const a = d[i + 3];
+                  if (a < 45) continue;
+                  const r = d[i];
+                  const g = d[i + 1];
+                  const b = d[i + 2];
+                  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                  const sat = Math.max(r, g, b) - Math.min(r, g, b);
+                  opaqueCount++;
+                  sumLum += lum;
+                  if (lum >= 220 && sat < 32) {
+                    veryLightMonochromeCount++;
+                  }
+                }
+
+                const avgLum = opaqueCount > 0 ? sumLum / opaqueCount : 0;
+                const lightRatio = opaqueCount > 0 ? veryLightMonochromeCount / opaqueCount : 0;
+
+                if (opaqueCount >= 20 && avgLum >= 222 && lightRatio >= 0.82) {
+                  for (let i = 0; i < d.length; i += 4) {
+                    const a = d[i + 3];
+                    if (a < 8) continue;
+                    const r = d[i];
+                    const g = d[i + 1];
+                    const b = d[i + 2];
+                    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                    const sat = Math.max(r, g, b) - Math.min(r, g, b);
+                    if (sat < 36 && lum > 175) {
+                      d[i] = 17;
+                      d[i + 1] = 24;
+                      d[i + 2] = 39;
+                    }
+                  }
+                  ctx.putImageData(imageData, 0, 0);
+                }
+              }
+
+              // 3. Find tight foreground bounding box when background is transparent or pure white
+              let minX = 0;
+              let minY = 0;
+              let maxX = w - 1;
+              let maxY = h - 1;
+
+              if (transparentBorderRatio >= 0.4 || whiteBorderRatio >= 0.65) {
+                let bMinX = w;
+                let bMinY = h;
+                let bMaxX = -1;
+                let bMaxY = -1;
+                const trimMode = transparentBorderRatio >= 0.4 ? 'ALPHA' : 'WHITE';
+
+                for (let y = 0; y < h; y++) {
+                  for (let x = 0; x < w; x++) {
+                    const idx = (y * w + x) * 4;
+                    const r = d[idx];
+                    const g = d[idx + 1];
+                    const b = d[idx + 2];
+                    const a = d[idx + 3];
+                    const isFg =
+                      trimMode === 'ALPHA'
+                        ? a > 20
+                        : a > 20 && !(r >= 244 && g >= 244 && b >= 244);
+
+                    if (isFg) {
+                      if (x < bMinX) bMinX = x;
+                      if (x > bMaxX) bMaxX = x;
+                      if (y < bMinY) bMinY = y;
+                      if (y > bMaxY) bMaxY = y;
+                    }
+                  }
+                }
+
+                if (bMaxX > bMinX && bMaxY > bMinY && bMaxX - bMinX >= 8 && bMaxY - bMinY >= 8) {
+                  minX = bMinX;
+                  minY = bMinY;
+                  maxX = bMaxX;
+                  maxY = bMaxY;
+                }
+              }
+
+              const cropW = maxX - minX + 1;
+              const cropH = maxY - minY + 1;
+
+              // Upscale tiny logos gently so text stays crisp at 2x DPI
+              const scale = cropH < 96 ? Math.min(2, 112 / cropH) : 1;
+              const padX = Math.max(2, Math.round(cropW * scale * 0.03));
+              const padY = Math.max(2, Math.round(cropH * scale * 0.04));
+              const outW = Math.round(cropW * scale) + padX * 2;
+              const outH = Math.round(cropH * scale) + padY * 2;
+
+              const outCanvas = document.createElement('canvas');
+              outCanvas.width = outW;
+              outCanvas.height = outH;
+              const outCtx = outCanvas.getContext('2d');
+              if (!outCtx) {
+                resolve(null);
+                return;
+              }
+              if (whiteBorderRatio >= 0.65 && transparentBorderRatio < 0.4) {
+                outCtx.fillStyle = '#FFFFFF';
+                outCtx.fillRect(0, 0, outW, outH);
+              }
+              outCtx.imageSmoothingEnabled = true;
+              outCtx.imageSmoothingQuality = 'high';
+              outCtx.drawImage(
+                canvas,
+                minX,
+                minY,
+                cropW,
+                cropH,
+                padX,
+                padY,
+                Math.round(cropW * scale),
+                Math.round(cropH * scale)
+              );
+
+              resolve(outCanvas.toDataURL('image/png'));
+            } catch {
+              resolve(null);
+            }
+          };
+          img.onerror = () => resolve(null);
+          img.src = srcUri;
+        });
+      }, dataUri);
+
+      if (!resultDataUri || !resultDataUri.startsWith('data:image/png;base64,')) {
+        return null;
+      }
+      const b64 = resultDataUri.slice('data:image/png;base64,'.length);
+      const outBuf = Buffer.from(b64, 'base64');
+      return outBuf.length >= 200 ? outBuf : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Batch-normalize existing logo buffers in 1 shared Chromium instance (for instant DB/R2 logo cleanup).
+   */
+  public async normalizeLogoBuffersBatch(
+    items: Array<{ slug: string; buffer: Buffer; contentType: string }>
+  ): Promise<Map<string, Buffer>> {
+    const out = new Map<string, Buffer>();
+    if (items.length === 0) return out;
+
+    let browser: Browser | null = null;
+    try {
+      browser = await BrowserPoolUtil.createBrowser();
+      const page = await BrowserPoolUtil.createStealthPage(browser);
+      await page.goto('about:blank');
+
+      for (const item of items) {
+        const normalized = await this.normalizeLogoBufferWithPage(
+          page,
+          item.buffer,
+          item.contentType || 'image/png'
+        );
+        if (normalized) {
+          out.set(item.slug, normalized);
+        }
+      }
+      await page.close();
+    } catch (err: any) {
+      this.logger.warn(`normalizeLogoBuffersBatch warning: ${err.message}`);
+    } finally {
+      await BrowserPoolUtil.closeBrowser(browser);
+    }
+    return out;
+  }
+
+  /**
+   * Detects anti-bot CAPTCHA / challenge pages so the scraper stops immediately without retrying.
+   */
+  private async isAntiBotChallengePage(page: any): Promise<boolean> {
+    try {
+      return await page.evaluate(() => {
+        const title = (document.title || '').toLowerCase();
+        const href = (location.href || '').toLowerCase();
+        const snippet = (document.body?.innerText || '').slice(0, 900).toLowerCase();
+        return (
+          title.includes('client challenge') ||
+          title.includes('attention required') ||
+          title.includes('just a moment') ||
+          href.includes('/_fs-ch-') ||
+          snippet.includes('enter the characters seen in the image') ||
+          snippet.includes('download audio captcha') ||
+          snippet.includes('verify you are human')
+        );
+      });
+    } catch {
+      return false;
     }
   }
 
@@ -641,8 +956,9 @@ export class ProjectsScraperService {
   }
 
   /**
-   * Discover all Houzz Project Album URLs (/hznb/projects/...) from a Houzz Professional Profile
-   * and scrape each project's authentic metadata + full photo album.
+   * Discover ALL Houzz Project Album URLs (/hznb/projects/...) from a Houzz Professional Profile
+   * (exhaustively CDP-clicking "Load Next 6 Projects" / "Load More" + checking /projects subpage)
+   * and scrape each project's authentic metadata + full photo album in parallel worker tabs.
    */
   private async scrapeHouzzProjectAlbums(
     browser: Browser,
@@ -650,47 +966,40 @@ export class ProjectsScraperService {
     businessName: string,
     maxProjects: number,
     maxPhotosPerProject: number
-  ): Promise<ScrapedProjectInput[]> {
+  ): Promise<{ projects: ScrapedProjectInput[]; challengeBlocked: boolean }> {
     const cleanProfileUrl = houzzProfileUrl.split('?')[0].replace(/\/+$/, '');
-    this.logger.log(`🏗️ [Houzz Projects] Discovering project albums from: ${cleanProfileUrl}`);
+    this.logger.log(`🏗️ [Houzz Projects] Discovering ALL project albums from: ${cleanProfileUrl}`);
 
     const discoveredProjectMap = new Map<
       string,
       { url: string; fallbackTitle?: string; fallbackLocation?: string; fallbackPhotoCount?: number }
     >();
     let proLogoHash = '';
+    let declaredTotalProjects = 0;
+    let challengeBlocked = false;
+
+    const mergeDiscovered = (
+      items: Array<{ url: string; title: string; location: string; photoCount: number }>
+    ): number => {
+      let added = 0;
+      for (const it of items) {
+        if (!it.url) continue;
+        const cleanUrl = it.url.split('?')[0].replace(/\/+$/, '');
+        const existing = discoveredProjectMap.get(cleanUrl);
+        if (!existing) added++;
+        discoveredProjectMap.set(cleanUrl, {
+          url: cleanUrl,
+          fallbackTitle: it.title || existing?.fallbackTitle,
+          fallbackLocation: it.location || existing?.fallbackLocation,
+          fallbackPhotoCount: it.photoCount || existing?.fallbackPhotoCount,
+        });
+      }
+      return added;
+    };
 
     const page = await BrowserPoolUtil.createStealthPage(browser);
     try {
       await page.setViewport({ width: 1440, height: 900 });
-      await page.goto(cleanProfileUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await ScraperHttpUtil.sleep(2500);
-
-      // Scroll down to trigger Houzz lazy-loaded Projects section & click "See All Projects" / "Load More" if rendered inline
-      await page.evaluate(async () => {
-        for (let y = 0; y < 3500; y += 500) {
-          window.scrollTo(0, y);
-          await new Promise((r) => setTimeout(r, 180));
-        }
-      });
-      await ScraperHttpUtil.sleep(1200);
-
-      // Check if there is a dedicated "/projects" sub-link or "Load More" button for projects
-      const projectsSubPageUrl = await page.evaluate(() => {
-        const links = Array.from(document.querySelectorAll('a[href]'));
-        for (const a of links) {
-          const href = (a as HTMLAnchorElement).href || '';
-          const txt = (a.textContent || '').trim();
-          if (
-            /\/projects(\?|$|\/)/i.test(href) &&
-            !href.includes('/hznb/projects/') &&
-            /project|see all|view all/i.test(txt + ' ' + href)
-          ) {
-            return href;
-          }
-        }
-        return '';
-      });
 
       const extractFromCurrentHouzzDom = async () => {
         return await page.evaluate(() => {
@@ -701,6 +1010,22 @@ export class ProjectsScraperService {
           if (avatarImg?.src) {
             const m = avatarImg.src.match(/([0-9a-f]{16})[_-]/i);
             if (m) logoHash = m[1].toLowerCase();
+          }
+
+          // Parse declared total project count (e.g. "62 Projects" heading)
+          let declaredCount = 0;
+          const headings = Array.from(
+            document.querySelectorAll(
+              'h1, h2, h3, h4, [id*="project" i] span, [data-component*="Project" i] span'
+            )
+          );
+          for (const h of headings) {
+            const txt = (h.textContent || '').replace(/\s+/g, ' ').trim();
+            const m = txt.match(/^(\d{1,4})\s+Projects?$/i);
+            if (m) {
+              const n = parseInt(m[1], 10);
+              if (n > declaredCount) declaredCount = n;
+            }
           }
 
           const items: Array<{
@@ -731,7 +1056,9 @@ export class ProjectsScraperService {
             const location = (subEl?.textContent || '').trim();
 
             const cardText = (a.textContent || card.textContent || '').trim();
-            const countMatch = cardText.match(/(\d+)\s*Photos?/i);
+            const countMatch =
+              cardText.match(/(?:^|\D)(\d{1,3})\s*(?:Photos?)?$/i) ||
+              cardText.match(/(\d+)\s*Photos?/i);
             const photoCount = countMatch ? parseInt(countMatch[1], 10) : 0;
 
             items.push({ url: rawHref, title, location, photoCount });
@@ -754,80 +1081,205 @@ export class ProjectsScraperService {
             }
           }
 
-          return { logoHash, items };
+          return { logoHash, declaredCount, items };
         });
       };
 
-      const firstPass = await extractFromCurrentHouzzDom();
-      if (firstPass.logoHash) proLogoHash = firstPass.logoHash;
-      for (const it of firstPass.items) {
-        const existing = discoveredProjectMap.get(it.url);
-        discoveredProjectMap.set(it.url, {
-          url: it.url,
-          fallbackTitle: it.title || existing?.fallbackTitle,
-          fallbackLocation: it.location || existing?.fallbackLocation,
-          fallbackPhotoCount: it.photoCount || existing?.fallbackPhotoCount,
-        });
-      }
+      const exhaustivelyClickLoadMoreProjects = async () => {
+        let stagnantRounds = 0;
+        for (let step = 0; step < 65; step++) {
+          if (discoveredProjectMap.size >= maxProjects) break;
+          if (
+            declaredTotalProjects > 0 &&
+            discoveredProjectMap.size >= declaredTotalProjects &&
+            step >= 1
+          ) {
+            break;
+          }
 
-      // Click project pagination / next arrow inside Projects carousel if fewer than maxProjects found
-      if (discoveredProjectMap.size < maxProjects) {
-        for (let clickStep = 0; clickStep < 3; clickStep++) {
-          const clickedNext = await page.evaluate(() => {
-            const buttons = Array.from(document.querySelectorAll('button, a[role="button"]'));
-            const projNext = buttons.find((b) => {
-              const label = (
-                (b.getAttribute('aria-label') || '') +
+          const beforeDomAnchors = await page.evaluate(
+            () => document.querySelectorAll('a[href*="/hznb/projects/"]').length
+          );
+
+          // Mark target button in DOM, then dispatch real CDP mouse click so Houzz React handlers fire reliably
+          const markedLabel = await page.evaluate(() => {
+            document
+              .querySelectorAll('[data-agy-hz-projmore]')
+              .forEach((n) => n.removeAttribute('data-agy-hz-projmore'));
+
+            const isVisible = (el: Element) => {
+              const r = el.getBoundingClientRect();
+              const st = window.getComputedStyle(el);
+              return r.width > 10 && r.height > 10 && st.display !== 'none' && st.visibility !== 'hidden';
+            };
+
+            const candidates = Array.from(
+              document.querySelectorAll(
+                'button, a[role="button"], div[role="button"], span[role="button"], a'
+              )
+            );
+
+            // Priority 1: Explicit "Load Next 6 Projects" / "Load More Projects" / "Show More Projects" / "Next 6 Projects"
+            let target = candidates.find((el) => {
+              if (!isVisible(el)) return false;
+              if ((el as HTMLButtonElement).disabled) return false;
+              const txt = (
+                (el.getAttribute('aria-label') || '') +
                 ' ' +
-                (b.textContent || '')
-              ).toLowerCase();
-              if (/load more projects|see more projects|show more projects/i.test(label)) {
-                return true;
-              }
-              const inProjSection = Boolean(
-                b.closest('[id*="project" i], [class*="Project" i], [data-component*="Project" i]')
+                (el.textContent || '')
+              )
+                .replace(/\s+/g, ' ')
+                .trim();
+              if (txt.length > 80) return false;
+              const href = (el as HTMLAnchorElement).href || '';
+              if (href && href.includes('/hznb/projects/')) return false;
+              return /\b(?:load|show|see|view)\s+(?:next|more|all)\s*(?:\d+\s*)?projects?\b|\bnext\s+\d+\s+projects?\b/i.test(
+                txt
               );
-              return inProjSection && /next|more/i.test(label) && !(b as HTMLButtonElement).disabled;
             }) as HTMLElement | undefined;
 
-            if (projNext) {
-              projNext.click();
-              return true;
+            // Priority 2: Generic "Load More" / "Load Next 6" button positioned right below the Projects grid
+            if (!target) {
+              const projAnchors = Array.from(document.querySelectorAll('a[href*="/hznb/projects/"]'));
+              if (projAnchors.length > 0) {
+                const lastCardRect = projAnchors[projAnchors.length - 1].getBoundingClientRect();
+                target = candidates.find((el) => {
+                  if (!isVisible(el) || (el as HTMLButtonElement).disabled) return false;
+                  const txt = (el.textContent || '').replace(/\s+/g, ' ').trim();
+                  if (!/^(?:load\s+(?:next|more).*|show\s+more|view\s+more|\+\s*\d+\s*more)$/i.test(txt)) {
+                    return false;
+                  }
+                  if (/review|comment|photo|question/i.test(txt)) return false;
+                  const r = el.getBoundingClientRect();
+                  return r.top >= lastCardRect.top - 40 && r.top <= lastCardRect.bottom + 360;
+                }) as HTMLElement | undefined;
+              }
             }
-            return false;
+
+            if (!target) return '';
+            target.setAttribute('data-agy-hz-projmore', '1');
+            target.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'center' });
+            return (target.textContent || '').replace(/\s+/g, ' ').trim();
           });
-          if (!clickedNext) break;
-          await ScraperHttpUtil.sleep(1500);
-          const extraPass = await extractFromCurrentHouzzDom();
-          for (const it of extraPass.items) {
-            if (!discoveredProjectMap.has(it.url)) {
-              discoveredProjectMap.set(it.url, {
-                url: it.url,
-                fallbackTitle: it.title,
-                fallbackLocation: it.location,
-                fallbackPhotoCount: it.photoCount,
-              });
+
+          if (!markedLabel) {
+            break;
+          }
+
+          const btnHandle = await page.$('[data-agy-hz-projmore="1"]');
+          if (!btnHandle) break;
+          await btnHandle.click({ delay: 35 }).catch(() => {});
+
+          // Poll up to 4.5s for new /hznb/projects/ cards to mount into DOM
+          let grew = false;
+          for (let w = 0; w < 15; w++) {
+            await ScraperHttpUtil.sleep(300);
+            const nowAnchors = await page.evaluate(
+              () => document.querySelectorAll('a[href*="/hznb/projects/"]').length
+            );
+            if (nowAnchors > beforeDomAnchors) {
+              grew = true;
+              await ScraperHttpUtil.sleep(250);
+              break;
             }
           }
-          if (discoveredProjectMap.size >= maxProjects) break;
+
+          if (await this.isAntiBotChallengePage(page)) {
+            challengeBlocked = true;
+            this.logger.warn(
+              `⛔ [Houzz Blocked] Anti-bot CAPTCHA challenge encountered while paginating projects for "${businessName}" — halting Houzz scrape.`
+            );
+            break;
+          }
+
+          const pass = await extractFromCurrentHouzzDom();
+          if (pass.declaredCount > declaredTotalProjects) {
+            declaredTotalProjects = pass.declaredCount;
+          }
+          const newlyAdded = mergeDiscovered(pass.items);
+
+          if (!grew && newlyAdded === 0) {
+            stagnantRounds++;
+            if (stagnantRounds >= 2) break;
+          } else {
+            stagnantRounds = 0;
+          }
         }
+      };
+
+      await page.goto(cleanProfileUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await ScraperHttpUtil.sleep(2200);
+
+      if (await this.isAntiBotChallengePage(page)) {
+        this.logger.warn(
+          `⛔ [Houzz Blocked] Anti-bot CAPTCHA challenge ("Client Challenge") detected at ${cleanProfileUrl} — stopping Houzz scrape without retrying.`
+        );
+        return { projects: [], challengeBlocked: true };
       }
 
-      // Visit dedicated /projects subpage if available and we still can discover more
-      if (projectsSubPageUrl && discoveredProjectMap.size < maxProjects) {
+      // Scroll down to trigger Houzz lazy-loaded Projects section
+      await page.evaluate(async () => {
+        const limitY = Math.min(document.body.scrollHeight, 5500);
+        for (let y = 0; y < limitY; y += 550) {
+          window.scrollTo(0, y);
+          await new Promise((r) => setTimeout(r, 140));
+        }
+      });
+      await ScraperHttpUtil.sleep(900);
+
+      const projectsSubPageUrl = await page.evaluate(() => {
+        const links = Array.from(document.querySelectorAll('a[href]'));
+        for (const a of links) {
+          const href = (a as HTMLAnchorElement).href || '';
+          const txt = (a.textContent || '').trim();
+          if (
+            /\/projects(\?|$|\/)/i.test(href) &&
+            !href.includes('/hznb/projects/') &&
+            /project|see all|view all/i.test(txt + ' ' + href)
+          ) {
+            return href;
+          }
+        }
+        return '';
+      });
+
+      const firstPass = await extractFromCurrentHouzzDom();
+      if (firstPass.logoHash) proLogoHash = firstPass.logoHash;
+      if (firstPass.declaredCount > declaredTotalProjects) {
+        declaredTotalProjects = firstPass.declaredCount;
+      }
+      mergeDiscovered(firstPass.items);
+
+      // Exhaustively CDP-click "Load Next 6 Projects" on main profile page
+      await exhaustivelyClickLoadMoreProjects();
+
+      // Also check dedicated /projects subpage if declaredTotalProjects > discovered or subpage link exists
+      const candidateSubUrl = projectsSubPageUrl || `${cleanProfileUrl}/projects`;
+      if (
+        !challengeBlocked &&
+        discoveredProjectMap.size < maxProjects &&
+        (Boolean(projectsSubPageUrl) ||
+          (declaredTotalProjects > 0 && discoveredProjectMap.size < declaredTotalProjects))
+      ) {
         try {
-          await page.goto(projectsSubPageUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
-          await ScraperHttpUtil.sleep(2000);
-          const subPass = await extractFromCurrentHouzzDom();
-          for (const it of subPass.items) {
-            if (!discoveredProjectMap.has(it.url)) {
-              discoveredProjectMap.set(it.url, {
-                url: it.url,
-                fallbackTitle: it.title,
-                fallbackLocation: it.location,
-                fallbackPhotoCount: it.photoCount,
-              });
+          await page.goto(candidateSubUrl, { waitUntil: 'domcontentloaded', timeout: 22000 });
+          await ScraperHttpUtil.sleep(1800);
+          if (await this.isAntiBotChallengePage(page)) {
+            challengeBlocked = true;
+          } else {
+            await page.evaluate(async () => {
+              const limitY = Math.min(document.body.scrollHeight, 5500);
+              for (let y = 0; y < limitY; y += 600) {
+                window.scrollTo(0, y);
+                await new Promise((r) => setTimeout(r, 120));
+              }
+            });
+            const subPass = await extractFromCurrentHouzzDom();
+            if (subPass.declaredCount > declaredTotalProjects) {
+              declaredTotalProjects = subPass.declaredCount;
             }
+            mergeDiscovered(subPass.items);
+            await exhaustivelyClickLoadMoreProjects();
           }
         } catch {}
       }
@@ -837,33 +1289,65 @@ export class ProjectsScraperService {
 
     const projectCandidates = Array.from(discoveredProjectMap.values()).slice(0, maxProjects);
     this.logger.log(
-      `📂 [Houzz Projects] Found ${discoveredProjectMap.size} project albums (scraping top ${projectCandidates.length})`
+      `📂 [Houzz Projects] Discovered ${discoveredProjectMap.size}${
+        declaredTotalProjects ? `/${declaredTotalProjects}` : ''
+      } project albums for "${businessName}" — scraping all ${projectCandidates.length} album(s) in parallel`
     );
 
-    const results: ScrapedProjectInput[] = [];
-
-    for (let idx = 0; idx < projectCandidates.length; idx++) {
-      const cand = projectCandidates[idx];
-      const scrapedAlbum = await this.scrapeSingleHouzzProjectAlbum(
-        browser,
-        cand.url,
-        businessName,
-        proLogoHash,
-        maxPhotosPerProject,
-        cand.fallbackTitle,
-        cand.fallbackLocation
-      );
-      if (scrapedAlbum && scrapedAlbum.photos.length > 0) {
-        results.push(scrapedAlbum);
-      }
+    if (projectCandidates.length === 0) {
+      return { projects: [], challengeBlocked };
     }
 
-    return results;
+    // Scrape all discovered Houzz albums using 4 persistent concurrent worker tabs (preserving exact order)
+    const orderedResults: Array<ScrapedProjectInput | null> = new Array(
+      projectCandidates.length
+    ).fill(null);
+    let cursor = 0;
+    const workerCount = Math.min(
+      BrowserPoolUtil.isRemoteBrowserConfigured() ? 2 : 4,
+      projectCandidates.length
+    );
+
+    const workers = Array.from({ length: workerCount }, async () => {
+      const workerPage = await BrowserPoolUtil.createStealthPage(browser);
+      await workerPage.setViewport({ width: 1440, height: 900 });
+      try {
+        while (cursor < projectCandidates.length && !challengeBlocked) {
+          const idx = cursor++;
+          const cand = projectCandidates[idx];
+          const scrapedAlbum = await this.scrapeSingleHouzzProjectAlbum(
+            browser,
+            cand.url,
+            businessName,
+            proLogoHash,
+            maxPhotosPerProject,
+            cand.fallbackTitle,
+            cand.fallbackLocation,
+            workerPage,
+            () => {
+              challengeBlocked = true;
+            }
+          );
+          if (scrapedAlbum && scrapedAlbum.photos.length > 0) {
+            orderedResults[idx] = scrapedAlbum;
+          }
+        }
+      } finally {
+        await workerPage.close().catch(() => {});
+      }
+    });
+
+    await Promise.all(workers);
+
+    return {
+      projects: orderedResults.filter((x): x is ScrapedProjectInput => Boolean(x)),
+      challengeBlocked,
+    };
   }
 
   /**
    * Scrape a single Houzz Project Album (/hznb/projects/<slug>-pj-vj~<id>):
-   * Extracts authentic title, description, location, projectYear, costRange, and all high-res album photos.
+   * Extracts authentic title, description, location, projectYear, costRange, and ALL high-res album photos (50+ supported).
    */
   private async scrapeSingleHouzzProjectAlbum(
     browser: Browser,
@@ -872,205 +1356,287 @@ export class ProjectsScraperService {
     proLogoHash: string,
     maxPhotos: number,
     cardTitle?: string,
-    cardLocation?: string
+    cardLocation?: string,
+    reusablePage?: any,
+    onChallengeBlocked?: () => void
   ): Promise<ScrapedProjectInput | null> {
-    const page = await BrowserPoolUtil.createStealthPage(browser);
+    const page = reusablePage || (await BrowserPoolUtil.createStealthPage(browser));
     try {
-      await page.setViewport({ width: 1440, height: 900 });
+      if (!reusablePage) {
+        await page.setViewport({ width: 1440, height: 900 });
+      }
       await page.goto(projectUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
-      await ScraperHttpUtil.sleep(1800);
+      await ScraperHttpUtil.sleep(1100);
 
-      // Scroll through the project album so every photo in the project loads its real src
-      await page.evaluate(async () => {
-        const maxScroll = Math.min(document.body.scrollHeight, 9000);
-        for (let y = 0; y < maxScroll; y += 650) {
-          window.scrollTo(0, y);
-          await new Promise((r) => setTimeout(r, 120));
-        }
-        window.scrollTo(0, 0);
-      });
-      await ScraperHttpUtil.sleep(800);
-
-      const data = await page.evaluate((proName: string) => {
-        const normalizeBiz = (s: string) =>
-          (s || '')
-            .toLowerCase()
-            .replace(/\b(company|co|inc|incorporated|corp|corporation|llc|ltd|limited|and)\b/g, '')
-            .replace(/[^a-z0-9]/g, '');
-        const normPro = normalizeBiz(proName);
-        const isSameAsProName = (val: string) => {
-          const n = normalizeBiz(val);
-          if (!n || n === normPro) return true;
-          if (normPro.length >= 5 && (n.startsWith(normPro) || normPro.startsWith(n)) && Math.abs(n.length - normPro.length) <= 4) {
-            return true;
-          }
-          return false;
-        };
-
-        // On Houzz /hznb/projects/ pages, <meta property="og:title"> / document.title is ALWAYS the exact Project Album Title,
-        // whereas the first <h1> in the DOM is often the Pro Masthead Banner (e.g. "Jewel Construction Company").
-        let title = '';
-
-        const ogTitle =
-          document.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
-          document.title ||
-          '';
-        const cleanedOg = ogTitle
-          .replace(/\s*[-|–]\s*Projects?\s*[-|–]\s*Houzz.*$/i, '')
-          .replace(/\s*[-|–]\s*Houzz.*$/i, '')
-          .trim();
-        if (cleanedOg && !isSameAsProName(cleanedOg) && !/^projects?$/i.test(cleanedOg)) {
-          title = cleanedOg;
-        }
-
-        if (!title) {
-          const projectHeadingCandidates = Array.from(
-            document.querySelectorAll(
-              '[data-component*="Project" i] h1, [data-component*="Project" i] h2, [class*="project-title" i], [class*="ProjectTitle" i], [class*="projectHeader" i] h1, [class*="projectHeader" i] h2, main h1, h1'
-            )
-          );
-          for (const el of projectHeadingCandidates) {
-            if (el.closest('header, [class*="masthead" i], [class*="ProHeader" i], [class*="pro-header" i]')) {
-              continue;
-            }
-            const txt = (el.textContent || '').replace(/\s+/g, ' ').trim();
-            if (txt.length >= 3 && !isSameAsProName(txt) && !/^projects?$/i.test(txt)) {
-              title = txt;
-              break;
-            }
-          }
-        }
-
-        // Extract structured metadata rows (Houzz renders Project Year, Project Cost, Location, Category in key/value rows or JSON)
-        let location = '';
-        let projectYear: number | undefined;
-        let costRange = '';
-        let serviceCategory = '';
-        let description = '';
-
-        // Check <script id="hz-ctx">, meta description, or project description block (filtering generic Houzz boilerplate)
-        const isGenericHouzzMeta = (txt: string) => {
-          const t = (txt || '').trim();
-          if (t.length < 25) return true;
-          return (
-            /see more photos of this project on houzz/i.test(t) ||
-            /^check out\b.*\bon houzz\.?$/i.test(t) ||
-            /^browse\b.*\bphotos on houzz/i.test(t) ||
-            /^houzz has millions of/i.test(t)
-          );
-        };
-
-        const descEl = document.querySelector(
-          '[class*="project-description" i], [class*="ProjectDescription" i], [data-component*="Description" i], [class*="ProjectInfo" i] p'
+      if (await this.isAntiBotChallengePage(page)) {
+        this.logger.warn(
+          `⛔ [Houzz Blocked] CAPTCHA challenge detected on album ${projectUrl} — stopping Houzz album scrape.`
         );
-        if (descEl?.textContent && !isGenericHouzzMeta(descEl.textContent)) {
-          description = descEl.textContent.replace(/\s+/g, ' ').trim();
-        }
+        onChallengeBlocked?.();
+        return null;
+      }
 
-        if (!description) {
+      // Scroll deeply & CDP-click any "Load More Photos" / "Load Next ... Photos" button inside 50+ photo albums
+      for (let round = 0; round < 8; round++) {
+        await page.evaluate(async () => {
+          const maxScroll = Math.min(document.body.scrollHeight, 30000);
+          for (let y = 0; y < maxScroll; y += 900) {
+            window.scrollTo(0, y);
+            await new Promise((r) => setTimeout(r, 55));
+          }
+        });
+        const markedPhotoMore = await page.evaluate(() => {
+          document
+            .querySelectorAll('[data-agy-hz-photomore]')
+            .forEach((n) => n.removeAttribute('data-agy-hz-photomore'));
+          const btn = Array.from(
+            document.querySelectorAll('button, a[role="button"], div[role="button"]')
+          ).find((b) => {
+            if ((b as HTMLButtonElement).disabled) return false;
+            const r = b.getBoundingClientRect();
+            if (r.width < 10 || r.height < 10) return false;
+            const txt = ((b.textContent || '') + ' ' + (b.getAttribute('aria-label') || ''))
+              .replace(/\s+/g, ' ')
+              .trim();
+            return /\b(?:load|show|view|see)\s+(?:more|all|next)\s*(?:\d+\s*)?photos?\b/i.test(txt);
+          }) as HTMLElement | undefined;
+          if (!btn) return false;
+          btn.setAttribute('data-agy-hz-photomore', '1');
+          btn.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'center' });
+          return true;
+        });
+        if (!markedPhotoMore) break;
+        const phBtnHandle = await page.$('[data-agy-hz-photomore="1"]');
+        if (!phBtnHandle) break;
+        await phBtnHandle.click({ delay: 35 }).catch(() => {});
+        await ScraperHttpUtil.sleep(850);
+      }
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await ScraperHttpUtil.sleep(350);
+
+      const urlProjectId = projectUrl.match(/vj~(\d+)/i)?.[1] || '';
+
+      const data = await page.evaluate(
+        (proName: string, exactProjectId: string) => {
+          const normalizeBiz = (s: string) =>
+            (s || '')
+              .toLowerCase()
+              .replace(/\b(company|co|inc|incorporated|corp|corporation|llc|ltd|limited|and)\b/g, '')
+              .replace(/[^a-z0-9]/g, '');
+          const normPro = normalizeBiz(proName);
+          const isSameAsProName = (val: string) => {
+            const n = normalizeBiz(val);
+            if (!n || n === normPro) return true;
+            if (
+              normPro.length >= 5 &&
+              (n.startsWith(normPro) || normPro.startsWith(n)) &&
+              Math.abs(n.length - normPro.length) <= 4
+            ) {
+              return true;
+            }
+            return false;
+          };
+
+          let title = '';
+          const ogTitle =
+            document.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
+            document.title ||
+            '';
+          const cleanedOg = ogTitle
+            .replace(/\s*[-|–]\s*Projects?\s*[-|–]\s*Houzz.*$/i, '')
+            .replace(/\s*[-|–]\s*Houzz.*$/i, '')
+            .trim();
+          if (cleanedOg && !isSameAsProName(cleanedOg) && !/^projects?$/i.test(cleanedOg)) {
+            title = cleanedOg;
+          }
+
+          if (!title) {
+            const projectHeadingCandidates = Array.from(
+              document.querySelectorAll(
+                '[data-component*="Project" i] h1, [data-component*="Project" i] h2, [class*="project-title" i], [class*="ProjectTitle" i], [class*="projectHeader" i] h1, [class*="projectHeader" i] h2, main h1, h1'
+              )
+            );
+            for (const el of projectHeadingCandidates) {
+              if (
+                el.closest(
+                  'header, [class*="masthead" i], [class*="ProHeader" i], [class*="pro-header" i]'
+                )
+              ) {
+                continue;
+              }
+              const txt = (el.textContent || '').replace(/\s+/g, ' ').trim();
+              if (txt.length >= 3 && !isSameAsProName(txt) && !/^projects?$/i.test(txt)) {
+                title = txt;
+                break;
+              }
+            }
+          }
+
+          let location = '';
+          let projectYear: number | undefined;
+          let costRange = '';
+          let serviceCategory = '';
+          let description = '';
+
+          const isGenericHouzzMeta = (txt: string) => {
+            const t = (txt || '').trim();
+            if (t.length < 25) return true;
+            return (
+              /see more photos of this project on houzz/i.test(t) ||
+              /^check out\b.*\bon houzz\.?$/i.test(t) ||
+              /^browse\b.*\bphotos on houzz/i.test(t) ||
+              /^houzz has millions of/i.test(t)
+            );
+          };
+
+          const descEl = document.querySelector(
+            '[class*="project-description" i], [class*="ProjectDescription" i], [data-component*="Description" i], [class*="ProjectInfo" i] p'
+          );
+          if (descEl?.textContent && !isGenericHouzzMeta(descEl.textContent)) {
+            description = descEl.textContent.replace(/\s+/g, ' ').trim();
+          }
+
+          const rawPhotos: Array<{ src: string; alt: string; w: number; h: number }> = [];
+
+          // Parse <script id="hz-ctx"> for both description AND exact project spaceIds -> imageIds (for 50+ photo albums)
           try {
             const ctxRaw = document.getElementById('hz-ctx')?.textContent || '';
             if (ctxRaw) {
               const ctx = JSON.parse(ctxRaw);
+              const stores = ctx?.data?.stores?.data || {};
               const projStore =
-                ctx?.data?.stores?.data?.ProjectStore?.data ||
-                ctx?.data?.stores?.data?.ViewProjectStore?.data ||
-                ctx?.data?.stores?.data?.ProjectDetailsStore?.data ||
+                stores?.ProjectStore?.data ||
+                stores?.ViewProjectStore?.data ||
+                stores?.ProjectDetailsStore?.data ||
                 null;
               if (projStore && typeof projStore === 'object') {
-                for (const val of Object.values(projStore) as any[]) {
+                const targetProj =
+                  (exactProjectId && (projStore[exactProjectId] || projStore[Number(exactProjectId)])) ||
+                  Object.values(projStore)[0];
+                if (!description && targetProj) {
                   const cand = String(
-                    val?.description || val?.projectDescription || val?.project?.description || ''
+                    targetProj?.description ||
+                      targetProj?.projectDescription ||
+                      targetProj?.project?.description ||
+                      ''
                   ).trim();
                   if (cand && !isGenericHouzzMeta(cand)) {
                     description = cand.replace(/\s+/g, ' ').trim();
-                    break;
+                  }
+                }
+
+                // If exactProjectId matches, extract all spaceIds -> imageIds belonging strictly to THIS project
+                const exactProjObj =
+                  exactProjectId &&
+                  (projStore[exactProjectId] ||
+                    projStore[Number(exactProjectId)] ||
+                    projStore[exactProjectId]?.project);
+                const spaceIds: any[] = Array.isArray(exactProjObj?.spaceIds)
+                  ? exactProjObj.spaceIds
+                  : Array.isArray(exactProjObj?.project?.spaceIds)
+                  ? exactProjObj.project.spaceIds
+                  : [];
+                const spaceStore = stores?.SpaceStore?.data || stores?.ImageStore?.data || {};
+                const imageStore = stores?.ImageStore?.data || {};
+                for (const sid of spaceIds) {
+                  const sp = spaceStore[sid] || spaceStore[String(sid)] || {};
+                  const imgId =
+                    sp?.imageId ||
+                    sp?.imgId ||
+                    imageStore[sid]?.imageId ||
+                    (typeof sp?.image?.id === 'string' ? sp.image.id : '');
+                  if (imgId && /^[0-9a-f]{16}$/i.test(String(imgId))) {
+                    rawPhotos.push({
+                      src: `https://st.hzcdn.com/simgs/${String(imgId).toLowerCase()}_9-0000/home-design.jpg`,
+                      alt: String(sp?.title || sp?.description || title || '').trim(),
+                      w: Number(sp?.width) || 1200,
+                      h: Number(sp?.height) || 900,
+                    });
                   }
                 }
               }
             }
           } catch {}
-        }
 
-        if (!description) {
-          const metaDesc =
-            document.querySelector('meta[property="og:description"]')?.getAttribute('content') ||
-            document.querySelector('meta[name="description"]')?.getAttribute('content') ||
-            '';
-          if (metaDesc && !isGenericHouzzMeta(metaDesc)) {
-            description = metaDesc.replace(/\s+/g, ' ').trim();
-          }
-        }
-
-        // Key-value metadata items on Houzz project page
-        const bodyText = document.body.innerText || '';
-        const yearMatch = bodyText.match(/Project\s+Year\s*[:\n]\s*(20\d{2}|19\d{2})/i);
-        if (yearMatch) {
-          projectYear = parseInt(yearMatch[1], 10);
-        }
-
-        const costMatch = bodyText.match(
-          /Project\s+Cost\s*[:\n]\s*(\$[0-9,]+\s*(?:-\s*\$[0-9,]+|\+)?|Under\s+\$[0-9,]+|Over\s+\$[0-9,]+)/i
-        );
-        if (costMatch) {
-          costRange = costMatch[1].trim();
-        }
-
-        const locMatch = bodyText.match(/Location\s*[:\n]\s*([A-Za-z\s.'-]+,\s*[A-Z]{2})\b/);
-        if (locMatch) {
-          location = locMatch[1].trim();
-        }
-
-        // Also check breadcrumb / subtitle location near H1
-        const h1 = document.querySelector('h1');
-        if (!location && h1) {
-          const headerWrap = h1.parentElement?.parentElement || h1.parentElement;
-          if (headerWrap) {
-            const locCandidate = headerWrap.textContent || '';
-            const m = locCandidate.match(
-              /\b((?:New York|Manhattan|Brooklyn|Queens|Bronx|Staten Island|Long Island|Jersey City|Hoboken|Westchester|Scarsdale|Astoria|Williamsburg|Tribeca|SoHo|Upper East Side|Upper West Side|Park Slope)(?:,\s*[A-Z]{2})?)\b/
-            );
-            if (m && m[1] !== title) {
-              location = m[1].trim();
+          if (!description) {
+            const metaDesc =
+              document.querySelector('meta[property="og:description"]')?.getAttribute('content') ||
+              document.querySelector('meta[name="description"]')?.getAttribute('content') ||
+              '';
+            if (metaDesc && !isGenericHouzzMeta(metaDesc)) {
+              description = metaDesc.replace(/\s+/g, ' ').trim();
             }
           }
-        }
 
-        // Extract authentic project photos ONLY from main project content (excluding footer, other projects, pro avatar)
-        const rawPhotos: Array<{ src: string; alt: string; w: number; h: number }> = [];
-        const imgs = Array.from(document.querySelectorAll('img'));
-        for (const img of imgs) {
-          const excludedAncestor = img.closest(
-            'header, footer, nav, aside, [class*="other-project" i], [class*="OtherProject" i], [class*="more-project" i], [class*="MoreProject" i], [class*="similar" i], [class*="pro-avatar" i], [class*="ProAvatar" i], [class*="ProCard" i], [class*="review" i]'
+          const bodyText = document.body.innerText || '';
+          const yearMatch = bodyText.match(/Project\s+Year\s*[:\n]\s*(20\d{2}|19\d{2})/i);
+          if (yearMatch) {
+            projectYear = parseInt(yearMatch[1], 10);
+          }
+
+          const costMatch = bodyText.match(
+            /Project\s+Cost\s*[:\n]\s*(\$[0-9,]+\s*(?:-\s*\$[0-9,]+|\+)?|Under\s+\$[0-9,]+|Over\s+\$[0-9,]+)/i
           );
-          if (excludedAncestor) continue;
+          if (costMatch) {
+            costRange = costMatch[1].trim();
+          }
 
-          const src =
-            img.currentSrc ||
-            img.src ||
-            img.getAttribute('data-src') ||
-            img.getAttribute('srcset')?.split(' ')[0] ||
-            '';
-          if (!src || !src.includes('hzcdn.com')) continue;
+          const locMatch = bodyText.match(/Location\s*[:\n]\s*([A-Za-z\s.'-]+,\s*[A-Z]{2})\b/);
+          if (locMatch) {
+            location = locMatch[1].trim();
+          }
 
-          const rect = img.getBoundingClientRect();
-          const w = img.naturalWidth || Math.round(rect.width) || img.width || 0;
-          const h = img.naturalHeight || Math.round(rect.height) || img.height || 0;
-          const alt = (img.alt || '').trim();
+          const h1 = document.querySelector('h1');
+          if (!location && h1) {
+            const headerWrap = h1.parentElement?.parentElement || h1.parentElement;
+            if (headerWrap) {
+              const locCandidate = headerWrap.textContent || '';
+              const m = locCandidate.match(
+                /\b((?:New York|Manhattan|Brooklyn|Queens|Bronx|Staten Island|Long Island|Jersey City|Hoboken|Westchester|Scarsdale|Astoria|Williamsburg|Tribeca|SoHo|Upper East Side|Upper West Side|Park Slope)(?:,\s*[A-Z]{2})?)\b/
+              );
+              if (m && m[1] !== title) {
+                location = m[1].trim();
+              }
+            }
+          }
 
-          rawPhotos.push({ src, alt, w, h });
-        }
+          // Extract authentic project photos from main project DOM (excluding footer, other projects, pro avatar)
+          const imgs = Array.from(document.querySelectorAll('img'));
+          for (const img of imgs) {
+            const excludedAncestor = img.closest(
+              'header, footer, nav, aside, [class*="other-project" i], [class*="OtherProject" i], [class*="more-project" i], [class*="MoreProject" i], [class*="similar" i], [class*="pro-avatar" i], [class*="ProAvatar" i], [class*="ProCard" i], [class*="review" i]'
+            );
+            if (excludedAncestor) continue;
 
-        return {
-          title,
-          description,
-          location,
-          projectYear,
-          costRange,
-          serviceCategory,
-          rawPhotos,
-        };
-      }, businessName);
+            const src =
+              img.currentSrc ||
+              img.src ||
+              img.getAttribute('data-src') ||
+              img.getAttribute('srcset')?.split(' ')[0] ||
+              '';
+            if (!src || !src.includes('hzcdn.com')) continue;
+
+            const rect = img.getBoundingClientRect();
+            const w = img.naturalWidth || Math.round(rect.width) || img.width || 0;
+            const h = img.naturalHeight || Math.round(rect.height) || img.height || 0;
+            const alt = (img.alt || '').trim();
+
+            rawPhotos.push({ src, alt, w, h });
+          }
+
+          return {
+            title,
+            description,
+            location,
+            projectYear,
+            costRange,
+            serviceCategory,
+            rawPhotos,
+          };
+        },
+        businessName,
+        urlProjectId
+      );
 
       let resolvedTitle = (data.title || cardTitle || '').trim();
       if (
@@ -1173,13 +1739,107 @@ export class ProjectsScraperService {
       this.logger.warn(`⚠️ Could not scrape Houzz album ${projectUrl}: ${err.message}`);
       return null;
     } finally {
-      await page.close();
+      if (!reusablePage) {
+        await page.close().catch(() => {});
+      }
     }
   }
 
   /**
+   * Discovers structured project/portfolio subpages directly from a contractor website's XML sitemaps
+   * (/sitemap.xml, /sitemap_index.xml, /wp-sitemap.xml, and child project/portfolio/page sitemaps).
+   */
+  private async discoverWebsiteProjectsFromSitemap(resolvedOrigin: string): Promise<string[]> {
+    const discovered = new Set<string>();
+    const visitedSitemaps = new Set<string>();
+    const normHost = (() => {
+      try {
+        return new URL(resolvedOrigin).hostname.replace(/^www\./i, '').toLowerCase();
+      } catch {
+        return '';
+      }
+    })();
+    if (!normHost) return [];
+
+    const parseLocs = (xml: string): string[] => {
+      const locs: string[] = [];
+      const re = /<loc>\s*(?:<!\[CDATA\[)?\s*(https?:\/\/[^\s<\]]+)\s*(?:\]\]>)?\s*<\/loc>/gi;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(xml)) !== null) {
+        if (m[1]) locs.push(m[1].trim());
+      }
+      return locs;
+    };
+
+    const childSitemapQueue: string[] = [];
+    for (const rootCandidate of [`${resolvedOrigin}/sitemap.xml`, `${resolvedOrigin}/wp-sitemap.xml`]) {
+      try {
+        const xml = await ScraperHttpUtil.fetchHtml(rootCandidate, { timeoutMs: 8000 });
+        if (!xml || !xml.includes('<loc>')) continue;
+        visitedSitemaps.add(rootCandidate);
+        const locs = parseLocs(xml);
+        for (const loc of locs) {
+          if (/\.xml(\?|$)/i.test(loc)) {
+            if (/(project|portfolio|work|gallery|case|page|post)/i.test(loc) && !visitedSitemaps.has(loc)) {
+              childSitemapQueue.push(loc);
+            }
+          } else {
+            try {
+              const u = new URL(loc);
+              if (u.hostname.replace(/^www\./i, '').toLowerCase() !== normHost) continue;
+              const p = u.pathname.replace(/\/+$/, '');
+              if (
+                /\/(projects?|portfolio|our-work|work|recent-work|case-stud(?:y|ies)|portfolio-item|project-gallery)\/[a-z0-9_-]+$/i.test(
+                  p
+                ) &&
+                !/\/(category|tag|author|page)\//i.test(p)
+              ) {
+                discovered.add(loc.split('#')[0]);
+              }
+            } catch {}
+          }
+        }
+        if (discovered.size > 0 || childSitemapQueue.length > 0) break;
+      } catch {}
+    }
+
+    for (const childSm of childSitemapQueue.slice(0, 8)) {
+      if (visitedSitemaps.has(childSm)) continue;
+      visitedSitemaps.add(childSm);
+      try {
+        const xml = await ScraperHttpUtil.fetchHtml(childSm, { timeoutMs: 8000 });
+        if (!xml || !xml.includes('<loc>')) continue;
+        const isDedicatedProjectSitemap = /(project|portfolio|work)/i.test(childSm);
+        for (const loc of parseLocs(xml)) {
+          if (/\.xml(\?|$)/i.test(loc)) continue;
+          try {
+            const u = new URL(loc);
+            if (u.hostname.replace(/^www\./i, '').toLowerCase() !== normHost) continue;
+            const p = u.pathname.replace(/\/+$/, '');
+            if (!p || p === '') continue;
+            if (/\/(category|tag|author|page|blog|news|about|contact|privacy|terms|faq)\b/i.test(p)) {
+              continue;
+            }
+            if (
+              isDedicatedProjectSitemap ||
+              /\/(projects?|portfolio|our-work|work|recent-work|case-stud(?:y|ies)|portfolio-item)\/[a-z0-9_-]+$/i.test(
+                p
+              )
+            ) {
+              discovered.add(loc.split('#')[0]);
+            }
+          } catch {}
+        }
+      } catch {}
+    }
+
+    return Array.from(discovered);
+  }
+
+  /**
    * Scrape authentic portfolio / project albums from a Contractor's Official Website.
-   * Discovers dedicated project subpages or gallery sections with real DOM headings — never invents fake titles.
+   * Resolves HTTP->HTTPS / domain redirects, parses XML sitemaps, follows paginated portfolio pages,
+   * and discovers dedicated project subpages or gallery sections with real DOM headings.
    */
   private async scrapeWebsiteProjectAlbums(
     browser: Browser,
@@ -1197,25 +1857,48 @@ export class ProjectsScraperService {
       await page.goto(websiteUrl, { waitUntil: 'domcontentloaded', timeout: 22000 });
       await ScraperHttpUtil.sleep(2000);
 
-      // Discover portfolio / gallery / project links on the same domain (checking pathname + label only, NEVER hostname!)
-      const navDiscovery = await page.evaluate((baseUrl: string) => {
-        let baseOrigin = '';
-        try {
-          baseOrigin = new URL(baseUrl).origin;
-        } catch {
-          baseOrigin = baseUrl;
-        }
+      const resolvedHomeUrl = page.url() || websiteUrl;
+      let resolvedOrigin = '';
+      try {
+        resolvedOrigin = new URL(resolvedHomeUrl).origin;
+      } catch {
+        resolvedOrigin = websiteUrl;
+      }
+
+      // 0. Fast XML Sitemap scan on resolved origin to catch 100% of published project/portfolio URLs
+      const sitemapProjectUrls = await this.discoverWebsiteProjectsFromSitemap(resolvedOrigin);
+      if (sitemapProjectUrls.length > 0) {
+        this.logger.log(
+          `🗺️ [Website Sitemap] Discovered ${sitemapProjectUrls.length} project URLs from sitemap on ${resolvedOrigin}`
+        );
+      }
+
+      // 1. Discover portfolio / gallery / project links on the LIVE resolved domain (handling www / https / domain redirects!)
+      const navDiscovery = await page.evaluate(() => {
+        const liveHost = window.location.hostname.replace(/^www\./i, '').toLowerCase();
+        const isSameSite = (href: string) => {
+          try {
+            const u = new URL(href);
+            return (
+              (u.protocol === 'http:' || u.protocol === 'https:') &&
+              u.hostname.replace(/^www\./i, '').toLowerCase() === liveHost
+            );
+          } catch {
+            return false;
+          }
+        };
 
         const galleryPages: Array<{ url: string; label: string }> = [];
         const servicePages: Array<{ url: string; label: string }> = [];
         const projectSubPages: Array<{ url: string; label: string }> = [];
         const seen = new Set<string>();
+        const currentClean = window.location.href.split('#')[0].replace(/\/+$/, '');
 
         for (const a of Array.from(document.querySelectorAll('a[href]'))) {
           const href = ((a as HTMLAnchorElement).href || '').split('#')[0].trim();
           const label = (a.textContent || '').replace(/\s+/g, ' ').trim();
-          if (!href || !href.startsWith(baseOrigin)) continue;
-          if (href === window.location.href.split('#')[0]) continue;
+          if (!href || !isSameSite(href)) continue;
+          if (href.replace(/\/+$/, '') === currentClean) continue;
           if (/\.(pdf|jpg|jpeg|png|webp|zip|tel|mailto)$/i.test(href)) continue;
 
           let pathname = '';
@@ -1237,9 +1920,10 @@ export class ProjectsScraperService {
           if (seen.has(href)) continue;
 
           if (
-            /\/(projects?|portfolio|our-work|work|recent-work|case-stud(?:y|ies)|gallery|renovations?|remodels?)\/[a-z0-9_-]+\/?$/i.test(
+            /\/(projects?|portfolio|our-work|work|recent-work|case-stud(?:y|ies)|portfolio-item|renovations?|remodels?)\/[a-z0-9_-]+\/?$/i.test(
               pathname
-            )
+            ) &&
+            !/\/page\/\d+\/?$/i.test(pathname)
           ) {
             seen.add(href);
             projectSubPages.push({ url: href, label });
@@ -1261,31 +1945,53 @@ export class ProjectsScraperService {
         }
 
         return {
-          galleryPages: galleryPages.slice(0, 8),
-          servicePages: servicePages.slice(0, 8),
-          projectSubPages: projectSubPages.slice(0, 14),
+          galleryPages: galleryPages.slice(0, 30),
+          servicePages: servicePages.slice(0, 25),
+          projectSubPages: projectSubPages.slice(0, 250),
         };
-      }, websiteUrl);
+      });
 
-      const extractPageSectionsAndPhotos = async (fallbackLabel?: string) => {
-        await page.evaluate(async () => {
-          const maxH = Math.min(document.body.scrollHeight, 6000);
-          for (let y = 0; y < maxH; y += 550) {
-            window.scrollTo(0, y);
-            await new Promise((r) => setTimeout(r, 120));
+      const extractPageSectionsAndPhotos = async (targetPage: any, fallbackLabel?: string) => {
+        await targetPage.evaluate(async () => {
+          // Scroll + click any "Load More" gallery button on the page
+          for (let r = 0; r < 4; r++) {
+            const maxH = Math.min(document.body.scrollHeight, 14000);
+            for (let y = 0; y < maxH; y += 650) {
+              window.scrollTo(0, y);
+              await new Promise((res) => setTimeout(res, 80));
+            }
+            const loadMoreBtn = Array.from(
+              document.querySelectorAll('button, a[role="button"], .load-more, [class*="load-more" i]')
+            ).find((el) => {
+              const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+              const rect = el.getBoundingClientRect();
+              return (
+                rect.width > 10 &&
+                rect.height > 10 &&
+                /^(load\s+more|show\s+more|view\s+more|more\s+projects?|more\s+photos?)$/i.test(t)
+              );
+            }) as HTMLElement | undefined;
+            if (loadMoreBtn) {
+              loadMoreBtn.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'center' });
+              loadMoreBtn.click();
+              await new Promise((res) => setTimeout(res, 700));
+            } else {
+              break;
+            }
           }
           window.scrollTo(0, 0);
         });
-        await ScraperHttpUtil.sleep(900);
+        await ScraperHttpUtil.sleep(600);
 
-        return await page.evaluate((fbLabel: string) => {
+        return await targetPage.evaluate((fbLabel: string) => {
           const h1 = (document.querySelector('h1')?.textContent || '').replace(/\s+/g, ' ').trim();
           const pageTitleRaw = (document.title || '').split(/[|\-–—]/)[0].trim();
           const pageHeading = h1 || fbLabel || pageTitleRaw;
 
-          // Collect clean first paragraph description if present on project subpage
           let description = '';
-          const mainParagraphs = Array.from(document.querySelectorAll('main p, article p, section p'));
+          const mainParagraphs = Array.from(
+            document.querySelectorAll('main p, article p, section p')
+          );
           for (const p of mainParagraphs) {
             const txt = (p.textContent || '').replace(/\s+/g, ' ').trim();
             if (
@@ -1308,7 +2014,9 @@ export class ProjectsScraperService {
           }> = [];
 
           const findNearestHeading = (el: Element): string => {
-            const container = el.closest('section, article, [class*="gallery" i], [class*="portfolio" i], div');
+            const container = el.closest(
+              'section, article, [class*="gallery" i], [class*="portfolio" i], div'
+            );
             if (container) {
               const heading = container.querySelector('h2, h3');
               if (heading?.textContent) {
@@ -1328,7 +2036,6 @@ export class ProjectsScraperService {
               continue;
             }
 
-            // Prefer full-res lightbox <a href="...jpg"> or high-res data attribute when wrapping a gallery thumbnail
             const parentAnchor = img.closest('a[href]') as HTMLAnchorElement | null;
             const anchorHref = parentAnchor?.href || '';
             const isLightboxImageHref = /\.(jpe?g|png|webp)(\?.*)?$/i.test(anchorHref);
@@ -1353,7 +2060,6 @@ export class ProjectsScraperService {
             items.push({ src, alt, cls, sectionTitle, w, h });
           }
 
-          // Also check direct <a href="...jpg"> gallery tiles that use CSS background or inner overlays without <img>
           for (const a of Array.from(document.querySelectorAll('a[href]')) as HTMLAnchorElement[]) {
             if (a.closest('header, nav, footer')) continue;
             if (a.querySelector('img')) continue;
@@ -1372,7 +2078,6 @@ export class ProjectsScraperService {
             }
           }
 
-          // Also check large CSS background-image tiles used by portfolio grids
           for (const el of Array.from(document.querySelectorAll('div, figure, a, li'))) {
             if (el.closest('header, nav, footer')) continue;
             const bg = window.getComputedStyle(el).backgroundImage || '';
@@ -1381,7 +2086,10 @@ export class ProjectsScraperService {
             if (!m?.[1]) continue;
             const rect = el.getBoundingClientRect();
             if (rect.width >= 200 && rect.height >= 150) {
-              const cls = typeof (el as HTMLElement).className === 'string' ? (el as HTMLElement).className : '';
+              const cls =
+                typeof (el as HTMLElement).className === 'string'
+                  ? (el as HTMLElement).className
+                  : '';
               items.push({
                 src: m[1],
                 alt: (el.getAttribute('aria-label') || el.getAttribute('title') || '').trim(),
@@ -1417,7 +2125,6 @@ export class ProjectsScraperService {
           }
           if (this.isNonWorkImage(c.src, c.alt, c.cls)) continue;
 
-          // Normalize WordPress -300x200 thumbnail suffix in dedup key & upgrade to original if available
           const cleanSrc = c.src;
           const normKey = cleanSrc
             .split('?')[0]
@@ -1446,94 +2153,185 @@ export class ProjectsScraperService {
         return valid;
       };
 
-      const discoveredSubUrls = new Set<string>(navDiscovery.projectSubPages.map((s) => s.url));
-      const allProjectSubPages = [...navDiscovery.projectSubPages];
+      const normalizeUrlKey = (u: string) => u.split('#')[0].split('?')[0].replace(/\/+$/, '').toLowerCase();
+      const discoveredSubUrls = new Set<string>();
+      const allProjectSubPages: Array<{ url: string; label: string }> = [];
+      const pushProjectSub = (url: string, label = '') => {
+        const k = normalizeUrlKey(url);
+        if (!k || discoveredSubUrls.has(k)) return;
+        discoveredSubUrls.add(k);
+        allProjectSubPages.push({ url, label });
+      };
 
-      // 2-Hop Discovery: Visit top portfolio/gallery index pages first to discover individual project subpages linked inside them!
-      for (const gal of navDiscovery.galleryPages.slice(0, 3)) {
-        if (allProjectSubPages.length >= maxProjects + 4) break;
+      for (const s of navDiscovery.projectSubPages) pushProjectSub(s.url, s.label);
+      for (const smUrl of sitemapProjectUrls) pushProjectSub(smUrl, '');
+
+      // 2-Hop Discovery (+ Pagination /page/2, /page/3...): Visit gallery/portfolio index pages to discover ALL project subpages!
+      const galleryQueue = [...navDiscovery.galleryPages.slice(0, 12)];
+      const visitedGalleryKeys = new Set<string>();
+
+      while (galleryQueue.length > 0 && visitedGalleryKeys.size < 25) {
+        const gal = galleryQueue.shift()!;
+        const galKey = normalizeUrlKey(gal.url);
+        if (visitedGalleryKeys.has(galKey)) continue;
+        visitedGalleryKeys.add(galKey);
+        if (allProjectSubPages.length >= maxProjects + 10) break;
+
         try {
           await page.goto(gal.url, { waitUntil: 'domcontentloaded', timeout: 16000 });
           await ScraperHttpUtil.sleep(1100);
-          const childLinks = await page.evaluate(
-            (baseUrl: string, parentUrl: string) => {
-              let baseOrigin = '';
-              let parentPath = '';
-              try {
-                baseOrigin = new URL(baseUrl).origin;
-                parentPath = new URL(parentUrl).pathname.replace(/\/+$/, '');
-              } catch {
-                return [];
-              }
-              const found: Array<{ url: string; label: string }> = [];
-              const seenLocal = new Set<string>();
-              for (const a of Array.from(document.querySelectorAll('main a[href], article a[href], section a[href], [class*="portfolio" i] a[href], [class*="project" i] a[href], [class*="gallery" i] a[href]'))) {
-                if (a.closest('header, nav, footer')) continue;
-                const href = ((a as HTMLAnchorElement).href || '').split('#')[0].split('?')[0].trim();
-                if (!href || !href.startsWith(baseOrigin) || href === parentUrl.split('?')[0]) continue;
-                if (/\.(pdf|jpe?g|png|webp|gif|svg|zip)$/i.test(href)) continue;
-                let p = '';
-                try {
-                  p = new URL(href).pathname.replace(/\/+$/, '');
-                } catch {
-                  continue;
-                }
-                if (!p || p === '/' || p === parentPath) continue;
-                if (
-                  /\b(about|contact|privacy|terms|login|cart|faq|blog|news|author|tag|testimonial|reviews?|careers?|financing|warranty|quote|estimate|page\/\d+)\b/i.test(
-                    p
-                  )
-                ) {
-                  continue;
-                }
-                const isChildOfGallery = parentPath.length > 1 && p.startsWith(`${parentPath}/`);
-                const matchesProjectSlug =
-                  /\/(projects?|portfolio|our-work|work|recent-work|case-stud(?:y|ies)|gallery|renovations?|remodels?|kitchens?|bathrooms?|closets?)\/[a-z0-9_-]+$/i.test(
-                    p
-                  );
-                if ((isChildOfGallery || matchesProjectSlug) && !seenLocal.has(href)) {
-                  seenLocal.add(href);
-                  const hEl = a.querySelector('h2, h3, h4, [class*="title" i]');
-                  const label = ((hEl?.textContent || a.textContent || a.getAttribute('aria-label') || '') as string)
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                  found.push({ url: href, label });
-                }
-              }
-              return found.slice(0, 16);
-            },
-            websiteUrl,
-            gal.url
-          );
+          await page.evaluate(async () => {
+            for (let y = 0; y < Math.min(document.body.scrollHeight, 10000); y += 700) {
+              window.scrollTo(0, y);
+              await new Promise((r) => setTimeout(r, 70));
+            }
+            window.scrollTo(0, 0);
+          });
 
-          for (const cl of childLinks) {
-            if (!discoveredSubUrls.has(cl.url)) {
-              discoveredSubUrls.add(cl.url);
-              allProjectSubPages.push(cl);
+          const discovery = await page.evaluate((parentUrl: string) => {
+            const liveHost = window.location.hostname.replace(/^www\./i, '').toLowerCase();
+            let parentPath = '';
+            try {
+              parentPath = new URL(parentUrl).pathname.replace(/\/+$/, '');
+            } catch {}
+
+            const childProjects: Array<{ url: string; label: string }> = [];
+            const nextGalleryPages: Array<{ url: string; label: string }> = [];
+            const seenLocal = new Set<string>();
+
+            const anchors = Array.from(
+              document.querySelectorAll(
+                'main a[href], article a[href], section a[href], [class*="portfolio" i] a[href], [class*="project" i] a[href], [class*="gallery" i] a[href], [class*="grid" i] a[href]'
+              )
+            );
+
+            for (const a of anchors) {
+              if (a.closest('header, nav, footer')) continue;
+              const rawHref = ((a as HTMLAnchorElement).href || '').split('#')[0].trim();
+              if (!rawHref) continue;
+              let u: URL;
+              try {
+                u = new URL(rawHref);
+              } catch {
+                continue;
+              }
+              if (u.hostname.replace(/^www\./i, '').toLowerCase() !== liveHost) continue;
+              const cleanHref = `${u.origin}${u.pathname}`;
+              if (/\.(pdf|jpe?g|png|webp|gif|svg|zip)$/i.test(cleanHref)) continue;
+              const p = u.pathname.replace(/\/+$/, '');
+              if (!p || p === '/' || p === parentPath) continue;
+
+              // Follow portfolio pagination (/projects/page/2, ?page=2)
+              if (
+                (parentPath.length > 1 && new RegExp(`^${parentPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/page/\\d+$`, 'i').test(p)) ||
+                /[?&](?:page|paged)=\d+/i.test(rawHref)
+              ) {
+                if (!seenLocal.has(rawHref)) {
+                  seenLocal.add(rawHref);
+                  nextGalleryPages.push({ url: rawHref, label: '' });
+                }
+                continue;
+              }
+
+              if (
+                /\b(about|about-us|contact|contact-us|privacy|terms|login|cart|faq|faqs|blog|news|author|tag|category|testimonial|reviews?|careers?|jobs?|team|staff|press|services|our-services|financing|warranty|quote|estimate|free-estimate|book|consultation|inquiry)\b/i.test(
+                  p
+                )
+              ) {
+                continue;
+              }
+
+              const isChildOfGallery = parentPath.length > 1 && p.startsWith(`${parentPath}/`);
+              const matchesProjectSlug =
+                /\/(projects?|portfolio|our-work|work|recent-work|case-stud(?:y|ies)|portfolio-item|gallery|renovations?|remodels?|kitchens?|bathrooms?|closets?)\/[a-z0-9_-]+$/i.test(
+                  p
+                );
+              // Also catch Squarespace/Wix/Webflow single-segment portfolio cards (e.g. /nomad-residence, /upper-west-side)
+              // when linked inside a dedicated /portfolio or /work or /projects page and wrapping an image or portfolio card!
+              const isDedicatedPortfolioIndex =
+                /\/(portfolio|projects?|our-work|work|selected-work|featured-projects?)$/i.test(
+                  parentPath
+                );
+              const hasVisualCard =
+                Boolean(a.querySelector('img, picture, figure')) ||
+                Boolean(a.closest('[class*="portfolio" i], [class*="project" i], [class*="gallery" i], figure'));
+              const isRootSlugProjectCard =
+                isDedicatedPortfolioIndex &&
+                hasVisualCard &&
+                /^\/[a-z0-9][a-z0-9_-]{2,80}$/i.test(p);
+
+              if ((isChildOfGallery || matchesProjectSlug || isRootSlugProjectCard) && !seenLocal.has(cleanHref)) {
+                seenLocal.add(cleanHref);
+                const hEl = a.querySelector('h2, h3, h4, [class*="title" i], figcaption');
+                const label = (
+                  (hEl?.textContent || a.textContent || a.getAttribute('aria-label') || '') as string
+                )
+                  .replace(/\s+/g, ' ')
+                  .trim();
+                childProjects.push({ url: cleanHref, label });
+              }
+            }
+
+            return { childProjects, nextGalleryPages };
+          }, page.url());
+
+          for (const cl of discovery.childProjects) {
+            pushProjectSub(cl.url, cl.label);
+          }
+          for (const np of discovery.nextGalleryPages) {
+            const nk = normalizeUrlKey(np.url);
+            if (!visitedGalleryKeys.has(nk)) {
+              galleryQueue.push(np);
             }
           }
         } catch {}
       }
 
-      // Case 1: Dedicated individual project subpages (/projects/xyz, /portfolio/xyz, etc.)
-      for (const sub of allProjectSubPages) {
-        if (results.length >= maxProjects) break;
-        try {
-          await page.goto(sub.url, { waitUntil: 'domcontentloaded', timeout: 16000 });
-          await ScraperHttpUtil.sleep(1100);
-          const extracted = await extractPageSectionsAndPhotos(sub.label);
-          const photos = filterValidPhotos(extracted.items).slice(0, maxPhotosPerProject);
-          const rawTitle = (extracted.pageHeading || sub.label || '').trim();
-          if (photos.length > 0 && rawTitle && !isGenericNonProjectHeading(rawTitle)) {
-            results.push({
-              title: rawTitle,
-              slug: this.slugify(rawTitle),
-              description: extracted.description || undefined,
-              sourceUrl: sub.url,
-              photos,
-            });
+      // Case 1: Dedicated individual project subpages — scrape in 3 concurrent tabs for fast full-portfolio coverage
+      if (allProjectSubPages.length > 0) {
+        const targets = allProjectSubPages.slice(0, maxProjects);
+        this.logger.log(
+          `📂 [Website Projects] Scraping ${targets.length} discovered project subpage(s) on ${resolvedOrigin}`
+        );
+        const orderedSubResults: Array<ScrapedProjectInput | null> = new Array(targets.length).fill(
+          null
+        );
+        let subCursor = 0;
+        const workerCount = Math.min(3, targets.length);
+
+        const subWorkers = Array.from({ length: workerCount }, async () => {
+          const wPage = await BrowserPoolUtil.createStealthPage(browser);
+          await wPage.setViewport({ width: 1440, height: 900 });
+          try {
+            while (subCursor < targets.length) {
+              const idx = subCursor++;
+              const sub = targets[idx];
+              try {
+                await wPage.goto(sub.url, { waitUntil: 'domcontentloaded', timeout: 18000 });
+                await ScraperHttpUtil.sleep(900);
+                const extracted = await extractPageSectionsAndPhotos(wPage, sub.label);
+                const photos = filterValidPhotos(extracted.items).slice(0, maxPhotosPerProject);
+                const rawTitle = (extracted.pageHeading || sub.label || '').trim();
+                if (photos.length > 0 && rawTitle && !isGenericNonProjectHeading(rawTitle)) {
+                  orderedSubResults[idx] = {
+                    title: rawTitle,
+                    slug: this.slugify(rawTitle),
+                    description: extracted.description || undefined,
+                    sourceUrl: sub.url,
+                    photos,
+                  };
+                }
+              } catch {}
+            }
+          } finally {
+            await wPage.close().catch(() => {});
           }
-        } catch {}
+        });
+
+        await Promise.all(subWorkers);
+        for (const r of orderedSubResults) {
+          if (r && results.length < maxProjects) results.push(r);
+        }
       }
 
       // Case 2: Dedicated Gallery / Portfolio / Our Work pages (supports multi-section headings OR full gallery)
@@ -1541,14 +2339,17 @@ export class ProjectsScraperService {
         if (results.length >= maxProjects) break;
         try {
           await page.goto(gal.url, { waitUntil: 'domcontentloaded', timeout: 16000 });
-          await ScraperHttpUtil.sleep(1200);
-          const extracted = await extractPageSectionsAndPhotos(gal.label);
+          await ScraperHttpUtil.sleep(1100);
+          const extracted = await extractPageSectionsAndPhotos(page, gal.label);
 
-          // Group by distinct non-generic section headings if >= 2 named sections exist on the gallery page
           const bySection = new Map<string, typeof extracted.items>();
           for (const it of extracted.items) {
             const sec = (it.sectionTitle || '').trim();
-            if (sec && !isGenericNonProjectHeading(sec) && sec.toLowerCase() !== businessName.toLowerCase()) {
+            if (
+              sec &&
+              !isGenericNonProjectHeading(sec) &&
+              sec.toLowerCase() !== businessName.toLowerCase()
+            ) {
               const list = bySection.get(sec) || [];
               list.push(it);
               bySection.set(sec, list);
@@ -1593,14 +2394,14 @@ export class ProjectsScraperService {
         } catch {}
       }
 
-      // Case 3: Authentic Service / Trade Showcase pages (Kitchens, Closets, Flat Roofing, Waterproofing, etc.) when more projects can be enriched
-      if (results.length < 3) {
+      // Case 3: Authentic Service / Trade Showcase pages (Kitchens, Bathrooms, Closets, etc.) when website doesn't split into many project subpages
+      if (results.length < 5) {
         for (const srv of navDiscovery.servicePages) {
           if (results.length >= maxProjects) break;
           try {
             await page.goto(srv.url, { waitUntil: 'domcontentloaded', timeout: 16000 });
-            await ScraperHttpUtil.sleep(1100);
-            const extracted = await extractPageSectionsAndPhotos(srv.label);
+            await ScraperHttpUtil.sleep(1000);
+            const extracted = await extractPageSectionsAndPhotos(page, srv.label);
             const photos = filterValidPhotos(extracted.items).slice(0, maxPhotosPerProject);
             if (photos.length >= 2) {
               const rawTitle = (srv.label || extracted.pageHeading || '').trim();
@@ -1623,15 +2424,15 @@ export class ProjectsScraperService {
       // Case 4: Homepage portfolio images if still empty (require >= 2 genuine work photos)
       if (results.length === 0) {
         try {
-          await page.goto(websiteUrl, { waitUntil: 'domcontentloaded', timeout: 16000 });
+          await page.goto(resolvedHomeUrl, { waitUntil: 'domcontentloaded', timeout: 16000 });
           await ScraperHttpUtil.sleep(1300);
-          const homeExtracted = await extractPageSectionsAndPhotos(`${businessName} Portfolio`);
+          const homeExtracted = await extractPageSectionsAndPhotos(page, `${businessName} Portfolio`);
           const photos = filterValidPhotos(homeExtracted.items).slice(0, maxPhotosPerProject);
           if (photos.length >= 2) {
             results.push({
               title: `${businessName} Portfolio`,
               slug: this.slugify(`${businessName}-portfolio`),
-              sourceUrl: websiteUrl,
+              sourceUrl: resolvedHomeUrl,
               photos,
             });
           }

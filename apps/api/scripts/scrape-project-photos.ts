@@ -79,7 +79,10 @@ async function main() {
         },
       },
       platformReviews: true,
-      projects: { select: { id: true } },
+      projects: {
+        orderBy: { orderIndex: 'asc' },
+        include: { photos: { orderBy: { orderIndex: 'asc' } } },
+      },
     },
     orderBy: { compositeRating: 'desc' },
   });
@@ -104,8 +107,8 @@ async function main() {
       boroughOrCity: p.borough || p.city,
       houzzUrl,
       websiteUrl: p.websiteUrl,
-      maxProjects: 12,
-      maxPhotosPerProject: 12,
+      maxProjects: 300,
+      maxPhotosPerProject: 100,
       skipProjects,
     });
 
@@ -304,6 +307,38 @@ async function main() {
             caption,
             width,
             height,
+          })),
+        });
+      }
+    }
+
+    if (brandAndProjects.houzzChallengeBlocked && (p.projects?.length || 0) > 0) {
+      const seenSlugs = new Set(uploadedProjects.map((u) => u.slug));
+      const websiteTitles = new Set(
+        uploadedProjects.map((u) => u.title.toLowerCase().replace(/[^a-z0-9]/g, ''))
+      );
+      for (const oldProj of p.projects || []) {
+        const cleanPhotos = (oldProj.photos || []).filter((ph) =>
+          (ph.imageUrl || '').startsWith('providers/')
+        );
+        if (cleanPhotos.length === 0) continue;
+        const normTitle = oldProj.title.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (seenSlugs.has(oldProj.slug) || (normTitle && websiteTitles.has(normTitle))) continue;
+        seenSlugs.add(oldProj.slug);
+        uploadedProjects.push({
+          title: oldProj.title,
+          slug: oldProj.slug,
+          description: oldProj.description || undefined,
+          location: oldProj.location || undefined,
+          projectYear: oldProj.projectYear || undefined,
+          costRange: oldProj.costRange || undefined,
+          serviceCategory: oldProj.serviceCategory || undefined,
+          sourceUrl: oldProj.sourceUrl || undefined,
+          photos: cleanPhotos.map((ph) => ({
+            r2Key: ph.imageUrl,
+            caption: ph.caption || undefined,
+            width: ph.width || undefined,
+            height: ph.height || undefined,
           })),
         });
       }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import useEmblaCarousel from 'embla-carousel-react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -78,14 +79,14 @@ export default function PhotoLightboxModal({
     };
   }, [isOpen, onClose, emblaMainApi]);
 
-  if (!isOpen || photos.length === 0) return null;
+  if (!isOpen || photos.length === 0 || typeof document === 'undefined') return null;
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label={`${providerName} photo gallery`}
-      className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex flex-col justify-between p-4 sm:p-6"
+      className="fixed inset-0 !m-0 z-[100] bg-black/95 backdrop-blur-sm flex flex-col justify-between p-4 sm:p-6"
     >
       {/* Top Bar */}
       <div className="flex items-center justify-between text-white/90 z-10 pb-4 border-b border-white/10">
@@ -123,19 +124,31 @@ export default function PhotoLightboxModal({
           className="w-full h-full overflow-hidden cursor-grab active:cursor-grabbing"
         >
           <div className="flex h-full items-center touch-pan-y">
-            {photos.map((photo, idx) => (
-              <div
-                key={`lb-${idx}`}
-                className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center px-2 sm:px-14"
-              >
-                <img
-                  src={photo}
-                  alt={`${providerName} project photo ${idx + 1}`}
-                  draggable={false}
-                  className="max-h-[72vh] max-w-[90vw] object-contain rounded-xl shadow-2xl"
-                />
-              </div>
-            ))}
+            {photos.map((photo, idx) => {
+              const total = photos.length;
+              const directDist = Math.abs(idx - currentIndex);
+              const loopDist = total > 1 ? Math.min(directDist, total - directDist) : directDist;
+              const shouldRenderSlide = total <= 12 || loopDist <= 3;
+
+              return (
+                <div
+                  key={`lb-${idx}`}
+                  className="flex-[0_0_100%] min-w-0 h-full flex items-center justify-center px-2 sm:px-14"
+                >
+                  {shouldRenderSlide ? (
+                    <img
+                      src={photo}
+                      alt={`${providerName} project photo ${idx + 1}`}
+                      draggable={false}
+                      decoding="async"
+                      className="max-h-[72vh] max-w-[90vw] object-contain rounded-xl shadow-2xl"
+                    />
+                  ) : (
+                    <div className="w-56 h-40 rounded-xl bg-white/5" />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -158,24 +171,33 @@ export default function PhotoLightboxModal({
             <div className="flex items-center justify-center gap-2.5">
               {photos.map((photo, idx) => {
                 const active = idx === currentIndex;
+                const total = photos.length;
+                const directDist = Math.abs(idx - currentIndex);
+                const loopDist = total > 1 ? Math.min(directDist, total - directDist) : directDist;
+                const renderThumbImg = total <= 48 || loopDist <= 24;
+
                 return (
                   <button
                     key={`lb-thumb-${idx}`}
                     type="button"
                     onClick={() => emblaMainApi?.scrollTo(idx)}
                     aria-label={`Jump to photo ${idx + 1}`}
-                    className={`shrink-0 w-20 h-[56px] sm:w-24 sm:h-[68px] rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
+                    className={`shrink-0 w-20 h-[56px] sm:w-24 sm:h-[68px] rounded-lg overflow-hidden border-2 bg-white/10 transition-all cursor-pointer ${
                       active
                         ? 'border-white scale-105 opacity-100 shadow-lg'
                         : 'border-transparent opacity-50 hover:opacity-90'
                     }`}
                   >
-                    <img
-                      src={photo}
-                      alt=""
-                      draggable={false}
-                      className="w-full h-full object-cover"
-                    />
+                    {renderThumbImg && (
+                      <img
+                        src={photo}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        draggable={false}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
                   </button>
                 );
               })}
@@ -183,6 +205,7 @@ export default function PhotoLightboxModal({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }

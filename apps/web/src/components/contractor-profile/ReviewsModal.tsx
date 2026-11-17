@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   Star,
@@ -13,9 +14,11 @@ import {
   ChevronRight,
   ChevronUp,
   ArrowRight,
+  Camera,
 } from 'lucide-react';
-import type { RooferProvider } from '@/data/mockRoofers';
-import { fetchProviderBySlug, type ScrapedReviewItemDto } from '@/lib/api';
+import type { RooferProvider, ProviderReviewStats } from '@/data/mockRoofers';
+import { fetchProviderReviews, type ScrapedReviewItemDto } from '@/lib/api';
+import { getOwnR2MediaUrl } from '@/lib/media-url';
 import {
   GoogleLogo,
   YelpLogo,
@@ -23,6 +26,8 @@ import {
   HouzzLogo,
   FacebookLogo,
 } from './PlatformLogos';
+
+const PAGE_SIZE = 50;
 
 interface ReviewsModalProps {
   isOpen: boolean;
@@ -57,8 +62,9 @@ function ExpandableReviewText({ text }: { text: string }) {
     <div className="space-y-1.5">
       <p
         ref={pRef}
-        className={`text-[13px] sm:text-sm text-gray-700 leading-relaxed whitespace-pre-line ${expanded ? '' : 'line-clamp-3'
-          }`}
+        className={`text-[13px] sm:text-sm text-gray-700 leading-relaxed whitespace-pre-line ${
+          expanded ? '' : 'line-clamp-3'
+        }`}
       >
         {text}
       </p>
@@ -85,10 +91,39 @@ function ExpandableReviewText({ text }: { text: string }) {
   );
 }
 
+function ReviewerAvatar({
+  avatarUrl,
+  authorName,
+}: {
+  avatarUrl: string;
+  authorName: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const safeUrl = getOwnR2MediaUrl(avatarUrl);
+
+  if (safeUrl && !failed) {
+    return (
+      <img
+        src={safeUrl}
+        alt={authorName}
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailed(true)}
+        className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-gray-200 shrink-0"
+      />
+    );
+  }
+
+  return (
+    <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-100 border border-gray-200 flex items-center justify-center text-xs font-black text-gray-700 shrink-0">
+      {(authorName || 'V').charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
 function formatReviewDate(rawDate?: string | null): string {
   const val = (rawDate || '').trim();
   if (!val) return 'Verified Review';
-  // Format ISO timestamps like "2018-06-27T10:59:04Z" or "2024-03-15" cleanly
   if (/^\d{4}-\d{2}-\d{2}(?:[T\s].*)?$/.test(val)) {
     const parsed = new Date(val);
     if (!Number.isNaN(parsed.getTime())) {
@@ -106,7 +141,6 @@ function cleanReviewerName(rawName?: string): string {
   const name = (rawName || '').replace(/\s*·\s*#\d+$/, '').trim();
   if (!name) return 'Verified Homeowner';
   if (/^HU-\d+$/i.test(name)) return 'Verified Houzz Homeowner';
-  // Strip Houzz obfuscated hash token prefix before real surname (e.g. "E2Isk.../TlN Levine" -> "Levine")
   const parts = name.split(/\s+/);
   if (parts.length >= 2 && parts[0].length > 20 && /[+/0-9]/.test(parts[0])) {
     return parts.slice(1).join(' ');
@@ -124,7 +158,6 @@ function parseReviewCommentAndOwnerReply(
   extractedDate: string | null;
 } {
   let text = (rawComment || '').trim();
-  // Clean trailing Google Maps structured metadata tags ("Price assessment\nReasonable price\nServices\n...")
   text = text
     .replace(/\nPrice assessment\n[\s\S]*$/i, '')
     .replace(/\nServices\n[^\n]+$/i, '')
@@ -155,70 +188,138 @@ function parseReviewCommentAndOwnerReply(
   };
 }
 
+function buildPageNumbers(currentPage: number, totalPages: number): Array<number | 'ELLIPSIS'> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
+  }
+  const pages: Array<number | 'ELLIPSIS'> = [1];
+  const left = Math.max(2, currentPage - 1);
+  const right = Math.min(totalPages - 1, currentPage + 1);
+
+  if (left > 2) pages.push('ELLIPSIS');
+  for (let p = left; p <= right; p++) {
+    pages.push(p);
+  }
+  if (right < totalPages - 1) pages.push('ELLIPSIS');
+  pages.push(totalPages);
+  return pages;
+}
+
 export default function ReviewsModal({
   isOpen,
   onClose,
   provider,
-  scrapedReviews = [],
   initialPlatform = 'ALL',
 }: ReviewsModalProps) {
-  const [selectedPlatform, setSelectedPlatform] = useState<string>(initialPlatform);
+  const [selectedPlatform, setSelectedPlatform] = useState<string>(
+    initialPlatform === 'WITH_PHOTOS' ? 'ALL' : initialPlatform
+  );
+  const [onlyWithPhotos, setOnlyWithPhotos] = useState<boolean>(
+    initialPlatform === 'WITH_PHOTOS'
+  );
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'RELEVANT' | 'HIGHEST' | 'LOWEST'>('RELEVANT');
-  const [lazyScrapedReviews, setLazyScrapedReviews] = useState<ScrapedReviewItemDto[]>([]);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [sortBy, setSortBy] = useState<'RELEVANT' | 'RECENT' | 'HIGHEST' | 'LOWEST'>('RELEVANT');
+  const [page, setPage] = useState(1);
+
+  const [pageItems, setPageItems] = useState<ScrapedReviewItemDto[]>([]);
+  const [totalMatching, setTotalMatching] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [apiStats, setApiStats] = useState<ProviderReviewStats | null>(
+    provider.reviewStats || null
+  );
   const [isLoadingReviews, setIsLoadingReviews] = useState(false);
-  const [renderedCount, setRenderedCount] = useState(60);
+
   const [lightboxState, setLightboxState] = useState<{
     photos: string[];
     index: number;
     authorName: string;
   } | null>(null);
 
-  useEffect(() => {
-    setLazyScrapedReviews([]);
-    setLightboxState(null);
-  }, [provider.slug]);
+  const mobileScrollRef = useRef<HTMLDivElement | null>(null);
+  const desktopScrollRef = useRef<HTMLDivElement | null>(null);
 
+  // Debounce keyword search (250ms) so typing doesn't spam API
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Reset modal state on open or contractor change
   useEffect(() => {
     if (isOpen) {
-      setSelectedPlatform(initialPlatform || 'ALL');
+      if (initialPlatform === 'WITH_PHOTOS') {
+        setSelectedPlatform('ALL');
+        setOnlyWithPhotos(true);
+      } else {
+        setSelectedPlatform(initialPlatform || 'ALL');
+        setOnlyWithPhotos(false);
+      }
       setSearchQuery('');
+      setDebouncedSearch('');
       setSortBy('RELEVANT');
-      setRenderedCount(60);
+      setPage(1);
       setLightboxState(null);
+      if (provider.reviewStats) {
+        setApiStats(provider.reviewStats);
+      }
     } else {
       setLightboxState(null);
     }
-  }, [isOpen, initialPlatform]);
+  }, [isOpen, initialPlatform, provider.slug, provider.reviewStats]);
 
+  // Fetch strictly 50 reviews per page from dedicated server-side paginated API
   useEffect(() => {
-    setRenderedCount(60);
-  }, [selectedPlatform, searchQuery, sortBy]);
-
-  // Lazy-fetch full scraped reviews when opened from listing/category cards where scrapedReviews aren't preloaded
-  useEffect(() => {
-    if (!isOpen) return;
-    if (scrapedReviews && scrapedReviews.length > 0) return;
-    if (provider.scrapedReviews && provider.scrapedReviews.length > 0) return;
-    if (!provider.slug) return;
+    if (!isOpen || !provider.slug) return;
 
     let cancelled = false;
     setIsLoadingReviews(true);
-    fetchProviderBySlug(provider.slug)
-      .then((fullProvider) => {
-        if (!cancelled && fullProvider?.scrapedReviews) {
-          setLazyScrapedReviews(fullProvider.scrapedReviews as ScrapedReviewItemDto[]);
-        }
+
+    fetchProviderReviews(provider.slug, {
+      page,
+      limit: PAGE_SIZE,
+      platform: selectedPlatform,
+      withPhotos: onlyWithPhotos,
+      sortBy,
+      search: debouncedSearch || undefined,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        setPageItems(res.items || []);
+        setTotalMatching(res.pagination.totalMatching || 0);
+        setTotalPages(res.pagination.totalPages || 1);
+        setApiStats(res.stats);
       })
-      .catch(() => { })
+      .catch(() => {
+        if (cancelled) return;
+        setPageItems([]);
+        setTotalMatching(0);
+        setTotalPages(1);
+      })
       .finally(() => {
-        if (!cancelled) setIsLoadingReviews(false);
+        if (!cancelled) {
+          setIsLoadingReviews(false);
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isOpen, provider.slug, provider.scrapedReviews, scrapedReviews]);
+  }, [isOpen, provider.slug, page, selectedPlatform, onlyWithPhotos, sortBy, debouncedSearch]);
+
+  const scrollFeedsToTop = () => {
+    mobileScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    desktopScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    const clamped = Math.max(1, Math.min(totalPages, nextPage));
+    if (clamped === page) return;
+    setPage(clamped);
+    scrollFeedsToTop();
+  };
 
   // Body scroll lock & Escape / Lightbox arrow handler
   useEffect(() => {
@@ -235,18 +336,18 @@ export default function ReviewsModal({
           setLightboxState((prev) =>
             prev
               ? {
-                ...prev,
-                index: (prev.index - 1 + prev.photos.length) % prev.photos.length,
-              }
+                  ...prev,
+                  index: (prev.index - 1 + prev.photos.length) % prev.photos.length,
+                }
               : null
           );
         } else if (e.key === 'ArrowRight' && lightboxState.photos.length > 1) {
           setLightboxState((prev) =>
             prev
               ? {
-                ...prev,
-                index: (prev.index + 1) % prev.photos.length,
-              }
+                  ...prev,
+                  index: (prev.index + 1) % prev.photos.length,
+                }
               : null
           );
         }
@@ -273,17 +374,10 @@ export default function ReviewsModal({
     });
   }, [provider.reviewsLastUpdatedAt]);
 
-  const effectiveScrapedReviews = useMemo(() => {
-    if (scrapedReviews && scrapedReviews.length > 0) return scrapedReviews;
-    if (provider.scrapedReviews && provider.scrapedReviews.length > 0) {
-      return provider.scrapedReviews as ScrapedReviewItemDto[];
-    }
-    return lazyScrapedReviews;
-  }, [scrapedReviews, provider.scrapedReviews, lazyScrapedReviews]);
-
-  const normalizedReviews = useMemo(
+  // Normalize strictly the current 50-item page (100% first-party R2 URLs only)
+  const normalizedPageReviews = useMemo(
     () =>
-      (effectiveScrapedReviews || []).map((sr) => {
+      (pageItems || []).map((sr) => {
         const parsed = parseReviewCommentAndOwnerReply(
           sr.comment,
           provider.name,
@@ -291,106 +385,76 @@ export default function ReviewsModal({
         );
         return {
           authorName: cleanReviewerName(sr.authorName),
-          authorAvatarUrl: sr.authorAvatarUrl || '',
+          authorAvatarUrl: sr.authorAvatarUrl ? getOwnR2MediaUrl(sr.authorAvatarUrl) : '',
           platform: (sr.platform || 'GOOGLE').toUpperCase(),
           rating: sr.rating || 5,
           date: formatReviewDate(parsed.extractedDate),
           customerComment: parsed.customerComment,
           ownerReply: parsed.ownerReply,
-          photoUrls: Array.isArray(sr.photoUrls) ? sr.photoUrls.filter(Boolean) : [],
+          photoUrls: Array.isArray(sr.photoUrls)
+            ? sr.photoUrls.map((u) => getOwnR2MediaUrl(u)).filter(Boolean)
+            : [],
         };
       }),
-    [effectiveScrapedReviews, provider.name]
+    [pageItems, provider.name]
   );
+
+  const effectiveStats = apiStats || provider.reviewStats || null;
+  const totalSavedCount = effectiveStats?.totalSaved || 0;
+  const photoReviewsCount = effectiveStats?.withPhotosCount || 0;
+  const savedByPlat = effectiveStats?.platformCounts || {};
 
   const activePlatformSummaries = useMemo(
     () =>
       [
         provider.reviews?.google && provider.reviews.google.count > 0
           ? {
-            key: 'GOOGLE',
-            label: 'Google',
-            rating: provider.reviews.google.rating,
-            count: provider.reviews.google.count,
-          }
+              key: 'GOOGLE',
+              label: 'Google',
+              rating: provider.reviews.google.rating,
+              count: provider.reviews.google.count,
+            }
           : null,
         provider.reviews?.yelp && provider.reviews.yelp.count > 0
           ? {
-            key: 'YELP',
-            label: 'Yelp',
-            rating: provider.reviews.yelp.rating,
-            count: provider.reviews.yelp.count,
-          }
+              key: 'YELP',
+              label: 'Yelp',
+              rating: provider.reviews.yelp.rating,
+              count: provider.reviews.yelp.count,
+            }
           : null,
         provider.reviews?.homeadvisor && provider.reviews.homeadvisor.count > 0
           ? {
-            key: 'HOMEADVISOR',
-            label: 'HomeAdvisor',
-            rating: provider.reviews.homeadvisor.rating,
-            count: provider.reviews.homeadvisor.count,
-          }
+              key: 'HOMEADVISOR',
+              label: 'HomeAdvisor',
+              rating: provider.reviews.homeadvisor.rating,
+              count: provider.reviews.homeadvisor.count,
+            }
           : null,
         (provider.reviews?.houzz?.count || provider.reviews?.facebook?.count || 0) > 0
           ? {
-            key: 'HOUZZ',
-            label: 'Houzz',
-            rating:
-              provider.reviews.houzz?.rating || provider.reviews.facebook?.rating || 0,
-            count:
-              provider.reviews.houzz?.count || provider.reviews.facebook?.count || 0,
-          }
+              key: 'HOUZZ',
+              label: 'Houzz',
+              rating:
+                provider.reviews.houzz?.rating || provider.reviews.facebook?.rating || 0,
+              count:
+                provider.reviews.houzz?.count || provider.reviews.facebook?.count || 0,
+            }
           : null,
       ].filter((item): item is NonNullable<typeof item> => Boolean(item)),
     [provider.reviews]
   );
 
-  const totalReviews = provider.totalReviews || normalizedReviews.length || 0;
+  const totalReviews = provider.totalReviews || totalSavedCount || 0;
   const compositeRating = provider.compositeRating || 0;
 
-  const distribution = useMemo(
-    () =>
-      [5, 4, 3, 2, 1].map((stars) => {
-        if (normalizedReviews.length > 0) {
-          const count = normalizedReviews.filter(
-            (r) => Math.round(r.rating || 5) === stars
-          ).length;
-          const pct = Math.round((count / normalizedReviews.length) * 100);
-          return { stars, pct, count };
-        }
-        const defaultPct = stars === 5 ? 78 : stars === 4 ? 16 : stars === 3 ? 4 : 1;
-        return {
-          stars,
-          pct: totalReviews > 0 ? defaultPct : 0,
-          count: Math.round((totalReviews * defaultPct) / 100),
-        };
-      }),
-    [normalizedReviews, totalReviews]
-  );
-
-  const visibleReviews = useMemo(() => {
-    let list =
-      selectedPlatform === 'ALL'
-        ? normalizedReviews
-        : normalizedReviews.filter((r) => r.platform === selectedPlatform);
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
-      list = list.filter(
-        (r) =>
-          r.customerComment.toLowerCase().includes(q) ||
-          r.authorName.toLowerCase().includes(q) ||
-          (r.ownerReply && r.ownerReply.toLowerCase().includes(q))
-      );
+  // Strictly real DB star distribution (zero static/hardcoded percentages)
+  const distribution = useMemo(() => {
+    if (effectiveStats?.starDistribution && effectiveStats.starDistribution.length === 5) {
+      return effectiveStats.starDistribution;
     }
-
-    if (sortBy === 'HIGHEST') {
-      list = [...list].sort((a, b) => b.rating - a.rating);
-    } else if (sortBy === 'LOWEST') {
-      list = [...list].sort((a, b) => a.rating - b.rating);
-    }
-
-    return list;
-  }, [normalizedReviews, selectedPlatform, searchQuery, sortBy]);
+    return [5, 4, 3, 2, 1].map((stars) => ({ stars, pct: 0, count: 0 }));
+  }, [effectiveStats]);
 
   const selectedSummary =
     selectedPlatform !== 'ALL'
@@ -429,23 +493,74 @@ export default function ReviewsModal({
     }
   };
 
-  const handleFeedScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    if (
-      renderedCount < visibleReviews.length &&
-      el.scrollHeight - el.scrollTop - el.clientHeight < 650
-    ) {
-      setRenderedCount((prev) => Math.min(visibleReviews.length, prev + 60));
-    }
-  };
+  if (!isOpen || typeof document === 'undefined') return null;
 
-  if (!isOpen) return null;
+  const rangeStart = totalMatching > 0 ? (page - 1) * PAGE_SIZE + 1 : 0;
+  const rangeEnd = Math.min(page * PAGE_SIZE, totalMatching);
+  const pageTokens = buildPageNumbers(page, totalPages);
 
-  const slicedReviews = visibleReviews.slice(0, renderedCount);
+  const paginationControls =
+    totalPages > 1 ? (
+      <div className="pt-3 pb-1 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <span className="text-xs font-semibold text-gray-500 tabular-nums">
+          Showing {rangeStart}–{rangeEnd} of {totalMatching} reviews
+        </span>
+
+        <div className="flex items-center gap-1.5 flex-wrap justify-center">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => handlePageChange(page - 1)}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none text-xs font-bold text-gray-700 cursor-pointer transition-colors"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span>Prev</span>
+          </button>
+
+          {pageTokens.map((tok, idx) =>
+            tok === 'ELLIPSIS' ? (
+              <span
+                key={`ellipsis-${idx}`}
+                className="px-1.5 text-xs font-bold text-gray-400 select-none"
+              >
+                …
+              </span>
+            ) : (
+              <button
+                key={tok}
+                type="button"
+                onClick={() => handlePageChange(tok)}
+                className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer tabular-nums ${
+                  tok === page
+                    ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] shadow-sm'
+                    : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'
+                }`}
+              >
+                {tok}
+              </button>
+            )
+          )}
+
+          <button
+            type="button"
+            disabled={page >= totalPages}
+            onClick={() => handlePageChange(page + 1)}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none text-xs font-bold text-gray-700 cursor-pointer transition-colors"
+          >
+            <span>Next</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    ) : totalMatching > 0 ? (
+      <div className="pt-2 text-center text-[11px] font-medium text-gray-400 tabular-nums">
+        Showing {rangeStart}–{rangeEnd} of {totalMatching} reviews
+      </div>
+    ) : null;
 
   const reviewsFeedContent = isLoadingReviews ? (
     <div className="space-y-3 sm:space-y-4">
-      {[1, 2, 3].map((item) => (
+      {[1, 2, 3, 4].map((item) => (
         <div
           key={item}
           className="p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 bg-white space-y-3 animate-pulse"
@@ -468,30 +583,20 @@ export default function ReviewsModal({
         </div>
       ))}
     </div>
-  ) : visibleReviews.length > 0 ? (
+  ) : normalizedPageReviews.length > 0 ? (
     <>
-      {slicedReviews.map((rev, idx) => (
+      {normalizedPageReviews.map((rev, idx) => (
         <article
-          key={`${rev.platform}-${rev.authorName}-${idx}`}
+          key={`${rev.platform}-${rev.authorName}-${page}-${idx}`}
           className="p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 bg-white shadow-sm space-y-2.5 sm:space-y-3"
         >
           {/* Reviewer Identity Row */}
           <div className="flex items-start justify-between gap-2.5 sm:gap-3">
             <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-              {rev.authorAvatarUrl ? (
-                <img
-                  src={rev.authorAvatarUrl}
-                  alt={rev.authorName}
-                  loading="lazy"
-                  decoding="async"
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-gray-200 shrink-0"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-100 border border-gray-200 flex items-center justify-center text-xs font-black text-gray-700 shrink-0">
-                  {rev.authorName.charAt(0).toUpperCase()}
-                </div>
-              )}
+              <ReviewerAvatar
+                avatarUrl={rev.authorAvatarUrl}
+                authorName={rev.authorName}
+              />
 
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -505,10 +610,11 @@ export default function ReviewsModal({
                     {[...Array(5)].map((_, i) => (
                       <Star
                         key={i}
-                        className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${i < Math.round(rev.rating || 5)
+                        className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${
+                          i < Math.round(rev.rating || 5)
                             ? 'fill-amber-400 text-amber-400'
                             : 'fill-gray-200 text-gray-200'
-                          }`}
+                        }`}
                       />
                     ))}
                   </div>
@@ -573,33 +679,23 @@ export default function ReviewsModal({
         </article>
       ))}
 
-      {renderedCount < visibleReviews.length && (
-        <div className="pt-2 pb-1 text-center">
-          <button
-            type="button"
-            onClick={() =>
-              setRenderedCount((prev) => Math.min(visibleReviews.length, prev + 80))
-            }
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-gray-800 transition-colors cursor-pointer"
-          >
-            <span>
-              Showing {renderedCount} of {visibleReviews.length} reviews — Show more
-            </span>
-          </button>
-        </div>
-      )}
+      {paginationControls}
     </>
-  ) : searchQuery.trim() ? (
+  ) : debouncedSearch ? (
     <div className="py-10 sm:py-12 text-center space-y-2">
       <p className="text-sm font-bold text-gray-900">
-        No reviews matching &ldquo;{searchQuery}&rdquo;
+        No reviews matching &ldquo;{debouncedSearch}&rdquo;
       </p>
       <p className="text-xs text-gray-500">
         Try clearing your search filter or switching platforms.
       </p>
       <button
         type="button"
-        onClick={() => setSearchQuery('')}
+        onClick={() => {
+          setSearchQuery('');
+          setDebouncedSearch('');
+          setPage(1);
+        }}
         className="mt-2 inline-flex items-center px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold text-gray-800 cursor-pointer"
       >
         Clear Search
@@ -626,14 +722,18 @@ export default function ReviewsModal({
           on {selectedSummary.label}.
         </p>
       </div>
-      {normalizedReviews.length > 0 && (
+      {totalSavedCount > 0 && (
         <div className="pt-1">
           <button
             type="button"
-            onClick={() => setSelectedPlatform('ALL')}
+            onClick={() => {
+              setSelectedPlatform('ALL');
+              setOnlyWithPhotos(false);
+              setPage(1);
+            }}
             className="inline-flex items-center px-4 py-2 rounded-xl bg-[#0B3B2C] hover:bg-[#07261C] text-white text-xs font-bold transition-colors cursor-pointer"
           >
-            View All Saved Customer Reviews ({normalizedReviews.length})
+            View All Saved Customer Reviews ({totalSavedCount})
           </button>
         </div>
       )}
@@ -644,9 +744,9 @@ export default function ReviewsModal({
     </div>
   );
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-gray-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-150"
+      className="fixed inset-0 !m-0 z-[100] bg-gray-950/65 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-150"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -689,10 +789,10 @@ export default function ReviewsModal({
         {/* MOBILE BODY (< md): UNIFIED SCROLL + STICKY FILTER RAIL   */}
         {/* ========================================================= */}
         <div
-          onScroll={handleFeedScroll}
+          ref={mobileScrollRef}
           className="md:hidden flex-1 min-h-0 overflow-y-auto overscroll-contain bg-white"
         >
-          {/* 1. Compact Side-by-Side Score & Distribution Strip (Scrolls away naturally as you read) */}
+          {/* 1. Compact Side-by-Side Score & Distribution Strip */}
           <div className="bg-[#F8FAFC] px-4 py-3 border-b border-gray-200/80 flex items-center gap-4">
             <div className="shrink-0 text-center min-w-[82px]">
               <div className="text-3xl font-black text-gray-950 leading-none tracking-tight">
@@ -702,10 +802,11 @@ export default function ReviewsModal({
                 {[...Array(5)].map((_, i) => (
                   <Star
                     key={i}
-                    className={`w-3 h-3 ${i < Math.round(compositeRating)
+                    className={`w-3 h-3 ${
+                      i < Math.round(compositeRating)
                         ? 'fill-amber-400 text-amber-400'
                         : 'fill-gray-200 text-gray-200'
-                      }`}
+                    }`}
                   />
                 ))}
               </div>
@@ -736,74 +837,117 @@ export default function ReviewsModal({
             </div>
           </div>
 
-          {/* 2. Sticky Horizontal Platform Chips + Compact Single-Row Search & Sort */}
+          {/* 2. Sticky Horizontal Platform Chips + Search & Sort */}
           <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-gray-200/90 px-3.5 py-2.5 space-y-2 shadow-sm">
-            {/* Swipeable Horizontal Platform Pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
               <button
                 type="button"
-                onClick={() => setSelectedPlatform('ALL')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold shrink-0 transition-colors cursor-pointer ${selectedPlatform === 'ALL'
+                onClick={() => {
+                  setSelectedPlatform('ALL');
+                  setOnlyWithPhotos(false);
+                  setPage(1);
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold shrink-0 transition-colors cursor-pointer ${
+                  selectedPlatform === 'ALL' && !onlyWithPhotos
                     ? 'bg-[#0B3B2C] text-white border-[#0B3B2C]'
                     : 'bg-white text-gray-800 border-gray-200/90'
-                  }`}
+                }`}
               >
                 <span>All</span>
                 <span
-                  className={`text-[10.5px] font-semibold ${selectedPlatform === 'ALL' ? 'text-white/80' : 'text-gray-400'
-                    }`}
+                  className={`text-[10.5px] font-semibold ${
+                    selectedPlatform === 'ALL' && !onlyWithPhotos
+                      ? 'text-white/80'
+                      : 'text-gray-400'
+                  }`}
                 >
-                  ({normalizedReviews.length || totalReviews})
+                  ({totalSavedCount || totalReviews})
                 </span>
               </button>
 
+              {photoReviewsCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOnlyWithPhotos((prev) => !prev);
+                    setPage(1);
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold shrink-0 transition-colors cursor-pointer ${
+                    onlyWithPhotos
+                      ? 'bg-[#EA580C] text-white border-[#EA580C]'
+                      : 'bg-orange-50/80 text-[#C2410C] border-orange-200'
+                  }`}
+                >
+                  <Camera className="w-3.5 h-3.5 shrink-0" />
+                  <span>With Photos</span>
+                  <span
+                    className={`text-[10.5px] font-semibold ${
+                      onlyWithPhotos ? 'text-white/85' : 'text-[#EA580C]/80'
+                    }`}
+                  >
+                    ({photoReviewsCount})
+                  </span>
+                </button>
+              )}
+
               {activePlatformSummaries.map((plat) => {
                 const isActive = selectedPlatform === plat.key;
-                const savedForPlat = normalizedReviews.filter(
-                  (r) => r.platform === plat.key
-                ).length;
+                const savedForPlat = savedByPlat[plat.key] || 0;
 
                 return (
                   <button
                     key={plat.key}
                     type="button"
-                    onClick={() => setSelectedPlatform(plat.key)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs shrink-0 transition-colors cursor-pointer ${isActive
+                    onClick={() => {
+                      setSelectedPlatform(plat.key);
+                      setPage(1);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs shrink-0 transition-colors cursor-pointer ${
+                      isActive
                         ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] font-bold'
                         : 'bg-white text-gray-800 border-gray-200/90 font-semibold'
-                      }`}
+                    }`}
                   >
                     {renderPlatformIcon(plat.key)}
                     <span>{plat.label}</span>
                     <span className="font-bold">{plat.rating.toFixed(1)}</span>
                     <span
-                      className={`text-[10.5px] ${isActive ? 'text-white/80' : 'text-gray-400'
-                        }`}
+                      className={`text-[10.5px] ${
+                        isActive ? 'text-white/80' : 'text-gray-400'
+                      }`}
                     >
-                      ({savedForPlat > 0 && savedForPlat < plat.count
+                      (
+                      {savedForPlat > 0 && savedForPlat < plat.count
                         ? `${savedForPlat}/${plat.count}`
-                        : Math.max(savedForPlat, plat.count)})
+                        : Math.max(savedForPlat, plat.count)}
+                      )
                     </span>
                   </button>
                 );
               })}
             </div>
 
-            {/* Single-Row Search + Sort */}
             <div className="flex items-center gap-2">
               <div className="relative flex-1 min-w-0">
                 <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPage(1);
+                  }}
                   placeholder="Search reviews..."
                   className="w-full pl-8 pr-7 py-1.5 rounded-lg border border-gray-200 bg-gray-50/70 focus:bg-white focus:border-primary focus:outline-none text-[13px] text-gray-900 placeholder:text-gray-400"
                 />
                 {searchQuery && (
                   <button
                     type="button"
-                    onClick={() => setSearchQuery('')}
+                    onClick={() => {
+                      setSearchQuery('');
+                      setDebouncedSearch('');
+                      setPage(1);
+                    }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -813,20 +957,23 @@ export default function ReviewsModal({
 
               <select
                 value={sortBy}
-                onChange={(e) =>
-                  setSortBy(e.target.value as 'RELEVANT' | 'HIGHEST' | 'LOWEST')
-                }
+                onChange={(e) => {
+                  setSortBy(
+                    e.target.value as 'RELEVANT' | 'RECENT' | 'HIGHEST' | 'LOWEST'
+                  );
+                  setPage(1);
+                }}
                 aria-label="Sort reviews"
                 className="py-1.5 px-2.5 rounded-lg border border-gray-200 bg-gray-50/70 focus:bg-white focus:border-primary focus:outline-none text-xs font-semibold text-gray-700 shrink-0 cursor-pointer"
               >
                 <option value="RELEVANT">Relevant</option>
+                <option value="RECENT">Recent</option>
                 <option value="HIGHEST">Highest ★</option>
                 <option value="LOWEST">Lowest ★</option>
               </select>
             </div>
           </div>
 
-          {/* 3. Full Spacious Mobile Reviews Feed */}
           <div className="p-3.5 space-y-3 pb-8">{reviewsFeedContent}</div>
         </div>
 
@@ -836,7 +983,6 @@ export default function ReviewsModal({
         <div className="hidden md:grid md:grid-cols-12 flex-1 min-h-0 overflow-hidden">
           {/* LEFT SIDEBAR: AGGREGATE RATING & PLATFORM SWITCHER */}
           <div className="md:col-span-4 border-r border-gray-200 bg-[#F8FAFC] p-5 space-y-5 overflow-y-auto">
-            {/* Overall Score Card */}
             <div className="bg-white border border-gray-200/90 rounded-xl p-4 shadow-sm space-y-3">
               <div className="flex items-center gap-3">
                 <span className="text-4xl font-black text-gray-950 tracking-tight">
@@ -847,10 +993,11 @@ export default function ReviewsModal({
                     {[...Array(5)].map((_, i) => (
                       <Star
                         key={i}
-                        className={`w-4 h-4 ${i < Math.round(compositeRating)
+                        className={`w-4 h-4 ${
+                          i < Math.round(compositeRating)
                             ? 'fill-amber-400 text-amber-400'
                             : 'fill-gray-200 text-gray-200'
-                          }`}
+                        }`}
                       />
                     ))}
                   </div>
@@ -860,7 +1007,6 @@ export default function ReviewsModal({
                 </div>
               </div>
 
-              {/* 5★ - 1★ Distribution */}
               <div className="space-y-1.5 pt-2 border-t border-gray-100 text-[11px] font-medium text-gray-600">
                 {distribution.map((item) => (
                   <div key={item.stars} className="flex items-center gap-2">
@@ -890,40 +1036,77 @@ export default function ReviewsModal({
               <div className="space-y-1.5">
                 <button
                   type="button"
-                  onClick={() => setSelectedPlatform('ALL')}
-                  className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${selectedPlatform === 'ALL'
+                  onClick={() => {
+                    setSelectedPlatform('ALL');
+                    setOnlyWithPhotos(false);
+                    setPage(1);
+                  }}
+                  className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                    selectedPlatform === 'ALL' && !onlyWithPhotos
                       ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] shadow-sm'
                       : 'bg-white hover:bg-gray-50 text-gray-800 border-gray-200/90'
-                    }`}
+                  }`}
                 >
                   <span>All Platforms</span>
                   <span
-                    className={`text-[11px] font-semibold ${selectedPlatform === 'ALL' ? 'text-white/80' : 'text-gray-500'
-                      }`}
+                    className={`text-[11px] font-semibold ${
+                      selectedPlatform === 'ALL' && !onlyWithPhotos
+                        ? 'text-white/80'
+                        : 'text-gray-500'
+                    }`}
                   >
-                    {normalizedReviews.length > 0
-                      ? normalizedReviews.length >= totalReviews
-                        ? `${normalizedReviews.length} verified`
-                        : `${normalizedReviews.length} saved • ${totalReviews} total`
+                    {totalSavedCount > 0
+                      ? totalSavedCount >= totalReviews
+                        ? `${totalSavedCount} verified`
+                        : `${totalSavedCount} saved • ${totalReviews} total`
                       : `${totalReviews} total`}
                   </span>
                 </button>
 
+                {photoReviewsCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOnlyWithPhotos((prev) => !prev);
+                      setPage(1);
+                    }}
+                    className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                      onlyWithPhotos
+                        ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-sm'
+                        : 'bg-orange-50/70 hover:bg-orange-100/70 text-[#C2410C] border-orange-200'
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Camera className="w-3.5 h-3.5 shrink-0" />
+                      <span>Reviews With Photos</span>
+                    </span>
+                    <span
+                      className={`text-[11px] font-bold ${
+                        onlyWithPhotos ? 'text-white/85' : 'text-[#EA580C]'
+                      }`}
+                    >
+                      {photoReviewsCount}
+                    </span>
+                  </button>
+                )}
+
                 {activePlatformSummaries.map((plat) => {
                   const isActive = selectedPlatform === plat.key;
-                  const savedForPlat = normalizedReviews.filter(
-                    (r) => r.platform === plat.key
-                  ).length;
+                  const savedForPlat = savedByPlat[plat.key] || 0;
 
                   return (
                     <button
                       key={plat.key}
                       type="button"
-                      onClick={() => setSelectedPlatform(plat.key)}
-                      className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs transition-all cursor-pointer ${isActive
+                      onClick={() => {
+                        setSelectedPlatform(plat.key);
+                        setPage(1);
+                      }}
+                      className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs transition-all cursor-pointer ${
+                        isActive
                           ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] shadow-sm font-bold'
                           : 'bg-white hover:bg-gray-50 text-gray-800 border-gray-200/90 font-semibold'
-                        }`}
+                      }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         {renderPlatformIcon(plat.key)}
@@ -934,12 +1117,15 @@ export default function ReviewsModal({
                         <Star className="w-3 h-3 fill-amber-400 text-amber-400 shrink-0" />
                         <span className="font-bold">{plat.rating.toFixed(1)}</span>
                         <span
-                          className={`text-[11px] ${isActive ? 'text-white/80' : 'text-gray-400'
-                            }`}
+                          className={`text-[11px] ${
+                            isActive ? 'text-white/80' : 'text-gray-400'
+                          }`}
                         >
-                          ({savedForPlat > 0 && savedForPlat < plat.count
+                          (
+                          {savedForPlat > 0 && savedForPlat < plat.count
                             ? `${savedForPlat}/${plat.count}`
-                            : Math.max(savedForPlat, plat.count)})
+                            : Math.max(savedForPlat, plat.count)}
+                          )
                         </span>
                       </div>
                     </button>
@@ -949,23 +1135,29 @@ export default function ReviewsModal({
             </div>
           </div>
 
-          {/* RIGHT COLUMN: SEARCH, SORT & FULL UNTRUNCATED REVIEWS FEED */}
+          {/* RIGHT COLUMN: SEARCH, SORT & PAGINATED 50-PER-PAGE REVIEWS FEED */}
           <div className="md:col-span-8 flex flex-col min-h-0 bg-white">
-            {/* Search & Sort Toolbar */}
             <div className="p-4 border-b border-gray-100 flex items-center gap-2.5 bg-white shrink-0">
               <div className="relative flex-1">
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPage(1);
+                  }}
                   placeholder="Search reviews by keyword or author..."
                   className="w-full pl-9 pr-8 py-2 rounded-xl border border-gray-200 bg-gray-50/70 focus:bg-white focus:border-primary focus:outline-none text-sm text-gray-900 placeholder:text-gray-400 transition-colors"
                 />
                 {searchQuery && (
                   <button
                     type="button"
-                    onClick={() => setSearchQuery('')}
+                    onClick={() => {
+                      setSearchQuery('');
+                      setDebouncedSearch('');
+                      setPage(1);
+                    }}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -977,20 +1169,26 @@ export default function ReviewsModal({
                 <SlidersHorizontal className="w-3.5 h-3.5 text-gray-400" />
                 <select
                   value={sortBy}
-                  onChange={(e) =>
-                    setSortBy(e.target.value as 'RELEVANT' | 'HIGHEST' | 'LOWEST')
-                  }
+                  onChange={(e) => {
+                    setSortBy(
+                      e.target.value as 'RELEVANT' | 'RECENT' | 'HIGHEST' | 'LOWEST'
+                    );
+                    setPage(1);
+                  }}
                   className="py-2 px-3 rounded-xl border border-gray-200 bg-gray-50/70 focus:bg-white focus:border-primary focus:outline-none text-xs font-semibold text-gray-700 cursor-pointer"
                 >
                   <option value="RELEVANT">Most Relevant</option>
+                  <option value="RECENT">Most Recent</option>
                   <option value="HIGHEST">Highest Rated</option>
                   <option value="LOWEST">Lowest Rated</option>
                 </select>
               </div>
             </div>
 
-            {/* Scrollable Reviews List */}
-            <div onScroll={handleFeedScroll} className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div
+              ref={desktopScrollRef}
+              className="flex-1 overflow-y-auto p-5 space-y-4"
+            >
               {reviewsFeedContent}
             </div>
           </div>
@@ -1002,13 +1200,12 @@ export default function ReviewsModal({
       {/* ========================================================= */}
       {lightboxState && (
         <div
-          className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-8"
+          className="fixed inset-0 !m-0 z-[110] bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 sm:p-8"
           onClick={(e) => {
             e.stopPropagation();
             setLightboxState(null);
           }}
         >
-          {/* Top Lightbox Bar */}
           <div
             className="w-full max-w-5xl flex items-center justify-between gap-3 pb-3 text-white"
             onClick={(e) => e.stopPropagation()}
@@ -1033,7 +1230,6 @@ export default function ReviewsModal({
             </button>
           </div>
 
-          {/* Main Image Stage */}
           <div
             className="relative flex-1 w-full max-w-5xl min-h-0 flex items-center justify-center"
             onClick={(e) => e.stopPropagation()}
@@ -1045,9 +1241,11 @@ export default function ReviewsModal({
                   setLightboxState((prev) =>
                     prev
                       ? {
-                        ...prev,
-                        index: (prev.index - 1 + prev.photos.length) % prev.photos.length,
-                      }
+                          ...prev,
+                          index:
+                            (prev.index - 1 + prev.photos.length) %
+                            prev.photos.length,
+                        }
                       : null
                   )
                 }
@@ -1071,9 +1269,9 @@ export default function ReviewsModal({
                   setLightboxState((prev) =>
                     prev
                       ? {
-                        ...prev,
-                        index: (prev.index + 1) % prev.photos.length,
-                      }
+                          ...prev,
+                          index: (prev.index + 1) % prev.photos.length,
+                        }
                       : null
                   )
                 }
@@ -1086,7 +1284,7 @@ export default function ReviewsModal({
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
-

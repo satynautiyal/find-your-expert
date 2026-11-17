@@ -19,6 +19,7 @@ import {
 import type { RooferProvider } from '@/data/mockRoofers';
 import { EButton } from '@/components/EComponents';
 import SafeImage from '@/components/common/SafeImage';
+import BrandLogoBadge from '@/components/common/BrandLogoBadge';
 import {
   GoogleLogo,
   YelpLogo,
@@ -326,23 +327,12 @@ export default function ProviderCard({
                 <div className="space-y-2">
                   {/* Company Logo + Name */}
                   <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-                    {provider.imageUrl ? (
-                      <div className="h-10 sm:h-11 min-w-[42px] sm:min-w-[46px] max-w-[150px] sm:max-w-[170px] px-2 py-1 rounded-xl bg-white border border-gray-200 shadow-sm flex items-center justify-center shrink-0">
-                        <SafeImage
-                          src={provider.imageUrl}
-                          alt={provider.name}
-                          fallbackCategory={
-                            isCabinets ? 'Custom Cabinets' : 'Roofing'
-                          }
-                          fallbackTitle={provider.name}
-                          className="max-h-8 sm:max-h-9 w-auto max-w-[134px] sm:max-w-[154px] object-contain"
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#EBF3F1] text-[#0F3E35] flex items-center justify-center shrink-0 font-bold text-sm border border-[#0B3B2C]/15">
-                        {provider.name.charAt(0)}
-                      </div>
-                    )}
+                    <BrandLogoBadge
+                      src={provider.imageUrl}
+                      name={provider.name}
+                      fallbackInitial={provider.logoText || provider.name.charAt(0)}
+                      size="card"
+                    />
 
                     <Link
                       href={`/contractors/${provider.slug}`}

@@ -28,6 +28,23 @@ export function getMediaUrl(urlOrKey: string | null | undefined): string {
 }
 
 /**
+ * Strictly resolves ONLY first-party Cloudflare R2 / internal storage URLs.
+ * Returns '' for any third-party external URL so review avatars & photos never hotlink third parties.
+ */
+export function getOwnR2MediaUrl(urlOrKey: string | null | undefined): string {
+  const resolved = getMediaUrl(urlOrKey);
+  if (!resolved) return '';
+  if (resolved.startsWith('/api/storage/')) return resolved;
+  if (
+    resolved.includes('.r2.cloudflarestorage.com') ||
+    resolved.includes('.amazonaws.com')
+  ) {
+    return resolved;
+  }
+  return '';
+}
+
+/**
  * Returns a fallback gradient and placeholder metadata based on category or title
  */
 export function getMediaPlaceholder(category?: string | null, title?: string | null) {

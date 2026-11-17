@@ -23,6 +23,7 @@ import {
   Clock,
   MapPin,
   PenLine,
+  Camera,
 } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
 import {
@@ -33,8 +34,9 @@ import {
   FacebookLogo,
 } from './PlatformLogos';
 import ProfileTeamSection from './ProfileTeamSection';
-import type { ScrapedReviewItemDto } from '@/lib/api';
-import { getMediaUrl } from '@/lib/media-url';
+import PhotoLightboxModal from './PhotoLightboxModal';
+import { fetchProviderReviews, type ScrapedReviewItemDto } from '@/lib/api';
+import { getOwnR2MediaUrl } from '@/lib/media-url';
 
 interface ProfileServicesAndReviewsProps {
   provider: RooferProvider;
@@ -67,10 +69,12 @@ function CustomerReviewCard({
   rev,
   renderPlatformIcon,
   onOpenModal,
+  onOpenPhotoLightbox,
 }: {
   rev: DisplayReviewCardItem;
   renderPlatformIcon: (platform: string) => React.ReactNode;
   onOpenModal: () => void;
+  onOpenPhotoLightbox: (photos: string[], index: number, authorName: string) => void;
 }) {
   const cleanComment = rev.comment.replace(/\nPrice assessment[\s\S]*$/i, '').trim();
   const [expanded, setExpanded] = useState(false);
@@ -97,7 +101,7 @@ function CustomerReviewCard({
   const showAvatar = Boolean(rev.authorAvatarUrl) && !avatarFailed;
 
   return (
-    <article className="p-4 rounded-2xl border border-gray-200/85 bg-[#F8FAFC]/65 hover:bg-white hover:border-gray-300 hover:shadow-xs transition-all flex flex-col justify-between gap-3">
+    <article className="p-4 rounded-2xl border border-gray-300/80 bg-white shadow-[0_4px_14px_-2px_rgba(15,23,42,0.08),0_2px_5px_-1px_rgba(15,23,42,0.04)] hover:shadow-[0_10px_24px_-4px_rgba(15,23,42,0.13)] hover:border-gray-300 transition-all flex flex-col justify-between gap-3">
       <div className="space-y-2.5">
         {/* Reviewer Header */}
         <div className="flex items-start justify-between gap-2">
@@ -187,27 +191,27 @@ function CustomerReviewCard({
 
       {/* Customer-Shared R2 Review Photos Preview (if attached) */}
       {rev.photoUrls && rev.photoUrls.length > 0 && (
-        <div
-          onClick={onOpenModal}
-          className="flex items-center gap-1.5 pt-1 cursor-pointer"
-        >
-          {rev.photoUrls.slice(0, 3).map((pUrl, pIdx) => (
-            <div
+        <div className="flex items-center gap-2 pt-1 flex-wrap">
+          {rev.photoUrls.slice(0, 4).map((pUrl, pIdx) => (
+            <button
               key={pIdx}
-              className="relative w-12 h-12 rounded-lg overflow-hidden border border-gray-200 bg-slate-100 shrink-0"
+              type="button"
+              onClick={() => onOpenPhotoLightbox(rev.photoUrls, pIdx, rev.authorName)}
+              aria-label={`View customer photo ${pIdx + 1} by ${rev.authorName}`}
+              className="group/rph relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border border-gray-200/90 hover:border-gray-300 bg-slate-100 shrink-0 cursor-pointer shadow-sm"
             >
               <img
                 src={pUrl}
-                alt="Customer project photo"
+                alt={`Photo shared by ${rev.authorName}`}
                 loading="lazy"
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover group-hover/rph:scale-105 transition-transform duration-200"
               />
-              {pIdx === 2 && rev.photoUrls.length > 3 && (
-                <div className="absolute inset-0 bg-black/60 text-white text-[10px] font-bold flex items-center justify-center">
-                  +{rev.photoUrls.length - 3}
+              {pIdx === 3 && rev.photoUrls.length > 4 && (
+                <div className="absolute inset-0 bg-black/65 text-white text-xs font-extrabold flex items-center justify-center">
+                  +{rev.photoUrls.length - 4}
                 </div>
               )}
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -222,8 +226,53 @@ export default function ProfileServicesAndReviews({
   scrapedReviews = [],
 }: ProfileServicesAndReviewsProps) {
   const [filterPlatform, setFilterPlatform] = useState<string>('ALL');
+  const [onlyWithPhotos, setOnlyWithPhotos] = useState(false);
+  const [tabFilteredItems, setTabFilteredItems] = useState<ScrapedReviewItemDto[] | null>(null);
+  const [isTabLoading, setIsTabLoading] = useState(false);
+  const [reviewLightbox, setReviewLightbox] = useState<{
+    photos: string[];
+    index: number;
+    authorName: string;
+  } | null>(null);
   const [showAllServices, setShowAllServices] = useState(false);
   const [showAllAreas, setShowAllAreas] = useState(false);
+
+  // When user selects a specific platform or "With Photos" on the profile preview, fetch top 6 matching reviews from paginated API
+  useEffect(() => {
+    if (filterPlatform === 'ALL' && !onlyWithPhotos) {
+      setTabFilteredItems(null);
+      setIsTabLoading(false);
+      return;
+    }
+    if (!provider.slug) return;
+    let cancelled = false;
+    setIsTabLoading(true);
+    fetchProviderReviews(provider.slug, {
+      page: 1,
+      limit: 6,
+      platform: filterPlatform,
+      withPhotos: onlyWithPhotos,
+      sortBy: 'RELEVANT',
+    })
+      .then((res) => {
+        if (!cancelled) {
+          setTabFilteredItems(res.items || []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTabFilteredItems([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsTabLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [provider.slug, filterPlatform, onlyWithPhotos]);
 
   const formattedReviewsUpdated = (() => {
     if (!provider.reviewsLastUpdatedAt) return null;
@@ -325,26 +374,26 @@ export default function ProfileServicesAndReviews({
     : allAreas.slice(1, INITIAL_AREAS_LIMIT);
   const extraAreasCount = Math.max(0, allAreas.length - INITIAL_AREAS_LIMIT);
 
-  // Rating & review distributions from DB
+  // Rating & review distributions strictly from real DB stats (zero static fallbacks)
   const rating = provider.compositeRating || 0;
-  const totalReviews = provider.totalReviews || scrapedReviews.length || 0;
+  const totalSavedInDb = provider.reviewStats?.totalSaved ?? scrapedReviews.length ?? 0;
+  const totalReviews = provider.totalReviews || totalSavedInDb || 0;
 
-  const distribution = [5, 4, 3, 2, 1].map((stars) => {
-    if (scrapedReviews && scrapedReviews.length > 0) {
-      const count = scrapedReviews.filter((r) => Math.round(r.rating || 5) === stars).length;
-      const pct = Math.round((count / scrapedReviews.length) * 100);
-      return { stars, pct, count };
-    }
-    const defaultPct = stars === 5 ? 78 : stars === 4 ? 16 : stars === 3 ? 4 : 1;
-    return {
-      stars,
-      pct: totalReviews > 0 ? defaultPct : 0,
-      count: Math.round((totalReviews * defaultPct) / 100),
-    };
-  });
+  const distribution = provider.reviewStats?.starDistribution
+    ? provider.reviewStats.starDistribution
+    : [5, 4, 3, 2, 1].map((stars) => {
+        if (scrapedReviews && scrapedReviews.length > 0) {
+          const count = scrapedReviews.filter((r) => Math.round(r.rating || 5) === stars).length;
+          const pct = Math.round((count / scrapedReviews.length) * 100);
+          return { stars, pct, count };
+        }
+        return { stars, pct: 0, count: 0 };
+      });
 
-  // Real scraped reviews from DB
-  const allDisplayReviews = (scrapedReviews || []).map((sr) => {
+  const activeRawPreviewSource =
+    tabFilteredItems !== null ? tabFilteredItems : scrapedReviews || [];
+
+  const formatReviewItem = (sr: ScrapedReviewItemDto, origIdx: number) => {
     const rawName = (sr.authorName || '').trim();
     let authorName = rawName || 'Verified Homeowner';
     if (/^HU-\d+$/i.test(authorName)) {
@@ -366,16 +415,25 @@ export default function ProfileServicesAndReviews({
         });
       }
     }
+    const cleanPhotos = (sr.photoUrls || []).map((u) => getOwnR2MediaUrl(u)).filter(Boolean);
     return {
       authorName,
-      authorAvatarUrl: sr.authorAvatarUrl ? getMediaUrl(sr.authorAvatarUrl) : '',
-      photoUrls: (sr.photoUrls || []).map((u) => getMediaUrl(u)).filter(Boolean),
+      authorAvatarUrl: sr.authorAvatarUrl ? getOwnR2MediaUrl(sr.authorAvatarUrl) : '',
+      photoUrls: cleanPhotos,
       platform: sr.platform?.toUpperCase() || 'GOOGLE',
       rating: sr.rating || 5,
       date: formattedDate,
       comment: sr.comment,
+      _origIdx: origIdx,
     };
-  });
+  };
+
+  const allDisplayReviews = (scrapedReviews || []).map(formatReviewItem);
+  const filteredReviews = activeRawPreviewSource.map(formatReviewItem);
+
+  const photoReviewsCount =
+    provider.reviewStats?.withPhotosCount ??
+    allDisplayReviews.filter((r) => r.photoUrls.length > 0).length;
 
   const renderPlatformIcon = (platform: string) => {
     switch (platform) {
@@ -433,6 +491,8 @@ export default function ProfileServicesAndReviews({
       : null,
   ].filter((item): item is NonNullable<typeof item> => Boolean(item));
 
+  const savedByPlat = provider.reviewStats?.platformCounts || {};
+
   const platformFilterOptions = [
     { key: 'ALL', label: 'All Reviews', count: totalReviews },
     {
@@ -440,43 +500,39 @@ export default function ProfileServicesAndReviews({
       label: 'Google',
       count:
         activePlatformSummaries.find((p) => p.key === 'GOOGLE')?.count ||
-        allDisplayReviews.filter((r) => r.platform === 'GOOGLE').length,
+        savedByPlat.GOOGLE ||
+        0,
     },
     {
       key: 'YELP',
       label: 'Yelp',
       count:
         activePlatformSummaries.find((p) => p.key === 'YELP')?.count ||
-        allDisplayReviews.filter((r) => r.platform === 'YELP').length,
+        savedByPlat.YELP ||
+        0,
     },
     {
       key: 'HOMEADVISOR',
       label: 'HomeAdvisor',
       count:
         activePlatformSummaries.find((p) => p.key === 'HOMEADVISOR')?.count ||
-        allDisplayReviews.filter((r) => r.platform === 'HOMEADVISOR').length,
+        savedByPlat.HOMEADVISOR ||
+        0,
     },
     {
       key: 'HOUZZ',
       label: 'Houzz',
       count:
         activePlatformSummaries.find((p) => p.key === 'HOUZZ')?.count ||
-        allDisplayReviews.some((r) => r.platform === 'HOUZZ')
-          ? activePlatformSummaries.find((p) => p.key === 'HOUZZ')?.count ||
-            allDisplayReviews.filter((r) => r.platform === 'HOUZZ').length
-          : 0,
+        savedByPlat.HOUZZ ||
+        0,
     },
   ].filter(
     (opt) =>
       opt.key === 'ALL' ||
       opt.count > 0 ||
-      allDisplayReviews.some((r) => r.platform === opt.key)
+      Boolean(savedByPlat[opt.key])
   );
-
-  const filteredReviews =
-    filterPlatform === 'ALL'
-      ? allDisplayReviews
-      : allDisplayReviews.filter((r) => r.platform === filterPlatform);
 
   const selectedPlatformSummary =
     filterPlatform !== 'ALL'
@@ -492,7 +548,7 @@ export default function ProfileServicesAndReviews({
         {/* Left Card: Compact Services Offered */}
         <section
           id="services"
-          className="lg:col-span-7 bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between gap-4 scroll-mt-36"
+          className="lg:col-span-7 bg-white rounded-2xl border border-gray-300/85 p-5 sm:p-6 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.11),0_4px_10px_-2px_rgba(15,23,42,0.06)] flex flex-col justify-between gap-4 scroll-mt-36"
         >
           <div className="space-y-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -549,7 +605,7 @@ export default function ProfileServicesAndReviews({
         {/* Right Card: Matching Compact Service Areas */}
         <section
           id="service-areas"
-          className="lg:col-span-5 bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 shadow-xs flex flex-col justify-between gap-4 scroll-mt-36"
+          className="lg:col-span-5 bg-white rounded-2xl border border-gray-300/85 p-5 sm:p-6 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.11),0_4px_10px_-2px_rgba(15,23,42,0.06)] flex flex-col justify-between gap-4 scroll-mt-36"
         >
           <div className="space-y-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -570,7 +626,7 @@ export default function ProfileServicesAndReviews({
             {/* Clean Regional Coverage Chips */}
             <div className="flex flex-wrap items-center gap-2">
               {allAreas[0] && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#0B3B2C] text-white shadow-2xs">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#0B3B2C] text-white shadow-sm">
                   <MapPin className="w-3 h-3 text-emerald-300 shrink-0" />
                   <span>{allAreas[0]}</span>
                 </span>
@@ -621,7 +677,7 @@ export default function ProfileServicesAndReviews({
       {/* =================================================================== */}
       <section
         id="reviews"
-        className="bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 shadow-sm space-y-5 scroll-mt-36"
+        className="bg-white rounded-2xl border border-gray-300/85 p-5 sm:p-6 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.11),0_4px_10px_-2px_rgba(15,23,42,0.06)] space-y-5 scroll-mt-36"
       >
         {/* Top Header Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -650,7 +706,7 @@ export default function ProfileServicesAndReviews({
             <button
               type="button"
               onClick={() => onOpenReviewsModal?.(filterPlatform)}
-              className="inline-flex items-center gap-1 py-2 px-3.5 rounded-xl bg-[#0B3B2C] hover:bg-[#082B20] text-white font-bold text-xs transition-colors cursor-pointer shadow-2xs"
+              className="inline-flex items-center gap-1 py-2 px-3.5 rounded-xl bg-[#0B3B2C] hover:bg-[#082B20] text-white font-bold text-xs transition-colors cursor-pointer shadow-sm"
             >
               <span>See all {totalReviews} reviews</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -713,7 +769,7 @@ export default function ProfileServicesAndReviews({
                     key={plat.key}
                     type="button"
                     onClick={() => onOpenReviewsModal?.(plat.key)}
-                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-gray-200/90 bg-white hover:border-gray-300 shadow-2xs transition-all text-xs cursor-pointer text-left"
+                    className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-gray-200/90 bg-white hover:border-gray-300 shadow-sm transition-all text-xs cursor-pointer text-left"
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
                       {renderPlatformIcon(plat.key)}
@@ -741,19 +797,22 @@ export default function ProfileServicesAndReviews({
           </div>
         </div>
 
-        {/* Platform Filter Tabs */}
-        {platformFilterOptions.length > 1 && (
+        {/* Platform + "With Photos" Filter Tabs */}
+        {(platformFilterOptions.length > 1 || photoReviewsCount > 0) && (
           <div className="flex flex-wrap items-center gap-2">
             {platformFilterOptions.map((opt) => {
-              const active = filterPlatform === opt.key;
+              const active = filterPlatform === opt.key && !onlyWithPhotos;
               return (
                 <button
                   key={opt.key}
                   type="button"
-                  onClick={() => setFilterPlatform(opt.key)}
+                  onClick={() => {
+                    setFilterPlatform(opt.key);
+                    setOnlyWithPhotos(false);
+                  }}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                     active
-                      ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] shadow-2xs'
+                      ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] shadow-sm'
                       : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                   }`}
                 >
@@ -771,12 +830,55 @@ export default function ProfileServicesAndReviews({
                 </button>
               );
             })}
+
+            {photoReviewsCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setOnlyWithPhotos((prev) => !prev)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  onlyWithPhotos
+                    ? 'bg-[#EA580C] text-white border-[#EA580C] shadow-sm'
+                    : 'bg-orange-50/70 text-[#C2410C] border-orange-200 hover:bg-orange-100/70'
+                }`}
+              >
+                <Camera className="w-3.5 h-3.5 shrink-0" />
+                <span>With Photos</span>
+                <span
+                  className={`text-[11px] tabular-nums ${
+                    onlyWithPhotos ? 'text-white/85' : 'text-[#EA580C]/80'
+                  }`}
+                >
+                  ({photoReviewsCount})
+                </span>
+              </button>
+            )}
           </div>
         )}
 
         {/* Full-Width 3-Column Customer Review Cards Grid */}
         <div id="reviews-list">
-          {filteredReviews.length > 0 ? (
+          {isTabLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3].map((sk) => (
+                <div
+                  key={sk}
+                  className="p-4 rounded-2xl border border-gray-200/80 bg-[#F8FAFC]/60 space-y-3 animate-pulse"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-full bg-gray-200" />
+                    <div className="space-y-1.5">
+                      <div className="w-28 h-3 bg-gray-200 rounded" />
+                      <div className="w-16 h-2.5 bg-gray-100 rounded" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="w-full h-3 bg-gray-100 rounded" />
+                    <div className="w-5/6 h-3 bg-gray-100 rounded" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filteredReviews.length > 0 ? (
             <div className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
                 {filteredReviews.slice(0, 6).map((rev, idx) => (
@@ -784,7 +886,12 @@ export default function ProfileServicesAndReviews({
                     key={`${rev.platform}-${rev.authorName}-${idx}`}
                     rev={rev}
                     renderPlatformIcon={renderPlatformIcon}
-                    onOpenModal={() => onOpenReviewsModal?.(filterPlatform)}
+                    onOpenModal={() =>
+                      onOpenReviewsModal?.(onlyWithPhotos ? 'WITH_PHOTOS' : filterPlatform)
+                    }
+                    onOpenPhotoLightbox={(photos, index, authorName) =>
+                      setReviewLightbox({ photos, index, authorName })
+                    }
                   />
                 ))}
               </div>
@@ -792,17 +899,22 @@ export default function ProfileServicesAndReviews({
               <div className="flex justify-center pt-1">
                 <button
                   type="button"
-                  onClick={() => onOpenReviewsModal?.(filterPlatform)}
-                  className="py-2.5 px-6 rounded-xl bg-[#F8FAFC] hover:bg-slate-100 border border-gray-200/90 hover:border-gray-300 text-xs sm:text-sm font-bold text-gray-900 transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                  onClick={() =>
+                    onOpenReviewsModal?.(onlyWithPhotos ? 'WITH_PHOTOS' : filterPlatform)
+                  }
+                  className="py-2.5 px-6 rounded-xl bg-[#F8FAFC] hover:bg-slate-100 border border-gray-300/80 hover:border-gray-400 text-xs sm:text-sm font-bold text-gray-900 transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
                 >
                   <span>
-                    Read all{' '}
-                    {filterPlatform === 'ALL'
-                      ? `${allDisplayReviews.length} verified reviews`
-                      : `${filteredReviews.length} ${
-                          platformFilterOptions.find(
-                            (o) => o.key === filterPlatform
-                          )?.label || ''
+                    {onlyWithPhotos
+                      ? `Read all ${photoReviewsCount} photo reviews`
+                      : filterPlatform === 'ALL'
+                      ? `Read all ${totalSavedInDb || totalReviews} verified reviews`
+                      : `Read all ${
+                          savedByPlat[filterPlatform] ||
+                          platformFilterOptions.find((o) => o.key === filterPlatform)?.count ||
+                          filteredReviews.length
+                        } ${
+                          platformFilterOptions.find((o) => o.key === filterPlatform)?.label || ''
                         } reviews`}
                   </span>
                   <ChevronRight className="w-4 h-4 text-[#EA580C]" />
@@ -831,7 +943,7 @@ export default function ProfileServicesAndReviews({
               <button
                 type="button"
                 onClick={() => onOpenReviewsModal?.('ALL')}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-gray-50 text-gray-900 border border-gray-200 shadow-2xs text-xs font-bold transition-all cursor-pointer shrink-0"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-gray-50 text-gray-900 border border-gray-300 shadow-sm text-xs font-bold transition-all cursor-pointer shrink-0"
               >
                 <span>View all reviews</span>
                 <ChevronRight className="w-3.5 h-3.5 text-[#EA580C]" />
@@ -840,6 +952,19 @@ export default function ProfileServicesAndReviews({
           ) : null}
         </div>
       </section>
+
+      {/* Lightbox for Customer-Uploaded Review Photos */}
+      <PhotoLightboxModal
+        isOpen={Boolean(reviewLightbox)}
+        onClose={() => setReviewLightbox(null)}
+        photos={reviewLightbox?.photos || []}
+        initialIndex={reviewLightbox?.index || 0}
+        providerName={
+          reviewLightbox
+            ? `${provider.name} — Photo by ${reviewLightbox.authorName}`
+            : provider.name
+        }
+      />
     </div>
   );
 }

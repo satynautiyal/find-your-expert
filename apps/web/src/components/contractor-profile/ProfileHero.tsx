@@ -21,6 +21,7 @@ import type { RooferProvider } from '@/data/mockRoofers';
 import { GoogleLogo, YelpLogo, HomeAdvisorLogo, HouzzLogo } from './PlatformLogos';
 import PhotoLightboxModal from './PhotoLightboxModal';
 import ProfilePhotoCarousel from './ProfilePhotoCarousel';
+import BrandLogoBadge from '@/components/common/BrandLogoBadge';
 
 interface ProfileHeroProps {
   provider: RooferProvider;
@@ -218,7 +219,7 @@ export default function ProfileHero({
                 href={websiteHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200/90 bg-white hover:bg-gray-50 hover:border-gray-300 text-xs font-semibold text-gray-700 hover:text-gray-950 shadow-2xs transition-all"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300/85 bg-white hover:bg-gray-50 hover:border-gray-300 text-xs font-semibold text-gray-700 hover:text-gray-950 shadow-sm transition-all"
               >
                 <span>Website</span>
                 <ArrowUpRight className="w-3.5 h-3.5 text-gray-500" />
@@ -228,7 +229,7 @@ export default function ProfileHero({
             <button
               type="button"
               onClick={handleShare}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200/90 bg-white hover:bg-gray-50 hover:border-gray-300 text-xs font-semibold text-gray-700 hover:text-gray-950 shadow-2xs transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-300/85 bg-white hover:bg-gray-50 hover:border-gray-300 text-xs font-semibold text-gray-700 hover:text-gray-950 shadow-sm transition-all cursor-pointer"
             >
               {copiedLink ? (
                 <>
@@ -246,10 +247,10 @@ export default function ProfileHero({
             <button
               type="button"
               onClick={handleSaveToggle}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold shadow-2xs transition-all cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold shadow-sm transition-all cursor-pointer ${
                 isSaved
                   ? 'bg-rose-50 border-rose-200 text-rose-600'
-                  : 'bg-white hover:bg-gray-50 border-gray-200/90 hover:border-gray-300 text-gray-700 hover:text-gray-950'
+                  : 'bg-white hover:bg-gray-50 border-gray-300/85 hover:border-gray-300 text-gray-700 hover:text-gray-950'
               }`}
             >
               <Heart
@@ -265,7 +266,7 @@ export default function ProfileHero({
         {/* =============================================================== */}
         {/* 2. UNIFIED ARCHITECTURAL HERO CARD (Locked Media + Executive Info) */}
         {/* =============================================================== */}
-        <div className="bg-white border border-gray-200/90 rounded-2xl p-4 sm:p-6 shadow-[0_8px_28px_-6px_rgba(15,23,42,0.08),0_2px_8px_-2px_rgba(15,23,42,0.04)]">
+        <div className="bg-white border border-gray-300/85 rounded-2xl p-4 sm:p-6 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.11),0_4px_10px_-2px_rgba(15,23,42,0.06)]">
           <div className="flex flex-col lg:flex-row gap-5 sm:gap-6 xl:gap-7 items-stretch">
             {/* LEFT ZONE: STRICT FIXED-DIMENSION MEDIA SHOWCASE */}
             <ProfilePhotoCarousel
@@ -281,16 +282,14 @@ export default function ProfileHero({
             <div className="flex-1 min-w-0 flex flex-col justify-between gap-4">
               {/* Top Block: Logo Plaque + Full-Width Business Title + Metadata */}
               <div className="space-y-3">
-                <div className="flex items-start gap-3.5 sm:gap-4">
+                <div className="flex flex-col xs:flex-row xs:items-center gap-3.5 sm:gap-4">
                   {hasProjectPhotos && businessLogo ? (
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white border border-gray-200/90 shadow-2xs p-2 flex items-center justify-center shrink-0">
-                      <img
-                        src={businessLogo}
-                        alt={`${provider.name} logo`}
-                        onError={() => setLogoFailed(true)}
-                        className="max-w-full max-h-full w-auto h-auto object-contain"
-                      />
-                    </div>
+                    <BrandLogoBadge
+                      src={businessLogo}
+                      name={provider.name}
+                      fallbackInitial={provider.logoText || provider.name.charAt(0)}
+                      size="hero"
+                    />
                   ) : null}
 
                   <div className="min-w-0 flex-1 space-y-1.5">
@@ -377,7 +376,7 @@ export default function ProfileHero({
               </div>
 
               {/* Middle Block: Unified 2-Column Vetted Audit & Multi-Platform Ratings Panel */}
-              <div className="rounded-2xl border border-gray-200/90 bg-[#F8FAFC] grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-200/80 overflow-hidden">
+              <div className="rounded-2xl border border-gray-300/80 bg-[#F8FAFC] grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-gray-200/90 overflow-hidden shadow-sm">
                 {/* Left Half: Prosvetted Audit Score & 4-Point Checklist */}
                 <div className="p-3.5 sm:p-4 flex flex-col justify-between gap-3">
                   <div className="flex items-center gap-3 pb-2.5 border-b border-gray-200/70">
@@ -516,7 +515,7 @@ export default function ProfileHero({
                 {provider.phone ? (
                   <a
                     href={`tel:${provider.phone.replace(/\D/g, '')}`}
-                    className="h-11 sm:h-12 bg-white hover:bg-slate-50 text-gray-900 border border-gray-300 hover:border-gray-400 font-bold text-sm px-5 rounded-xl shadow-2xs transition-all inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                    className="h-11 sm:h-12 bg-white hover:bg-slate-50 text-gray-900 border border-gray-300 hover:border-gray-400 font-bold text-sm px-5 rounded-xl shadow-sm transition-all inline-flex items-center justify-center gap-2 whitespace-nowrap"
                   >
                     <Phone className="w-4 h-4 text-[#0B3B2C] shrink-0" />
                     <span>Call {provider.displayPhone || provider.phone}</span>
@@ -525,7 +524,7 @@ export default function ProfileHero({
                   <button
                     type="button"
                     onClick={onScrollToReviews}
-                    className="h-11 sm:h-12 bg-white hover:bg-slate-50 text-gray-900 border border-gray-300 font-bold text-sm px-5 rounded-xl shadow-2xs transition-colors inline-flex items-center justify-center whitespace-nowrap cursor-pointer"
+                    className="h-11 sm:h-12 bg-white hover:bg-slate-50 text-gray-900 border border-gray-300 font-bold text-sm px-5 rounded-xl shadow-sm transition-colors inline-flex items-center justify-center whitespace-nowrap cursor-pointer"
                   >
                     Read Customer Reviews
                   </button>

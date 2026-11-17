@@ -5,6 +5,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createHash } from 'crypto';
@@ -262,6 +263,47 @@ export class StorageService {
     fs.mkdirSync(path.dirname(localFilePath), { recursive: true });
     fs.writeFileSync(localFilePath, buffer);
     this.logger.debug(`Saved image locally to: ${localFilePath}`);
+  }
+
+  /**
+   * Read raw object bytes + contentType from Cloudflare R2 (or local fallback).
+   */
+  async getObjectBuffer(
+    keyOrUrl: string
+  ): Promise<{ buffer: Buffer; contentType: string } | null> {
+    const cleanKey = this.extractCleanKey(keyOrUrl);
+    if (!cleanKey || cleanKey.startsWith('http')) return null;
+
+    if (this.isReady && this.s3Client) {
+      try {
+        const out = await this.s3Client.send(
+          new GetObjectCommand({
+            Bucket: this.bucketName,
+            Key: cleanKey,
+          })
+        );
+        if (!out.Body) return null;
+        const bytes = await out.Body.transformToByteArray();
+        return {
+          buffer: Buffer.from(bytes),
+          contentType: out.ContentType || 'image/png',
+        };
+      } catch (err: any) {
+        this.logger.warn(`getObjectBuffer failed for ${cleanKey}: ${err.message}`);
+        return null;
+      }
+    }
+
+    const localPath = this.getLocalFilePath(cleanKey);
+    if (!localPath) return null;
+    return {
+      buffer: fs.readFileSync(localPath),
+      contentType: localPath.endsWith('.webp')
+        ? 'image/webp'
+        : localPath.endsWith('.jpg') || localPath.endsWith('.jpeg')
+        ? 'image/jpeg'
+        : 'image/png',
+    };
   }
 
   /**
@@ -550,6 +592,32 @@ export class StorageService {
    */
   public hashUrl(url: string): string {
     return createHash('sha1').update(url.trim()).digest('hex').slice(0, 12);
+  }
+
+  /**
+   * List all stored object keys matching a prefix in Cloudflare R2.
+   */
+  async listObjectKeys(prefix: string): Promise<string[]> {
+    const cleanPrefix = prefix.replace(/^\/+/, '');
+    if (!this.isReady || !this.s3Client) return [];
+
+    const keys: string[] = [];
+    let continuationToken: string | undefined;
+    do {
+      const res = await this.s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: this.bucketName,
+          Prefix: cleanPrefix,
+          ContinuationToken: continuationToken,
+        })
+      );
+      for (const obj of res.Contents || []) {
+        if (obj.Key) keys.push(obj.Key);
+      }
+      continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+    } while (continuationToken);
+
+    return keys.sort();
   }
 
   /**

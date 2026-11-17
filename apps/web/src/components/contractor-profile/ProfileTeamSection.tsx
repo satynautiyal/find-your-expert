@@ -116,7 +116,7 @@ export default function ProfileTeamSection({ provider }: ProfileTeamSectionProps
   return (
     <section
       id="team"
-      className="bg-white rounded-2xl border border-gray-200/90 p-5 sm:p-6 shadow-sm scroll-mt-36"
+      className="bg-white rounded-2xl border border-gray-300/85 p-5 sm:p-6 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.11),0_4px_10px_-2px_rgba(15,23,42,0.06)] scroll-mt-36"
     >
       {/* Header matching reference design */}
       <div className="mb-3.5">
