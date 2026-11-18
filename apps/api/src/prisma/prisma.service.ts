@@ -1,5 +1,56 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import * as dns from 'dns';
+
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
+
+/**
+ * Resolves a MySQL hostname (e.g. Hostinger `auth-db629.hstgr.io`) to its live IPv4 A-record
+ * before Prisma's Rust engine connects, preventing Windows dual-stack IPv6 blackhole timeouts
+ * when the host advertises an unreachable AAAA record (`2a02:4780:...`).
+ */
+export async function resolveDatabaseUrlIpv4(rawUrl?: string): Promise<string | undefined> {
+  const target = rawUrl || process.env.DATABASE_URL;
+  if (!target) return undefined;
+  try {
+    const parsed = new URL(target);
+    const host = parsed.hostname;
+    if (
+      host &&
+      host !== 'localhost' &&
+      !/^\d{1,3}(\.\d{1,3}){3}$/.test(host) &&
+      !host.includes(':')
+    ) {
+      let ipv4: string | undefined;
+      try {
+        const records = await dns.promises.resolve4(host);
+        ipv4 = records?.[0];
+      } catch {
+        const lookedUp = await dns.promises.lookup(host, { family: 4 });
+        ipv4 = lookedUp?.address;
+      }
+      if (ipv4) {
+        parsed.hostname = ipv4;
+      }
+    }
+    if (!parsed.searchParams.has('connection_limit')) {
+      parsed.searchParams.set('connection_limit', '10');
+    }
+    if (!parsed.searchParams.has('pool_timeout')) {
+      parsed.searchParams.set('pool_timeout', '25');
+    }
+    if (!parsed.searchParams.has('connect_timeout')) {
+      parsed.searchParams.set('connect_timeout', '20');
+    }
+    const resolved = parsed.toString();
+    process.env.DATABASE_URL = resolved;
+    return resolved;
+  } catch {
+    return target;
+  }
+}
 
 function buildOptimizedDatabaseUrl(rawUrl?: string): string | undefined {
   if (!rawUrl) return undefined;
@@ -60,10 +111,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       if (this.keepAliveTimer.unref) {
         this.keepAliveTimer.unref();
       }
-    } catch {
+    } catch (err: any) {
       this.isDbHealthy = false;
       this.logger.warn(
-        'Could not connect to database on startup. Please ensure DATABASE_URL is set in .env'
+        `Could not connect to database on startup: ${err?.message || 'Unknown error'}`
       );
     }
   }
@@ -124,6 +175,16 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           `ALTER TABLE \`scraped_reviews\` ADD COLUMN \`photo_urls\` JSON NULL`
         );
         this.logger.log('Added photo_urls JSON column to scraped_reviews table');
+      }
+
+      const aiAnalysisColRows = await this.$queryRawUnsafe<Array<{ COLUMN_NAME?: string }>>(
+        `SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'provider_profiles' AND COLUMN_NAME = 'ai_review_analysis' LIMIT 1`
+      );
+      if (!aiAnalysisColRows || aiAnalysisColRows.length === 0) {
+        await this.$executeRawUnsafe(
+          `ALTER TABLE \`provider_profiles\` ADD COLUMN \`ai_review_analysis\` JSON NULL`
+        );
+        this.logger.log('Added ai_review_analysis JSON column to provider_profiles table');
       }
     } catch (err: any) {
       this.logger.warn(`ensureProjectTables warning: ${err.message}`);

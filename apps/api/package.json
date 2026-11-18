@@ -9,6 +9,7 @@
     "scrape:projects": "ts-node scripts/scrape-project-photos.ts",
     "scrape:full": "ts-node scripts/scrape-full-pipeline.ts",
     "sync:reviews": "ts-node scripts/sync-reviews-worker.ts",
+    "ai:reviews": "ts-node scripts/generate-ai-review-summaries.ts",
     "sync:yelp-homeadvisor": "ts-node scripts/sync-yelp-homeadvisor.ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "dev": "nest start --watch",

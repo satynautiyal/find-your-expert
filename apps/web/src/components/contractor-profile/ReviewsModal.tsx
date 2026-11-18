@@ -26,6 +26,7 @@ import {
   HouzzLogo,
   FacebookLogo,
 } from './PlatformLogos';
+import AiReviewSummaryCard from './AiReviewSummaryCard';
 
 const PAGE_SIZE = 50;
 
@@ -35,6 +36,7 @@ interface ReviewsModalProps {
   provider: RooferProvider;
   scrapedReviews?: ScrapedReviewItemDto[];
   initialPlatform?: string;
+  initialSearch?: string;
 }
 
 function ExpandableReviewText({ text }: { text: string }) {
@@ -210,6 +212,7 @@ export default function ReviewsModal({
   onClose,
   provider,
   initialPlatform = 'ALL',
+  initialSearch = '',
 }: ReviewsModalProps) {
   const [selectedPlatform, setSelectedPlatform] = useState<string>(
     initialPlatform === 'WITH_PHOTOS' ? 'ALL' : initialPlatform
@@ -217,8 +220,8 @@ export default function ReviewsModal({
   const [onlyWithPhotos, setOnlyWithPhotos] = useState<boolean>(
     initialPlatform === 'WITH_PHOTOS'
   );
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch.trim());
   const [sortBy, setSortBy] = useState<'RELEVANT' | 'RECENT' | 'HIGHEST' | 'LOWEST'>('RELEVANT');
   const [page, setPage] = useState(1);
 
@@ -257,8 +260,9 @@ export default function ReviewsModal({
         setSelectedPlatform(initialPlatform || 'ALL');
         setOnlyWithPhotos(false);
       }
-      setSearchQuery('');
-      setDebouncedSearch('');
+      const cleanInitSearch = (initialSearch || '').trim();
+      setSearchQuery(cleanInitSearch);
+      setDebouncedSearch(cleanInitSearch);
       setSortBy('RELEVANT');
       setPage(1);
       setLightboxState(null);
@@ -268,7 +272,7 @@ export default function ReviewsModal({
     } else {
       setLightboxState(null);
     }
-  }, [isOpen, initialPlatform, provider.slug, provider.reviewStats]);
+  }, [isOpen, initialPlatform, initialSearch, provider.slug, provider.reviewStats]);
 
   // Fetch strictly 50 reviews per page from dedicated server-side paginated API
   useEffect(() => {
@@ -974,7 +978,22 @@ export default function ReviewsModal({
             </div>
           </div>
 
-          <div className="p-3.5 space-y-3 pb-8">{reviewsFeedContent}</div>
+          <div className="p-3.5 space-y-3 pb-8">
+            {selectedPlatform === 'ALL' && !onlyWithPhotos && (
+              <AiReviewSummaryCard
+                provider={provider}
+                variant="compact"
+                activeKeyword={debouncedSearch}
+                onSelectTagKeyword={(kw) => {
+                  setSearchQuery(kw);
+                  setDebouncedSearch(kw);
+                  setPage(1);
+                  scrollFeedsToTop();
+                }}
+              />
+            )}
+            {reviewsFeedContent}
+          </div>
         </div>
 
         {/* ========================================================= */}
@@ -1189,6 +1208,19 @@ export default function ReviewsModal({
               ref={desktopScrollRef}
               className="flex-1 overflow-y-auto p-5 space-y-4"
             >
+              {selectedPlatform === 'ALL' && !onlyWithPhotos && (
+                <AiReviewSummaryCard
+                  provider={provider}
+                  variant="compact"
+                  activeKeyword={debouncedSearch}
+                  onSelectTagKeyword={(kw) => {
+                    setSearchQuery(kw);
+                    setDebouncedSearch(kw);
+                    setPage(1);
+                    scrollFeedsToTop();
+                  }}
+                />
+              )}
               {reviewsFeedContent}
             </div>
           </div>

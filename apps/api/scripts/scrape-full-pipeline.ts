@@ -7,9 +7,10 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 dotenv.config();
 
 import { PrismaClient } from '@prisma/client';
+import { resolveDatabaseUrlIpv4 } from '../src/prisma/prisma.service';
 import { syncSingleProviderReviews } from './sync-reviews-worker';
 
-const prisma = new PrismaClient();
+let prisma = new PrismaClient();
 
 /**
  * Permanent Master Scraper Pipeline (`npm run scrape:full` or `npm run scrape:full -- <slug>`)
@@ -47,6 +48,10 @@ async function main() {
   });
 
   // Step 6-7: Up to 2,000 Reviews + R2 Customer Review Photos + Progressive AI Summary
+  const resolvedUrl = await resolveDatabaseUrlIpv4(process.env.DATABASE_URL);
+  prisma = new PrismaClient(
+    resolvedUrl ? { datasources: { db: { url: resolvedUrl } } } : undefined
+  );
   await prisma.$connect();
   try {
     const providers = await prisma.providerProfile.findMany({

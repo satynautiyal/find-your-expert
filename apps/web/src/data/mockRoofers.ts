@@ -43,6 +43,34 @@ export interface ProviderReviewStats {
   starDistribution: Array<{ stars: number; count: number; pct: number }>;
 }
 
+export interface AiReviewTagItem {
+  label: string;
+  keyword: string;
+  mentionCount: number;
+  sentiment: 'positive' | 'neutral' | 'caution';
+  category:
+    | 'craftsmanship'
+    | 'punctuality'
+    | 'pricing'
+    | 'communication'
+    | 'cleanliness'
+    | 'specialty'
+    | 'trust'
+    | string;
+}
+
+export interface AiReviewAnalysisData {
+  verdictHeadline: string;
+  summary: string;
+  tags: AiReviewTagItem[];
+  analyzedCount: number;
+  maxWindowSize?: number;
+  platformsIncluded?: Partial<Record<'GOOGLE' | 'HOUZZ' | 'YELP' | 'HOMEADVISOR' | string, number>>;
+  averageRating?: number;
+  generatedAt?: string;
+  version?: number;
+}
+
 export interface RooferProvider {
   id: string;
   name: string;
@@ -100,6 +128,7 @@ export interface RooferProvider {
   verifiedYear: number;
   reviewsLastUpdatedAt?: string;
   aiReviewSummary?: string;
+  aiReviewAnalysis?: AiReviewAnalysisData;
   aiSummaryUpdatedAt?: string;
   reviewStats?: ProviderReviewStats;
   scrapedReviews?: Array<{

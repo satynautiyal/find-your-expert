@@ -35,9 +35,11 @@ export default function ContractorProfilePage() {
   const [costGuideOpen, setCostGuideOpen] = useState(false);
   const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
   const [reviewsModalPlatform, setReviewsModalPlatform] = useState<string>('ALL');
+  const [reviewsModalSearch, setReviewsModalSearch] = useState<string>('');
 
-  const handleOpenReviewsModal = (initialPlatform?: string) => {
+  const handleOpenReviewsModal = (initialPlatform?: string, initialSearch?: string) => {
     setReviewsModalPlatform(initialPlatform || 'ALL');
+    setReviewsModalSearch(initialSearch || '');
     setReviewsModalOpen(true);
   };
 
@@ -197,6 +199,7 @@ export default function ContractorProfilePage() {
         provider={provider}
         scrapedReviews={scrapedReviews}
         initialPlatform={reviewsModalPlatform}
+        initialSearch={reviewsModalSearch}
       />
     </div>
   );

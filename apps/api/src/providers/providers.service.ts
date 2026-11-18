@@ -9,7 +9,10 @@ import {
   ProjectsScraperService,
   ScraperHttpUtil,
 } from '../scrapers';
-import { AiReviewSummaryService } from './ai-review-summary.service';
+import {
+  AiReviewSummaryService,
+  AiReviewAnalysisPayload,
+} from './ai-review-summary.service';
 import { GetProvidersQueryDto } from './dto/get-providers.dto';
 import { Prisma, ReviewPlatform, PhotoCategory } from '@prisma/client';
 
@@ -131,6 +134,7 @@ export interface FormattedProvider {
   verifiedYear: number;
   reviewsLastUpdatedAt?: string;
   aiReviewSummary?: string;
+  aiReviewAnalysis?: AiReviewAnalysisPayload;
   aiSummaryUpdatedAt?: string;
   reviewStats?: ProviderReviewStats;
   scrapedReviews?: FormattedReviewItem[];
@@ -141,6 +145,7 @@ export class ProvidersService implements OnApplicationBootstrap {
   private readonly logger = new Logger(ProvidersService.name);
   private reviewPhotosColumnReady = false;
   private teamMembersTableReady = false;
+  private aiSummaryColumnReady = false;
 
   private static readonly LIST_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min fresh
   private static readonly LIST_CACHE_SWR_MS = 25 * 60 * 1000; // +25 min SWR
@@ -154,7 +159,7 @@ export class ProvidersService implements OnApplicationBootstrap {
     private readonly reviewsScraperService: ReviewsScraperService,
     private readonly projectsScraperService: ProjectsScraperService,
     private readonly aiReviewSummaryService: AiReviewSummaryService
-  ) {}
+  ) { }
 
   /**
    * Ensure `scraped_reviews.photo_urls` JSON column exists in MariaDB/MySQL (idempotent).
@@ -173,14 +178,80 @@ export class ProvidersService implements OnApplicationBootstrap {
       // Ensure profileUrl & sourceUrl columns are TEXT so >191-char Google Maps place URLs never truncate or fail with P2000
       await this.prisma
         .$executeRawUnsafe(`ALTER TABLE \`platform_reviews\` MODIFY COLUMN \`profileUrl\` TEXT NOT NULL`)
-        .catch(() => {});
+        .catch(() => { });
       await this.prisma
         .$executeRawUnsafe(`ALTER TABLE \`scraped_reviews\` MODIFY COLUMN \`sourceUrl\` TEXT NULL`)
-        .catch(() => {});
+        .catch(() => { });
       this.reviewPhotosColumnReady = true;
     } catch (err: any) {
       this.logger.warn(`ensureReviewPhotosColumn check warning: ${err?.message || err}`);
     }
+  }
+
+  /**
+   * Ensure `provider_profiles.ai_review_analysis` JSON column exists in MariaDB/MySQL (idempotent).
+   */
+  private async ensureAiSummaryColumn(): Promise<void> {
+    if (this.aiSummaryColumnReady) return;
+    try {
+      const cols = await this.prisma.$queryRawUnsafe<Array<{ Field: string }>>(
+        `SHOW COLUMNS FROM \`provider_profiles\` LIKE 'ai_review_analysis'`
+      );
+      if (!Array.isArray(cols) || cols.length === 0) {
+        await this.prisma.$executeRawUnsafe(
+          `ALTER TABLE \`provider_profiles\` ADD COLUMN \`ai_review_analysis\` JSON NULL`
+        );
+      }
+      this.aiSummaryColumnReady = true;
+    } catch (err: any) {
+      this.logger.warn(`ensureAiSummaryColumn check warning: ${err?.message || err}`);
+    }
+  }
+
+  /**
+   * Batch-load structured `ai_review_analysis` JSON payloads across provider IDs in 1 flat query.
+   */
+  private async loadAiReviewAnalysisMap(
+    providerIds: string[]
+  ): Promise<Map<string, AiReviewAnalysisPayload>> {
+    const map = new Map<string, AiReviewAnalysisPayload>();
+    if (providerIds.length === 0) return map;
+
+    await this.ensureAiSummaryColumn();
+
+    try {
+      const placeholders = providerIds.map(() => '?').join(',');
+      const rows = await this.prisma.$queryRawUnsafe<
+        Array<{ id: string; ai_review_analysis: unknown }>
+      >(
+        `SELECT id, ai_review_analysis FROM \`provider_profiles\` WHERE \`id\` IN (${placeholders}) AND \`ai_review_analysis\` IS NOT NULL`,
+        ...providerIds
+      );
+
+      for (const row of rows || []) {
+        let parsed: any = row.ai_review_analysis;
+        if (typeof parsed === 'string') {
+          try {
+            parsed = JSON.parse(parsed);
+          } catch {
+            parsed = null;
+          }
+        }
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          typeof parsed.summary === 'string' &&
+          parsed.summary.trim().length > 0 &&
+          Array.isArray(parsed.tags)
+        ) {
+          map.set(row.id, parsed as AiReviewAnalysisPayload);
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`loadAiReviewAnalysisMap warning: ${err?.message || err}`);
+    }
+
+    return map;
   }
 
   /**
@@ -309,7 +380,7 @@ export class ProvidersService implements OnApplicationBootstrap {
       for (const r of rows || []) {
         counts.set(r.providerProfileId, Number(r.cnt || 0));
       }
-    } catch {}
+    } catch { }
     return counts;
   }
 
@@ -459,8 +530,8 @@ export class ProvidersService implements OnApplicationBootstrap {
         const resolvedPhotos =
           rawKeys.length > 0
             ? (await Promise.all(rawKeys.map((k) => this.resolveStrictR2Url(k)))).filter(
-                (u): u is string => Boolean(u)
-              )
+              (u): u is string => Boolean(u)
+            )
             : [];
 
         return {
@@ -604,8 +675,8 @@ export class ProvidersService implements OnApplicationBootstrap {
         const ts = sr.updatedAt
           ? new Date(sr.updatedAt).getTime()
           : sr.createdAt
-          ? new Date(sr.createdAt).getTime()
-          : 0;
+            ? new Date(sr.createdAt).getTime()
+            : 0;
         if (ts > (latestScrapedMsByProvider.get(sr.providerProfileId) || 0)) {
           latestScrapedMsByProvider.set(sr.providerProfileId, ts);
         }
@@ -690,12 +761,12 @@ export class ProvidersService implements OnApplicationBootstrap {
           ],
         },
       })
-      .catch(() => {});
+      .catch(() => { });
     await this.prisma
       .$executeRawUnsafe(
         `UPDATE \`scraped_reviews\` SET \`photo_urls\` = NULL WHERE \`photo_urls\` LIKE '%0554099452e3%'`
       )
-      .catch(() => {});
+      .catch(() => { });
     this.cache.invalidatePrefix('providers:');
     await this.warmUpCache();
     return { cleared: true };
@@ -767,8 +838,8 @@ export class ProvidersService implements OnApplicationBootstrap {
       provider.typicalPriceRange ||
       (firstListingWithPrice
         ? `$${Number(firstListingWithPrice.minPrice || 0).toLocaleString()} – $${Number(
-            firstListingWithPrice.maxPrice || 0
-          ).toLocaleString()}`
+          firstListingWithPrice.maxPrice || 0
+        ).toLocaleString()}`
         : '');
 
     // Compute latest review scrape / sync timestamp across platformReviews & scrapedReviews
@@ -833,13 +904,13 @@ export class ProvidersService implements OnApplicationBootstrap {
     const computedCompositeRating =
       activePlatforms.length > 0 && computedTotalReviews > 0
         ? Math.round(
-            (activePlatforms.reduce(
-              (acc: number, p: any) => acc + Number(p.rating) * Number(p.reviewCount),
-              0
-            ) /
-              computedTotalReviews) *
-              10
-          ) / 10
+          (activePlatforms.reduce(
+            (acc: number, p: any) => acc + Number(p.rating) * Number(p.reviewCount),
+            0
+          ) /
+            computedTotalReviews) *
+          10
+        ) / 10
         : Number(provider.compositeRating) || 0;
 
     const formattedProjects: FormattedProviderProject[] | undefined = provider.formattedProjects;
@@ -921,7 +992,9 @@ export class ProvidersService implements OnApplicationBootstrap {
       featuredQuote: provider.featuredQuote || '',
       verifiedYear: provider.verifiedYear || 0,
       reviewsLastUpdatedAt,
-      aiReviewSummary: provider.aiReviewSummary || undefined,
+      aiReviewSummary:
+        provider.aiReviewAnalysis?.summary || provider.aiReviewSummary || undefined,
+      aiReviewAnalysis: provider.aiReviewAnalysis || undefined,
       aiSummaryUpdatedAt: provider.aiSummaryUpdatedAt ? provider.aiSummaryUpdatedAt.toISOString() : undefined,
       ...(reviewStats ? { reviewStats } : {}),
       scrapedReviews,
@@ -949,6 +1022,7 @@ export class ProvidersService implements OnApplicationBootstrap {
       projectCountsGroup,
       teamByProvider,
       teamCountByProvider,
+      aiAnalysisByProvider,
     ] = await Promise.all([
       this.getCategories(),
       this.prisma.listing.findMany({
@@ -959,10 +1033,10 @@ export class ProvidersService implements OnApplicationBootstrap {
       }),
       includeScrapedReviews
         ? this.prisma.scrapedReview.findMany({
-            where: { providerProfileId: { in: providerIds } },
-            orderBy: { createdAt: 'desc' },
-            take: providerIds.length === 1 ? 2000 : 2000 * providerIds.length,
-          })
+          where: { providerProfileId: { in: providerIds } },
+          orderBy: { createdAt: 'desc' },
+          take: providerIds.length === 1 ? 2000 : 2000 * providerIds.length,
+        })
         : Promise.resolve([]),
       includeScrapedReviews
         ? this.loadRawReviewPhotoKeysMap(providerIds)
@@ -973,16 +1047,17 @@ export class ProvidersService implements OnApplicationBootstrap {
       includeScrapedReviews
         ? Promise.resolve([])
         : this.prisma.providerProject.groupBy({
-            by: ['providerProfileId'],
-            where: { providerProfileId: { in: providerIds } },
-            _count: { id: true },
-          }),
+          by: ['providerProfileId'],
+          where: { providerProfileId: { in: providerIds } },
+          _count: { id: true },
+        }),
       includeScrapedReviews
         ? this.formatTeamMembersForProviders(providerIds)
         : Promise.resolve(new Map<string, FormattedProviderTeamMember[]>()),
       includeScrapedReviews
         ? Promise.resolve(new Map<string, number>())
         : this.loadTeamCountsForProviders(providerIds),
+      this.loadAiReviewAnalysisMap(providerIds),
     ]);
 
     const projectCountByProvider = new Map<string, number>();
@@ -994,17 +1069,17 @@ export class ProvidersService implements OnApplicationBootstrap {
     const [photos, serviceAreas, listingSubServices] =
       listingIds.length > 0
         ? await Promise.all([
-            this.prisma.listingPhoto.findMany({
-              where: { listingId: { in: listingIds } },
-              orderBy: { orderIndex: 'asc' },
-            }),
-            this.prisma.listingServiceArea.findMany({
-              where: { listingId: { in: listingIds } },
-            }),
-            this.prisma.listingSubService.findMany({
-              where: { listingId: { in: listingIds } },
-            }),
-          ])
+          this.prisma.listingPhoto.findMany({
+            where: { listingId: { in: listingIds } },
+            orderBy: { orderIndex: 'asc' },
+          }),
+          this.prisma.listingServiceArea.findMany({
+            where: { listingId: { in: listingIds } },
+          }),
+          this.prisma.listingSubService.findMany({
+            where: { listingId: { in: listingIds } },
+          }),
+        ])
         : [[], [], []];
 
     const categoryById = new Map<string, any>();
@@ -1075,6 +1150,7 @@ export class ProvidersService implements OnApplicationBootstrap {
           platformReviews: platformByProvider.get(p.id) || [],
           scrapedReviews: scrapedByProvider.get(p.id) || [],
           rawPhotoKeysMap,
+          aiReviewAnalysis: aiAnalysisByProvider.get(p.id) || undefined,
           formattedProjects: includeScrapedReviews
             ? projectsByProvider.get(p.id) || []
             : undefined,
@@ -1390,10 +1466,10 @@ export class ProvidersService implements OnApplicationBootstrap {
           rawCategories.map(async (cat) => {
             const image =
               cat.icon &&
-              (cat.icon.includes('/') ||
-                cat.icon.endsWith('.jpg') ||
-                cat.icon.endsWith('.png') ||
-                cat.icon.endsWith('.webp'))
+                (cat.icon.includes('/') ||
+                  cat.icon.endsWith('.jpg') ||
+                  cat.icon.endsWith('.png') ||
+                  cat.icon.endsWith('.webp'))
                 ? await this.storageService.getPresignedUrl(cat.icon)
                 : '';
 
@@ -2001,6 +2077,13 @@ export class ProvidersService implements OnApplicationBootstrap {
 
     this.logger.log(`✅ Saved ${allScrapedReviews.length} review comments + aggregates to DB for "${profile.businessName}"`);
 
+    // Automatically refresh the 500-review AI summary & highlight tags whenever reviews are synced
+    try {
+      await this.generateAiSummary(slug);
+    } catch (aiErr: any) {
+      this.logger.warn(`⚠️ Auto AI review summary refresh skipped for "${slug}": ${aiErr.message}`);
+    }
+
     const updatedProvider = await this.findBySlug(slug);
     return {
       provider: updatedProvider,
@@ -2009,18 +2092,38 @@ export class ProvidersService implements OnApplicationBootstrap {
   }
 
   /**
-   * Generate progressive AI review summary for a provider using Mistral small models (20 reviews per batch)
-   * Stored directly into database for fast reads.
+   * Analyze up to 500 most recent verified reviews across Google, Houzz, Yelp & HomeAdvisor
+   * (no minimum review cutoff; max 500) and persist both crisp summary + structured highlight tags.
    */
-  async generateAiSummary(slug: string): Promise<{
+  async generateAiSummary(
+    slug: string,
+    maxReviews = AiReviewSummaryService.MAX_REVIEW_WINDOW
+  ): Promise<{
     provider: FormattedProvider;
     summary: string;
+    analysis: AiReviewAnalysisPayload | null;
   }> {
+    await this.ensureAiSummaryColumn();
+
     const profile = await this.prisma.providerProfile.findUnique({
       where: { slug },
       include: {
+        listings: {
+          include: {
+            category: true,
+            subServices: {
+              include: { subService: true },
+            },
+          },
+        },
         scrapedReviews: {
+          where: {
+            platform: {
+              in: ['GOOGLE', 'HOUZZ', 'YELP', 'HOMEADVISOR'],
+            },
+          },
           orderBy: { createdAt: 'desc' },
+          take: 2500,
         },
       },
     });
@@ -2029,34 +2132,152 @@ export class ProvidersService implements OnApplicationBootstrap {
       throw new NotFoundException(`Provider with slug "${slug}" not found`);
     }
 
-    const reviewsToAnalyze = (profile.scrapedReviews || []).map((r) => ({
+    const primaryCategory = profile.listings?.[0]?.category?.name || undefined;
+    const services: string[] = Array.from(
+      new Set<string>(
+        (profile.listings || []).flatMap((l: any) =>
+          (l.subServices || []).map((ss: any) => String(ss.subService.name))
+        )
+      )
+    );
+
+    const reviewsToAnalyze = (profile.scrapedReviews || []).map((r: any) => ({
       comment: r.comment,
       rating: r.rating,
       authorName: r.authorName,
       platform: r.platform,
       reviewDate: r.reviewDate || undefined,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
     }));
 
-    const summary = await this.aiReviewSummaryService.generateProgressiveSummary(
-      profile.businessName,
-      reviewsToAnalyze
-    );
-
-    await this.prisma.providerProfile.update({
-      where: { id: profile.id },
-      data: {
-        aiReviewSummary: summary,
-        aiSummaryUpdatedAt: new Date(),
-      },
+    const analysis = await this.aiReviewSummaryService.analyzeContractorReviews({
+      businessName: profile.businessName,
+      category: primaryCategory,
+      services,
+      reviews: reviewsToAnalyze,
+      maxReviews,
     });
 
+    if (analysis) {
+      const now = new Date();
+      await this.prisma.providerProfile.update({
+        where: { id: profile.id },
+        data: {
+          aiReviewSummary: analysis.summary,
+          aiSummaryUpdatedAt: now,
+        },
+      });
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE \`provider_profiles\` SET \`ai_review_analysis\` = ? WHERE \`id\` = ?`,
+        JSON.stringify(analysis),
+        profile.id
+      );
+    } else {
+      await this.prisma.providerProfile.update({
+        where: { id: profile.id },
+        data: {
+          aiReviewSummary: null,
+          aiSummaryUpdatedAt: null,
+        },
+      });
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE \`provider_profiles\` SET \`ai_review_analysis\` = NULL WHERE \`id\` = ?`,
+        profile.id
+      );
+    }
+
     this.cache.invalidatePrefix('providers:');
-    this.logger.log(`✅ Saved AI Review Summary to DB for "${profile.businessName}"`);
+    this.logger.log(
+      analysis
+        ? `✅ Saved AI Review Analysis (${analysis.analyzedCount} reviews, ${analysis.tags.length} tags) for "${profile.businessName}"`
+        : `ℹ️ Cleared AI Review Analysis (0 clean reviews) for "${profile.businessName}"`
+    );
 
     const updatedProvider = await this.findBySlug(slug);
     return {
       provider: updatedProvider,
-      summary,
+      summary: analysis?.summary || '',
+      analysis,
+    };
+  }
+
+  /**
+   * Batch-generate 500-review AI summaries & highlight tags across all active contractors.
+   */
+  async generateAiSummariesForAllProviders(options?: {
+    force?: boolean;
+    limit?: number;
+    maxReviews?: number;
+  }) {
+    await this.ensureAiSummaryColumn();
+    const force = options?.force ?? true;
+    const maxReviews = options?.maxReviews ?? AiReviewSummaryService.MAX_REVIEW_WINDOW;
+
+    const activeProviders = await this.prisma.providerProfile.findMany({
+      where: { isActive: true },
+      select: { id: true, slug: true, businessName: true },
+      orderBy: { compositeRating: 'desc' },
+      ...(options?.limit ? { take: Math.max(1, Number(options.limit)) } : {}),
+    });
+
+    const existingMap = force
+      ? new Map<string, AiReviewAnalysisPayload>()
+      : await this.loadAiReviewAnalysisMap(activeProviders.map((p) => p.id));
+
+    const results: Array<{
+      slug: string;
+      businessName: string;
+      status: 'generated' | 'skipped_existing' | 'no_reviews' | 'failed';
+      analyzedCount: number;
+      tagCount: number;
+      error?: string;
+    }> = [];
+
+    for (const prov of activeProviders) {
+      if (!force && existingMap.has(prov.id)) {
+        const existing = existingMap.get(prov.id)!;
+        results.push({
+          slug: prov.slug,
+          businessName: prov.businessName,
+          status: 'skipped_existing',
+          analyzedCount: existing.analyzedCount,
+          tagCount: existing.tags.length,
+        });
+        continue;
+      }
+
+      try {
+        const res = await this.generateAiSummary(prov.slug, maxReviews);
+        results.push({
+          slug: prov.slug,
+          businessName: prov.businessName,
+          status: res.analysis ? 'generated' : 'no_reviews',
+          analyzedCount: res.analysis?.analyzedCount || 0,
+          tagCount: res.analysis?.tags.length || 0,
+        });
+      } catch (err: any) {
+        this.logger.error(`Failed AI summary generation for "${prov.slug}": ${err.message}`);
+        results.push({
+          slug: prov.slug,
+          businessName: prov.businessName,
+          status: 'failed',
+          analyzedCount: 0,
+          tagCount: 0,
+          error: err.message,
+        });
+      }
+    }
+
+    await this.clearCache();
+
+    return {
+      totalProviders: activeProviders.length,
+      generatedCount: results.filter((r) => r.status === 'generated').length,
+      noReviewsCount: results.filter((r) => r.status === 'no_reviews').length,
+      skippedCount: results.filter((r) => r.status === 'skipped_existing').length,
+      failedCount: results.filter((r) => r.status === 'failed').length,
+      results,
     };
   }
 
@@ -2422,9 +2643,9 @@ export class ProvidersService implements OnApplicationBootstrap {
           blogUpdate.coverImageUrl !== undefined
             ? blogUpdate.coverImageUrl
             : await this.storageService.ingestRemoteImage(
-                blog.ogImageUrl,
-                `blogs/og/${blog.slug}`
-              );
+              blog.ogImageUrl,
+              `blogs/og/${blog.slug}`
+            );
       }
       if (isExternalUrl(blog.authorAvatar)) {
         blogUpdate.authorAvatar = await this.storageService.ingestRemoteImage(
@@ -2568,7 +2789,7 @@ export class ProvidersService implements OnApplicationBootstrap {
             where: { id: existingHz.id },
             data: { profileUrl: brandAndProjects.discoveredHouzzUrl },
           })
-          .catch(() => {});
+          .catch(() => { });
       }
     }
 
@@ -2717,7 +2938,7 @@ export class ProvidersService implements OnApplicationBootstrap {
               if (rewrittenMemberBio && rewrittenMemberBio.length >= 15) {
                 cleanBio = rewrittenMemberBio;
               }
-            } catch {}
+            } catch { }
           }
 
           preparedTeam.push({
@@ -3039,12 +3260,10 @@ export class ProvidersService implements OnApplicationBootstrap {
     const updatedProvider = await this.findBySlug(slug);
 
     this.logger.log(
-      `✅ [Brand/Team/Projects Sync] ${profile.businessName} [${brandAndProjects.sourceUsed}] (site: ${
-        finalWebsiteUrl || 'none'
+      `✅ [Brand/Team/Projects Sync] ${profile.businessName} [${brandAndProjects.sourceUsed}] (site: ${finalWebsiteUrl || 'none'
       }, logoUpdated: ${Boolean(newLogoKey)}, aiBio: ${Boolean(
         aiBusinessDesc
-      )}, team: ${teamMembersSaved}): ${
-        uploadedProjects.length || updatedProvider.projectCount || 0
+      )}, team: ${teamMembersSaved}): ${uploadedProjects.length || updatedProvider.projectCount || 0
       } projects (${totalUploadedPhotos} new R2 photos)`
     );
 
@@ -3135,12 +3354,14 @@ export class ProvidersService implements OnApplicationBootstrap {
   async syncFullProvider(slug: string, maxReviews = 2000) {
     const brandAndProjectsRes = await this.syncProviderProjects(slug);
     const reviewsRes = await this.syncReviews(slug, undefined, maxReviews);
-    let aiSummaryGenerated = false;
-    try {
-      await this.generateAiSummary(slug);
-      aiSummaryGenerated = true;
-    } catch (err: any) {
-      this.logger.warn(`AI summary generation skipped for ${slug}: ${err.message}`);
+    let aiSummaryGenerated = Boolean(reviewsRes.provider.aiReviewAnalysis);
+    if (!aiSummaryGenerated) {
+      try {
+        const aiRes = await this.generateAiSummary(slug);
+        aiSummaryGenerated = Boolean(aiRes.analysis);
+      } catch (err: any) {
+        this.logger.warn(`AI summary generation skipped for ${slug}: ${err.message}`);
+      }
     }
     const finalProvider = await this.findBySlug(slug);
     return {
@@ -3487,7 +3708,7 @@ export class ProvidersService implements OnApplicationBootstrap {
           costRange: spec.costRange,
           photoCount: r2Keys.length,
         });
-      } catch {}
+      } catch { }
 
       await this.prisma.providerProject.create({
         data: {

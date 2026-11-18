@@ -1,9 +1,16 @@
+import * as dotenv from 'dotenv';
+import * as path from 'path';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { resolveDatabaseUrlIpv4 } from './prisma/prisma.service';
+
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), 'apps/api/.env') });
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+  await resolveDatabaseUrlIpv4();
   const app = await NestFactory.create(AppModule);
 
   // Enable CORS for frontend

@@ -225,6 +225,29 @@ export class ProvidersController {
   }
 
   /**
+   * POST /api/providers/reviews/generate-ai-summaries-all
+   * Analyze up to 500 most recent reviews (Google, Houzz, Yelp, HomeAdvisor) across all active providers
+   */
+  @Post('reviews/generate-ai-summaries-all')
+  async generateAllAiSummaries(
+    @Query('force') force?: string,
+    @Query('limit') limit?: string,
+    @Query('maxReviews') maxReviews?: string
+  ) {
+    const result = await this.providersService.generateAiSummariesForAllProviders({
+      force: force === undefined ? true : force !== 'false',
+      limit: limit ? Number(limit) : undefined,
+      maxReviews: maxReviews ? Number(maxReviews) : 500,
+    });
+    return {
+      success: true,
+      data: result,
+      message: `Generated AI review summaries for ${result.generatedCount}/${result.totalProviders} contractor(s).`,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
    * POST /api/providers/:slug/sync-brand-team
    * Fast sync of official website brand logo, AI-rewritten website About description, and website "The team" members
    */
@@ -343,15 +366,21 @@ export class ProvidersController {
 
   /**
    * POST /api/providers/:slug/generate-ai-summary
-   * Trigger progressive AI chunked review analysis (20 reviews per batch via OpenRouter Mistral)
+   * Analyze up to 500 most recent verified reviews (Google, Houzz, Yelp, HomeAdvisor) -> crisp summary + tags
    */
   @Post(':slug/generate-ai-summary')
-  async generateAiSummary(@Param('slug') slug: string) {
-    const result = await this.providersService.generateAiSummary(slug);
+  async generateAiSummary(
+    @Param('slug') slug: string,
+    @Query('maxReviews') maxReviews?: string
+  ) {
+    const result = await this.providersService.generateAiSummary(
+      slug,
+      maxReviews ? Number(maxReviews) : 500
+    );
     return {
       success: true,
       data: result,
-      message: 'AI Review summary generated and saved successfully.',
+      message: 'AI Review summary and highlight tags generated and saved successfully.',
       timestamp: new Date().toISOString(),
     };
   }

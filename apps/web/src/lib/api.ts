@@ -1,4 +1,4 @@
-import type { RooferProvider } from '@/data/mockRoofers';
+import type { RooferProvider, AiReviewAnalysisData } from '@/data/mockRoofers';
 import { getMediaUrl } from './media-url';
 
 export interface GetProvidersParams {
@@ -380,6 +380,7 @@ export async function syncProviderReviews(slug: string): Promise<SyncReviewsResu
 export interface AiSummaryResult {
   provider: RooferProvider;
   summary: string;
+  analysis?: AiReviewAnalysisData | null;
 }
 
 /**

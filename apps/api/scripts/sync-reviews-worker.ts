@@ -14,9 +14,10 @@ import { HouzzReviewsScraperService } from '../src/scrapers/houzz/houzz-reviews-
 import { ReviewsScraperService } from '../src/scrapers/reviews-scraper.service';
 import { ScraperHttpUtil } from '../src/scrapers/utils/scraper-http.util';
 import { AiReviewSummaryService } from '../src/providers/ai-review-summary.service';
+import { resolveDatabaseUrlIpv4 } from '../src/prisma/prisma.service';
 import { ingestImageToR2, hashAssetUrl } from './utils/r2-upload';
 
-const prisma = new PrismaClient();
+let prisma = new PrismaClient();
 const googleScraper = new GoogleReviewsScraperService();
 const yelpScraper = new YelpReviewsScraperService();
 const homeAdvisorScraper = new HomeAdvisorReviewsScraperService();
@@ -39,13 +40,21 @@ async function ensureReviewColumns() {
         `ALTER TABLE \`scraped_reviews\` ADD COLUMN \`photo_urls\` JSON NULL`
       );
     }
+    const aiCols = await prisma.$queryRawUnsafe<Array<{ Field: string }>>(
+      `SHOW COLUMNS FROM \`provider_profiles\` LIKE 'ai_review_analysis'`
+    );
+    if (!Array.isArray(aiCols) || aiCols.length === 0) {
+      await prisma.$executeRawUnsafe(
+        `ALTER TABLE \`provider_profiles\` ADD COLUMN \`ai_review_analysis\` JSON NULL`
+      );
+    }
     await prisma
       .$executeRawUnsafe(`ALTER TABLE \`platform_reviews\` MODIFY COLUMN \`profileUrl\` TEXT NOT NULL`)
-      .catch(() => {});
+      .catch(() => { });
     await prisma
       .$executeRawUnsafe(`ALTER TABLE \`scraped_reviews\` MODIFY COLUMN \`sourceUrl\` TEXT NULL`)
-      .catch(() => {});
-  } catch {}
+      .catch(() => { });
+  } catch { }
 }
 
 export async function syncSingleProviderReviews(profile: any, maxReviews = 2000) {
@@ -211,7 +220,7 @@ export async function syncSingleProviderReviews(profile: any, maxReviews = 2000)
           );
         }
         savedComments++;
-      } catch {}
+      } catch { }
     }
 
     console.log(
@@ -226,10 +235,10 @@ export async function syncSingleProviderReviews(profile: any, maxReviews = 2000)
     const compRating =
       totalRevCount > 0
         ? Math.round(
-            (allPlats.reduce((acc, p) => acc + Number(p.rating) * p.reviewCount, 0) /
-              totalRevCount) *
-              10
-          ) / 10
+          (allPlats.reduce((acc, p) => acc + Number(p.rating) * p.reviewCount, 0) /
+            totalRevCount) *
+          10
+        ) / 10
         : scraped.compositeRating;
 
     if (totalRevCount > 0) {
@@ -242,33 +251,48 @@ export async function syncSingleProviderReviews(profile: any, maxReviews = 2000)
       });
     }
 
-    // 4. Refresh progressive AI review summary if provider has reviews
+    // 4. Refresh 500-review AI review summary & highlight tags across Google, Houzz, Yelp & HomeAdvisor
     const dbReviews = await prisma.scrapedReview.findMany({
-      where: { providerProfileId: profile.id },
+      where: {
+        providerProfileId: profile.id,
+        platform: {
+          in: ['GOOGLE', 'HOUZZ', 'YELP', 'HOMEADVISOR'],
+        },
+      },
       orderBy: { createdAt: 'desc' },
-      take: 120,
+      take: 2500,
     });
     if (dbReviews.length > 0) {
       try {
-        const summary = await aiService.generateProgressiveSummary(
-          profile.businessName,
-          dbReviews.map((r) => ({
+        const analysis = await aiService.analyzeContractorReviews({
+          businessName: profile.businessName,
+          reviews: dbReviews.map((r) => ({
             comment: r.comment,
             rating: r.rating,
             authorName: r.authorName,
             platform: r.platform,
             reviewDate: r.reviewDate || undefined,
-          }))
-        );
-        if (summary && summary.length >= 40) {
+            createdAt: r.createdAt,
+            updatedAt: r.updatedAt,
+          })),
+          maxReviews: 500,
+        });
+        if (analysis && analysis.summary.length >= 35) {
           await prisma.providerProfile.update({
             where: { id: profile.id },
             data: {
-              aiReviewSummary: summary,
+              aiReviewSummary: analysis.summary,
               aiSummaryUpdatedAt: new Date(),
             },
           });
-          console.log(`   🤖 Updated progressive AI review summary`);
+          await prisma.$executeRawUnsafe(
+            `UPDATE \`provider_profiles\` SET \`ai_review_analysis\` = ? WHERE \`id\` = ?`,
+            JSON.stringify(analysis),
+            profile.id
+          );
+          console.log(
+            `   🤖 Updated AI review summary (${analysis.analyzedCount} recent reviews, ${analysis.tags.length} tags)`
+          );
         }
       } catch (aiErr: any) {
         console.warn(`   ⚠️ AI summary skipped: ${aiErr.message}`);
@@ -289,6 +313,10 @@ async function run() {
   const isAll = args.includes('--all') || slugArg === 'all';
 
   console.log('🔗 Connecting to database...');
+  const resolvedUrl = await resolveDatabaseUrlIpv4(process.env.DATABASE_URL);
+  prisma = new PrismaClient(
+    resolvedUrl ? { datasources: { db: { url: resolvedUrl } } } : undefined
+  );
   await prisma.$connect();
   await ensureReviewColumns();
 

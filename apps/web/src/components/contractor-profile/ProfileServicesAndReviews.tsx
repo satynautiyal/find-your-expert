@@ -35,13 +35,14 @@ import {
 } from './PlatformLogos';
 import ProfileTeamSection from './ProfileTeamSection';
 import PhotoLightboxModal from './PhotoLightboxModal';
+import AiReviewSummaryCard from './AiReviewSummaryCard';
 import { fetchProviderReviews, type ScrapedReviewItemDto } from '@/lib/api';
 import { getOwnR2MediaUrl } from '@/lib/media-url';
 
 interface ProfileServicesAndReviewsProps {
   provider: RooferProvider;
   onOpenQuoteModal: () => void;
-  onOpenReviewsModal?: (initialPlatform?: string) => void;
+  onOpenReviewsModal?: (initialPlatform?: string, initialSearch?: string) => void;
   scrapedReviews?: ScrapedReviewItemDto[];
 }
 
@@ -796,6 +797,16 @@ export default function ProfileServicesAndReviews({
             )}
           </div>
         </div>
+
+        {/* AI Review Summary + Verifiable Highlight Tags (500 Most Recent Reviews) */}
+        <AiReviewSummaryCard
+          provider={provider}
+          onSelectTagKeyword={(keyword) => {
+            if (keyword) {
+              onOpenReviewsModal?.('ALL', keyword);
+            }
+          }}
+        />
 
         {/* Platform + "With Photos" Filter Tabs */}
         {(platformFilterOptions.length > 1 || photoReviewsCount > 0) && (

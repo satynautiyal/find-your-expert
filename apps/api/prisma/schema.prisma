@@ -188,8 +188,9 @@ model ProviderProfile {
   topPickCategory TopPickCategory?
   featuredQuote   String?          @db.Text
 
-  // AI Review Summary
+  // AI Review Summary (500 most recent reviews across Google, Houzz, Yelp & HomeAdvisor)
   aiReviewSummary    String?   @db.Text
+  aiReviewAnalysis   Json?     @map("ai_review_analysis")
   aiSummaryUpdatedAt DateTime?
 
   // Relations

@@ -10,4 +10,5 @@ export { default as PhotoLightboxModal } from './PhotoLightboxModal';
 export { default as ProjectsModal } from './ProjectsModal';
 export { default as ProfilePhotoCarousel } from './ProfilePhotoCarousel';
 export { default as ReviewsModal } from './ReviewsModal';
+export { default as AiReviewSummaryCard } from './AiReviewSummaryCard';
 export * from './PlatformLogos';
