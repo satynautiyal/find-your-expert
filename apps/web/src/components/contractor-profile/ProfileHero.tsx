@@ -58,11 +58,15 @@ export default function ProfileHero({
   const stateName = provider.state === 'NY' || !provider.state ? 'New York' : provider.state;
   const stateShort = provider.state || 'NY';
 
-  // Real R2 brand logo & R2 project photos from DB
-  const businessLogo =
-    provider.imageUrl && !provider.imageUrl.includes('placeholder') && !logoFailed
+  // Real R2 brand logo & R2 project photos from DB (never confuse project photo with brand logo)
+  const rawLogoCandidate =
+    provider.logoUrl ||
+    (provider.imageUrl &&
+    !provider.imageUrl.includes('placeholder') &&
+    !(provider.photos || []).some((p) => p.url === provider.imageUrl)
       ? provider.imageUrl
-      : '';
+      : '');
+  const businessLogo = rawLogoCandidate && !logoFailed ? rawLogoCandidate : '';
 
   const dbPhotoUrls = (provider.photos || [])
     .map((p) => p.url)
@@ -280,10 +284,10 @@ export default function ProfileHero({
 
             {/* RIGHT ZONE: EXECUTIVE CONTRACTOR IDENTITY, TRUST AUDIT & CTAS */}
             <div className="flex-1 min-w-0 flex flex-col justify-between gap-4">
-              {/* Top Block: Logo Plaque + Full-Width Business Title + Metadata */}
+              {/* Top Block: Houzz-Style Side-by-Side Brand Logo + Identity, Rating & Credentials */}
               <div className="space-y-3">
-                <div className="flex flex-col xs:flex-row xs:items-center gap-3.5 sm:gap-4">
-                  {hasProjectPhotos && businessLogo ? (
+                <div className="flex flex-row items-center gap-4 sm:gap-5 pb-3 border-b border-gray-100">
+                  {hasProjectPhotos ? (
                     <BrandLogoBadge
                       src={businessLogo}
                       name={provider.name}
@@ -293,36 +297,16 @@ export default function ProfileHero({
                   ) : null}
 
                   <div className="min-w-0 flex-1 space-y-1.5">
-                    {/* Eyebrow Credential Pills */}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200/80">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Verified Professional</span>
-                      </span>
-
-                      {establishedYear > 0 && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-gray-700 text-[11px] font-semibold border border-gray-200/90">
-                          <Calendar className="w-3 h-3 text-gray-500 shrink-0" />
-                          <span>Since {establishedYear}</span>
-                        </span>
-                      )}
-
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-gray-100/80 text-gray-600 text-[11px] font-semibold border border-gray-200/70">
-                        {trade}
-                      </span>
-                    </div>
-
                     {/* Full-Width Uncluttered Contractor Title */}
-                    <h1 className="text-2xl sm:text-[26px] xl:text-[28px] font-black text-gray-950 tracking-tight leading-tight">
+                    <h1 className="text-xl sm:text-[26px] xl:text-[28px] font-extrabold text-gray-950 tracking-tight leading-snug">
                       {provider.name}
                     </h1>
-                  </div>
-                </div>
 
-                {/* Rating + Location + Service Highlights Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-2.5 py-2.5 border-y border-gray-100">
-                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                    <div className="flex items-center gap-1.5">
+                    {/* Rating Stars + Review Count Row (Houzz style directly below title) */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="font-extrabold text-sm text-amber-500 tabular-nums">
+                        {compositeRating.toFixed(1)}
+                      </span>
                       <div className="flex items-center gap-0.5 text-amber-500">
                         {[...Array(5)].map((_, i) => (
                           <Star
@@ -335,9 +319,6 @@ export default function ProfileHero({
                           />
                         ))}
                       </div>
-                      <span className="font-black text-sm text-gray-950">
-                        {compositeRating.toFixed(1)}
-                      </span>
                       <button
                         type="button"
                         onClick={() =>
@@ -345,32 +326,52 @@ export default function ProfileHero({
                             ? onOpenReviewsModal('ALL')
                             : onScrollToReviews?.()
                         }
-                        className="text-xs font-semibold text-gray-600 hover:text-primary hover:underline transition-colors cursor-pointer"
+                        className="text-xs sm:text-[13px] font-medium text-gray-600 hover:text-primary hover:underline transition-colors cursor-pointer"
                       >
-                        ({provider.totalReviews || 0} verified reviews)
+                        {provider.totalReviews || 0} Reviews
                       </button>
                     </div>
 
-                    <span className="text-gray-300 hidden sm:inline">•</span>
+                    {/* Verified Credentials + Trade + Hub Location Line */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600 pt-0.5">
+                      <span className="inline-flex items-center gap-1 font-bold text-gray-900">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Verified Professional</span>
+                      </span>
 
-                    <div className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600">
-                      <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                      <span>
-                        {boroughOrCity}, {stateShort}
+                      <span className="text-gray-300">•</span>
+                      <span className="font-medium text-gray-600">{trade}</span>
+
+                      {establishedYear > 0 && (
+                        <>
+                          <span className="text-gray-300">•</span>
+                          <span className="inline-flex items-center gap-1 font-medium text-gray-600">
+                            <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span>Since {establishedYear}</span>
+                          </span>
+                        </>
+                      )}
+
+                      <span className="text-gray-300">•</span>
+                      <span className="inline-flex items-center gap-1 font-medium text-gray-600">
+                        <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <span>
+                          {boroughOrCity}, {stateShort}
+                        </span>
                       </span>
                     </div>
-                  </div>
 
-                  {/* Subtle Service Assurance Chips */}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50/70 border border-amber-200/60 text-[11px] font-semibold text-gray-800">
-                      <Award className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      <span>Warranty Available</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50/70 border border-blue-200/60 text-[11px] font-semibold text-gray-800">
-                      <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                      <span>Free Estimates</span>
-                    </span>
+                    {/* Subtle Service Assurance Row */}
+                    <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 pt-1 text-[11.5px] font-semibold text-gray-700">
+                      <span className="inline-flex items-center gap-1">
+                        <Award className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Warranty Available</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        <span>Free Estimates</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

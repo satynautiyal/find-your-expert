@@ -81,6 +81,7 @@ export interface RooferProvider {
   category?: string;
   categorySlug?: string;
   logoText: string;
+  logoUrl?: string;
   imageUrl: string;
   photoCount: number;
   photos?: Array<{

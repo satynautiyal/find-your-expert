@@ -87,6 +87,7 @@ export interface FormattedProvider {
   category?: string;
   categorySlug?: string;
   logoText: string;
+  logoUrl?: string;
   imageUrl: string;
   photoCount: number;
   photos?: Array<{
@@ -934,6 +935,7 @@ export class ProvidersService implements OnApplicationBootstrap {
       category: primaryCategory || undefined,
       categorySlug: primaryCategorySlug || undefined,
       logoText: provider.logoText || provider.businessName.charAt(0),
+      logoUrl: logoUrl || undefined,
       imageUrl,
       photoCount: formattedPhotos.length,
       photos: formattedPhotos,
