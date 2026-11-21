@@ -282,7 +282,7 @@ export interface PaginatedReviewsResponse {
 }
 
 /**
- * Fetch server-side paginated verified reviews (50 per page default, 100% R2 media)
+ * Fetch server-side paginated verified reviews (10 per page default, 100% R2 media)
  */
 export async function fetchProviderReviews(
   slug: string,
@@ -296,7 +296,7 @@ export async function fetchProviderReviews(
   }
 ): Promise<PaginatedReviewsResponse> {
   const page = options?.page ?? 1;
-  const limit = options?.limit ?? 50;
+  const limit = options?.limit ?? 10;
   const platform = options?.platform || 'ALL';
   const withPhotos = options?.withPhotos ? 'true' : undefined;
   const sortBy = options?.sortBy || 'RELEVANT';
@@ -312,25 +312,30 @@ export async function fetchProviderReviews(
   });
 
   const cacheKey = `providers:reviews:${slug}:${page}:${limit}:${platform}:${withPhotos || '0'}:${sortBy}:${search || ''}`;
+  const reviewsTtlMs = typeof window !== 'undefined' ? 5 * 60_000 : SSR_CACHE_TTL_MS;
 
-  return cachedRequest(cacheKey, async () => {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    });
+  return cachedRequest(
+    cacheKey,
+    async () => {
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch reviews (HTTP ${response.status})`);
-    }
+      if (!response.ok) {
+        throw new Error(`Failed to fetch reviews (HTTP ${response.status})`);
+      }
 
-    const json: ApiResponse<PaginatedReviewsResponse> = await response.json();
-    if (!json.success || !json.data) {
-      throw new Error(json.error || 'Failed to load paginated reviews');
-    }
+      const json: ApiResponse<PaginatedReviewsResponse> = await response.json();
+      if (!json.success || !json.data) {
+        throw new Error(json.error || 'Failed to load paginated reviews');
+      }
 
-    return json.data;
-  });
+      return json.data;
+    },
+    reviewsTtlMs
+  );
 }
 
 export interface SyncReviewsResult {

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
   Star,
@@ -28,7 +29,7 @@ import {
 } from './PlatformLogos';
 import AiReviewSummaryCard from './AiReviewSummaryCard';
 
-const PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 10;
 
 interface ReviewsModalProps {
   isOpen: boolean;
@@ -47,17 +48,7 @@ function ExpandableReviewText({ text }: { text: string }) {
   useEffect(() => {
     const el = pRef.current;
     if (!el || expanded) return;
-    const check = () => {
-      if (el) {
-        setIsOverflowing(el.scrollHeight > el.clientHeight + 1);
-      }
-    };
-    check();
-    if (typeof ResizeObserver !== 'undefined') {
-      const ro = new ResizeObserver(check);
-      ro.observe(el);
-      return () => ro.disconnect();
-    }
+    setIsOverflowing(el.scrollHeight > el.clientHeight + 1);
   }, [text, expanded]);
 
   return (
@@ -211,12 +202,18 @@ export default function ReviewsModal({
   isOpen,
   onClose,
   provider,
+  scrapedReviews = [],
   initialPlatform = 'ALL',
   initialSearch = '',
 }: ReviewsModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<string>(
     initialPlatform === 'WITH_PHOTOS' ? 'ALL' : initialPlatform
   );
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [onlyWithPhotos, setOnlyWithPhotos] = useState<boolean>(
     initialPlatform === 'WITH_PHOTOS'
   );
@@ -224,6 +221,7 @@ export default function ReviewsModal({
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch.trim());
   const [sortBy, setSortBy] = useState<'RELEVANT' | 'RECENT' | 'HIGHEST' | 'LOWEST'>('RELEVANT');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
 
   const [pageItems, setPageItems] = useState<ScrapedReviewItemDto[]>([]);
   const [totalMatching, setTotalMatching] = useState(0);
@@ -265,16 +263,30 @@ export default function ReviewsModal({
       setDebouncedSearch(cleanInitSearch);
       setSortBy('RELEVANT');
       setPage(1);
+      setPageSize(DEFAULT_PAGE_SIZE);
       setLightboxState(null);
+      if (
+        (!initialPlatform || initialPlatform === 'ALL') &&
+        !cleanInitSearch &&
+        scrapedReviews.length > 0 &&
+        pageItems.length === 0
+      ) {
+        setPageItems(scrapedReviews.slice(0, DEFAULT_PAGE_SIZE));
+        const fallbackTotal =
+          provider.reviewStats?.totalSaved || provider.totalReviews || scrapedReviews.length;
+        setTotalMatching(fallbackTotal);
+        setTotalPages(Math.max(1, Math.ceil(fallbackTotal / DEFAULT_PAGE_SIZE)));
+      }
       if (provider.reviewStats) {
         setApiStats(provider.reviewStats);
       }
     } else {
       setLightboxState(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialPlatform, initialSearch, provider.slug, provider.reviewStats]);
 
-  // Fetch strictly 50 reviews per page from dedicated server-side paginated API
+  // Fetch paginated reviews (10 per page default) + silently prefetch next page for 0ms paging
   useEffect(() => {
     if (!isOpen || !provider.slug) return;
 
@@ -283,7 +295,7 @@ export default function ReviewsModal({
 
     fetchProviderReviews(provider.slug, {
       page,
-      limit: PAGE_SIZE,
+      limit: pageSize,
       platform: selectedPlatform,
       withPhotos: onlyWithPhotos,
       sortBy,
@@ -295,6 +307,18 @@ export default function ReviewsModal({
         setTotalMatching(res.pagination.totalMatching || 0);
         setTotalPages(res.pagination.totalPages || 1);
         setApiStats(res.stats);
+
+        // Prefetch next page into memory cache so clicking "Next" is 0ms instant
+        if (res.pagination.hasMore) {
+          fetchProviderReviews(provider.slug, {
+            page: page + 1,
+            limit: pageSize,
+            platform: selectedPlatform,
+            withPhotos: onlyWithPhotos,
+            sortBy,
+            search: debouncedSearch || undefined,
+          }).catch(() => {});
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -311,7 +335,7 @@ export default function ReviewsModal({
     return () => {
       cancelled = true;
     };
-  }, [isOpen, provider.slug, page, selectedPlatform, onlyWithPhotos, sortBy, debouncedSearch]);
+  }, [isOpen, provider.slug, page, pageSize, selectedPlatform, onlyWithPhotos, sortBy, debouncedSearch]);
 
   const scrollFeedsToTop = () => {
     mobileScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -497,99 +521,158 @@ export default function ReviewsModal({
     }
   };
 
-  if (!isOpen || typeof document === 'undefined') return null;
+  if (!mounted || typeof document === 'undefined') return null;
 
-  const rangeStart = totalMatching > 0 ? (page - 1) * PAGE_SIZE + 1 : 0;
-  const rangeEnd = Math.min(page * PAGE_SIZE, totalMatching);
+  const rangeStart = totalMatching > 0 ? (page - 1) * pageSize + 1 : 0;
+  const rangeEnd = Math.min(page * pageSize, totalMatching);
   const pageTokens = buildPageNumbers(page, totalPages);
 
-  const paginationControls =
-    totalPages > 1 ? (
-      <div className="pt-3 pb-1 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <span className="text-xs font-semibold text-gray-500 tabular-nums">
-          Showing {rangeStart}–{rangeEnd} of {totalMatching} reviews
+  const topPaginationStrip =
+    totalMatching > 0 ? (
+      <div className="flex items-center justify-between gap-2 px-1 py-0.5 text-xs">
+        <span className="font-semibold text-gray-500 tabular-nums">
+          Showing <strong className="text-gray-900">{rangeStart}–{rangeEnd}</strong> of{' '}
+          <strong className="text-gray-900">{totalMatching}</strong> reviews
         </span>
 
-        <div className="flex items-center gap-1.5 flex-wrap justify-center">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => handlePageChange(page - 1)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none text-xs font-bold text-gray-700 cursor-pointer transition-colors"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-            <span>Prev</span>
-          </button>
-
-          {pageTokens.map((tok, idx) =>
-            tok === 'ELLIPSIS' ? (
-              <span
-                key={`ellipsis-${idx}`}
-                className="px-1.5 text-xs font-bold text-gray-400 select-none"
-              >
-                …
-              </span>
-            ) : (
-              <button
-                key={tok}
-                type="button"
-                onClick={() => handlePageChange(tok)}
-                className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer tabular-nums ${
-                  tok === page
-                    ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] shadow-sm'
-                    : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'
-                }`}
-              >
-                {tok}
-              </button>
-            )
-          )}
-
-          <button
-            type="button"
-            disabled={page >= totalPages}
-            onClick={() => handlePageChange(page + 1)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none text-xs font-bold text-gray-700 cursor-pointer transition-colors"
-          >
-            <span>Next</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-    ) : totalMatching > 0 ? (
-      <div className="pt-2 text-center text-[11px] font-medium text-gray-400 tabular-nums">
-        Showing {rangeStart}–{rangeEnd} of {totalMatching} reviews
+        {totalPages > 1 && (
+          <div className="inline-flex items-center gap-1.5 shrink-0">
+            <span className="text-[11px] font-semibold text-gray-400 tabular-nums hidden xs:inline">
+              Page {page}/{totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={page <= 1 || isLoadingReviews}
+              onClick={() => handlePageChange(page - 1)}
+              aria-label="Previous page"
+              className="w-7 h-7 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center text-gray-700 cursor-pointer transition-colors"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              disabled={page >= totalPages || isLoadingReviews}
+              onClick={() => handlePageChange(page + 1)}
+              aria-label="Next page"
+              className="w-7 h-7 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center text-gray-700 cursor-pointer transition-colors"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
     ) : null;
 
-  const reviewsFeedContent = isLoadingReviews ? (
-    <div className="space-y-3 sm:space-y-4">
-      {[1, 2, 3, 4].map((item) => (
-        <div
-          key={item}
-          className="p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 bg-white space-y-3 animate-pulse"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gray-200" />
-              <div className="space-y-1.5">
-                <div className="w-28 h-3.5 bg-gray-200 rounded" />
-                <div className="w-20 h-3 bg-gray-100 rounded" />
-              </div>
-            </div>
-            <div className="w-16 h-6 bg-gray-100 rounded-full" />
-          </div>
-          <div className="space-y-2">
-            <div className="w-full h-3 bg-gray-100 rounded" />
-            <div className="w-5/6 h-3 bg-gray-100 rounded" />
-            <div className="w-2/3 h-3 bg-gray-100 rounded" />
-          </div>
+  const paginationControls =
+    totalMatching > 0 ? (
+      <div className="pt-3.5 pb-1 border-t border-gray-200/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap justify-center sm:justify-start">
+          <span className="text-xs font-semibold text-gray-500 tabular-nums">
+            Showing {rangeStart}–{rangeEnd} of {totalMatching}
+          </span>
+
+          {totalMatching > 10 && (
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value) || DEFAULT_PAGE_SIZE);
+                setPage(1);
+                scrollFeedsToTop();
+              }}
+              aria-label="Reviews per page"
+              className="py-1 px-2 rounded-lg border border-gray-200 bg-gray-50 hover:bg-white text-[11px] font-bold text-gray-700 cursor-pointer focus:outline-none focus:border-primary"
+            >
+              <option value={10}>10 / page</option>
+              <option value={20}>20 / page</option>
+              <option value={50}>50 / page</option>
+            </select>
+          )}
         </div>
-      ))}
-    </div>
-  ) : normalizedPageReviews.length > 0 ? (
-    <>
-      {normalizedPageReviews.map((rev, idx) => (
+
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1.5 flex-wrap justify-center">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => handlePageChange(page - 1)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none text-xs font-bold text-gray-700 cursor-pointer transition-colors"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Prev</span>
+            </button>
+
+            {pageTokens.map((tok, idx) =>
+              tok === 'ELLIPSIS' ? (
+                <span
+                  key={`ellipsis-${idx}`}
+                  className="px-1.5 text-xs font-bold text-gray-400 select-none"
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={tok}
+                  type="button"
+                  onClick={() => handlePageChange(tok)}
+                  className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer tabular-nums ${
+                    tok === page
+                      ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] shadow-sm'
+                      : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'
+                  }`}
+                >
+                  {tok}
+                </button>
+              )
+            )}
+
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => handlePageChange(page + 1)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:pointer-events-none text-xs font-bold text-gray-700 cursor-pointer transition-colors"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+    ) : null;
+
+  const reviewsFeedContent =
+    isLoadingReviews && normalizedPageReviews.length === 0 ? (
+      <div className="space-y-3 sm:space-y-4">
+        {[1, 2, 3, 4].map((item) => (
+          <div
+            key={item}
+            className="p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 bg-white space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full skeleton-shimmer" />
+                <div className="space-y-1.5">
+                  <div className="w-28 h-3.5 rounded skeleton-shimmer" />
+                  <div className="w-20 h-3 rounded skeleton-shimmer" />
+                </div>
+              </div>
+              <div className="w-16 h-6 rounded-full skeleton-shimmer" />
+            </div>
+            <div className="space-y-2">
+              <div className="w-full h-3 rounded skeleton-shimmer" />
+              <div className="w-5/6 h-3 rounded skeleton-shimmer" />
+              <div className="w-2/3 h-3 rounded skeleton-shimmer" />
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : normalizedPageReviews.length > 0 ? (
+      <div
+        className={`space-y-3 sm:space-y-4 transition-opacity duration-150 ${
+          isLoadingReviews ? 'opacity-60 pointer-events-none' : 'opacity-100'
+        }`}
+      >
+        {topPaginationStrip}
+        {normalizedPageReviews.map((rev, idx) => (
         <article
           key={`${rev.platform}-${rev.authorName}-${page}-${idx}`}
           className="p-3.5 sm:p-4 rounded-2xl border border-gray-200/90 bg-white shadow-sm space-y-2.5 sm:space-y-3"
@@ -683,9 +766,9 @@ export default function ReviewsModal({
         </article>
       ))}
 
-      {paginationControls}
-    </>
-  ) : debouncedSearch ? (
+        {paginationControls}
+      </div>
+    ) : debouncedSearch ? (
     <div className="py-10 sm:py-12 text-center space-y-2">
       <p className="text-sm font-bold text-gray-900">
         No reviews matching &ldquo;{debouncedSearch}&rdquo;
@@ -749,17 +832,27 @@ export default function ReviewsModal({
   );
 
   return createPortal(
-    <div
-      className="fixed inset-0 !m-0 z-[100] bg-gray-950/65 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-150"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="reviews-modal-title"
-    >
-      <div
-        className="w-full max-w-4xl h-[93dvh] sm:h-auto sm:max-h-[90vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="fixed inset-0 !m-0 z-[100] bg-gray-950/65 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-6"
+          onClick={onClose}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reviews-modal-title"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 18, scale: 0.98 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            className="w-full max-w-4xl h-[93dvh] sm:h-auto sm:max-h-[90vh] bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
         {/* ========================================================= */}
         {/* MODAL HEADER                                              */}
         {/* ========================================================= */}
@@ -1225,7 +1318,7 @@ export default function ReviewsModal({
             </div>
           </div>
         </div>
-      </div>
+          </motion.div>
 
       {/* ========================================================= */}
       {/* FULL-SCREEN LIGHTBOX FOR CUSTOMER-SHARED REVIEW PHOTOS    */}
@@ -1316,7 +1409,9 @@ export default function ReviewsModal({
           </div>
         </div>
       )}
-    </div>,
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body
   );
 }

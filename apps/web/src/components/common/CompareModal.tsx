@@ -1,5 +1,6 @@
 'use client';
 
+import { motion, AnimatePresence } from 'motion/react';
 import { X, Star, CheckCircle2 } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
 import { EButton } from '@/components/EComponents';
@@ -39,11 +40,25 @@ export default function CompareModal({
   providers,
   onSelectForQuote,
 }: CompareModalProps) {
-  if (!isOpen || providers.length === 0) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl max-w-4xl w-full border border-gray-200 shadow-2xl overflow-hidden relative max-h-[90vh] flex flex-col">
+    <AnimatePresence>
+      {isOpen && providers.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={onClose}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-950/70 backdrop-blur-sm"
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 8 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl max-w-4xl w-full border border-gray-200 shadow-2xl overflow-hidden relative max-h-[90vh] flex flex-col"
+          >
         {/* Modal Header */}
         <div className="p-5 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
           <div>
@@ -247,7 +262,9 @@ export default function CompareModal({
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

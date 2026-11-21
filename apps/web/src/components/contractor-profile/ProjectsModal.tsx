@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import useEmblaCarousel from 'embla-carousel-react';
 import {
   X,
@@ -34,7 +35,12 @@ export default function ProjectsModal({
   initialPhotoIndex = 0,
   providerName,
 }: ProjectsModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [selectedProjectIdx, setSelectedProjectIdx] = useState(initialProjectIndex);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [currentPhotoIdx, setCurrentPhotoIdx] = useState(initialPhotoIndex);
   const [viewMode, setViewMode] = useState<'SLIDESHOW' | 'GRID'>('SLIDESHOW');
   const [descExpanded, setDescExpanded] = useState(false);
@@ -145,8 +151,6 @@ export default function ProjectsModal({
     };
   }, [isOpen, onClose, emblaMainApi, viewMode]);
 
-  if (!isOpen || projects.length === 0 || !activeProject) return null;
-
   const handleSelectProject = (idx: number) => {
     setSelectedProjectIdx(idx);
     setCurrentPhotoIdx(0);
@@ -158,26 +162,36 @@ export default function ProjectsModal({
 
   const currentPhoto = activePhotos[currentPhotoIdx];
   const hasMetadata = Boolean(
-    activeProject.location ||
-      activeProject.projectYear ||
-      activeProject.costRange ||
-      activeProject.serviceCategory
+    activeProject?.location ||
+      activeProject?.projectYear ||
+      activeProject?.costRange ||
+      activeProject?.serviceCategory
   );
 
-  if (typeof document === 'undefined') return null;
+  if (!mounted || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${providerName} projects`}
-      onClick={onClose}
-      className="fixed inset-0 !m-0 z-[100] bg-black/75 backdrop-blur-sm flex items-end lg:items-center justify-center lg:p-6"
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full h-[93dvh] lg:h-[88vh] lg:max-w-6xl rounded-t-2xl lg:rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
-      >
+    <AnimatePresence>
+      {isOpen && projects.length > 0 && activeProject && (
+        <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${providerName} projects`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={onClose}
+          className="fixed inset-0 !m-0 z-[100] bg-black/75 backdrop-blur-sm flex items-end lg:items-center justify-center lg:p-6"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 18, scale: 0.98 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white w-full h-[93dvh] lg:h-[88vh] lg:max-w-6xl rounded-t-2xl lg:rounded-2xl shadow-2xl border border-gray-200 flex flex-col overflow-hidden"
+          >
         {/* Top Modal Header */}
         <div className="px-4 sm:px-6 py-3.5 border-b border-gray-200 flex items-center justify-between gap-3 bg-white shrink-0">
           <div className="min-w-0">
@@ -559,8 +573,10 @@ export default function ProjectsModal({
             )}
           </div>
         </div>
-      </div>
-    </div>,
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body
   );
 }

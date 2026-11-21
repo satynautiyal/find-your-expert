@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'motion/react';
 import {
   FileText,
   Star,
@@ -191,15 +192,20 @@ export default function ProfileNavTabs({
                   </span>
                 )}
 
-                {/* Bottom Tab Underline Indicator */}
-                <span
-                  aria-hidden="true"
-                  className={`absolute bottom-0 inset-x-0 rounded-t-full transition-all duration-200 ${
-                    isActive
-                      ? 'h-[3px] bg-primary'
-                      : 'h-[2px] bg-transparent group-hover:bg-gray-300'
-                  }`}
-                />
+                {/* Smooth Sliding Tab Underline Indicator (Linear / Airbnb style) */}
+                {isActive ? (
+                  <motion.span
+                    layoutId="profile-active-tab-underline"
+                    aria-hidden="true"
+                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                    className="absolute bottom-0 inset-x-0 h-[3px] bg-primary rounded-t-full"
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="absolute bottom-0 inset-x-0 h-[2px] bg-transparent group-hover:bg-gray-300 rounded-t-full transition-colors duration-200"
+                  />
+                )}
               </button>
             );
           })}

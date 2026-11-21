@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, ChevronRight, HelpCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { ChevronDown, ChevronRight, HelpCircle } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
 
 interface ProfileServiceAreasAndFaqProps {
@@ -105,18 +106,28 @@ export default function ProfileServiceAreasAndFaq({
                 className="w-full text-left p-3.5 flex items-center justify-between gap-3 text-xs sm:text-[13px] font-bold text-gray-900 hover:text-primary hover:bg-gray-50/60 transition-colors cursor-pointer"
               >
                 <span>{faq.q}</span>
-                {isOpen ? (
-                  <ChevronUp className="w-4 h-4 text-gray-500 shrink-0" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-                )}
+                <ChevronDown
+                  className={`w-4 h-4 shrink-0 transition-transform duration-200 ${
+                    isOpen ? 'rotate-180 text-primary' : 'text-gray-400'
+                  }`}
+                />
               </button>
 
-              {isOpen && (
-                <div className="px-3.5 pb-3.5 pt-0 text-xs sm:text-[13px] text-gray-600 leading-relaxed border-t border-gray-100 bg-slate-50/50">
-                  <p className="pt-2.5">{faq.a}</p>
-                </div>
-              )}
+              <AnimatePresence initial={false}>
+                {isOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-3.5 pb-3.5 pt-0 text-xs sm:text-[13px] text-gray-600 leading-relaxed border-t border-gray-100 bg-slate-50/50">
+                      <p className="pt-2.5">{faq.a}</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           );
         })}

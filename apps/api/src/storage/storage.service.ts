@@ -170,7 +170,7 @@ export class StorageService {
 
         // Cache for half of expiration window (e.g. 6h for 12h URLs) so browser HTTP cache also reuses stable URLs
         const ttlMs = Math.max(60_000, Math.floor(expiresInSeconds * 500));
-        if (this.presignedUrlCache.size >= 1000) {
+        if (this.presignedUrlCache.size >= 25_000) {
           const oldest = this.presignedUrlCache.keys().next().value;
           if (oldest !== undefined) this.presignedUrlCache.delete(oldest);
         }

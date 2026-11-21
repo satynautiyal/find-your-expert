@@ -25,11 +25,13 @@ export default function SafeImage({
   ...props
 }: SafeImageProps) {
   const [hasError, setHasError] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const resolvedSrc = getMediaUrl(src);
 
-  // Reset error state if src changes
+  // Reset error & loaded state if src changes
   useEffect(() => {
     setHasError(false);
+    setIsLoaded(false);
   }, [resolvedSrc]);
 
   if (!resolvedSrc || hasError) {
@@ -59,9 +61,13 @@ export default function SafeImage({
     <img
       src={resolvedSrc}
       alt={alt}
+      onLoad={() => setIsLoaded(true)}
       onError={() => setHasError(true)}
-      className={className}
+      className={`transition-opacity duration-300 ease-out ${
+        isLoaded ? 'opacity-100' : 'opacity-0'
+      } ${className}`}
       loading="lazy"
+      decoding="async"
       {...props}
     />
   );

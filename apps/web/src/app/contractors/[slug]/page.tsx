@@ -3,9 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { motion } from 'motion/react';
 import { Header, Footer, QuoteModal, CostGuideModal } from '@/components/common';
 import type { RooferProvider } from '@/data/mockRoofers';
-import { fetchProviderBySlug, type ScrapedReviewItemDto } from '@/lib/api';
+import {
+  fetchProviderBySlug,
+  fetchProviderReviews,
+  type ScrapedReviewItemDto,
+} from '@/lib/api';
 import {
   ProfileHero,
   ProfileNavTabs,
@@ -52,6 +57,15 @@ export default function ContractorProfilePage() {
       .then((data) => {
         setProvider(data);
         setScrapedReviews((data.scrapedReviews || []) as ScrapedReviewItemDto[]);
+        // Silently warm Page 1 (10 reviews) in background so opening ReviewsModal is 0ms instant
+        setTimeout(() => {
+          fetchProviderReviews(slug, {
+            page: 1,
+            limit: 10,
+            platform: 'ALL',
+            sortBy: 'RELEVANT',
+          }).catch(() => {});
+        }, 250);
       })
       .catch((err) => {
         console.error('Failed to fetch provider profile:', err);
@@ -72,17 +86,84 @@ export default function ContractorProfilePage() {
     }
   };
 
-  // Loading State Skeleton
+  // Layout-Matched Shimmer Skeleton (Zero layout jump / 0 CLS when data arrives)
   if (isLoading && !provider) {
     return (
-      <div className="min-h-screen bg-[#FBFBFB] flex flex-col justify-between">
+      <div className="min-h-screen bg-[#F5F7FA] flex flex-col justify-between">
         <Header onOpenQuoteModal={() => setQuoteModalOpen(true)} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 flex-1 flex flex-col items-center justify-center space-y-4">
-          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm font-semibold text-gray-500">
-            Loading contractor profile...
-          </p>
-        </div>
+        <main className="flex-1 pb-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-6 space-y-3.5">
+            {/* Breadcrumbs Bar Skeleton */}
+            <div className="flex items-center justify-between gap-3 py-1">
+              <div className="h-4 w-64 rounded-md skeleton-shimmer" />
+              <div className="flex items-center gap-2">
+                <div className="h-7 w-20 rounded-lg skeleton-shimmer" />
+                <div className="h-7 w-16 rounded-lg skeleton-shimmer" />
+              </div>
+            </div>
+
+            {/* Unified Architectural Hero Skeleton */}
+            <div className="bg-white border border-gray-200/90 rounded-2xl p-4 sm:p-6 shadow-sm">
+              <div className="flex flex-col lg:flex-row gap-6 items-stretch">
+                <div className="w-full lg:w-[440px] xl:w-[520px] shrink-0 space-y-2.5">
+                  <div className="w-full h-[228px] sm:h-[320px] lg:h-[304px] xl:h-[348px] rounded-2xl skeleton-shimmer" />
+                  <div className="grid grid-cols-5 gap-2 h-[54px] sm:h-[64px]">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <div key={n} className="rounded-xl skeleton-shimmer" />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex-1 flex flex-col justify-between gap-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-16 h-16 rounded-2xl skeleton-shimmer shrink-0" />
+                      <div className="space-y-2 flex-1">
+                        <div className="h-4 w-44 rounded-full skeleton-shimmer" />
+                        <div className="h-8 w-3/4 rounded-lg skeleton-shimmer" />
+                      </div>
+                    </div>
+                    <div className="h-10 w-full rounded-xl skeleton-shimmer" />
+                  </div>
+                  <div className="h-36 w-full rounded-2xl skeleton-shimmer" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="h-12 rounded-xl skeleton-shimmer" />
+                    <div className="h-12 rounded-xl skeleton-shimmer" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sticky Nav Skeleton */}
+          <div className="bg-white border-y border-gray-200 py-3.5">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-6">
+              {[1, 2, 3, 4, 5].map((t) => (
+                <div key={t} className="h-4 w-20 rounded skeleton-shimmer" />
+              ))}
+            </div>
+          </div>
+
+          {/* Overview + Map Grid Skeleton */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-7 h-72 bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+              <div className="h-6 w-48 rounded skeleton-shimmer" />
+              <div className="space-y-2.5">
+                <div className="h-3.5 w-full rounded skeleton-shimmer" />
+                <div className="h-3.5 w-11/12 rounded skeleton-shimmer" />
+                <div className="h-3.5 w-4/5 rounded skeleton-shimmer" />
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-4">
+                <div className="h-14 rounded-xl skeleton-shimmer" />
+                <div className="h-14 rounded-xl skeleton-shimmer" />
+              </div>
+            </div>
+            <div className="lg:col-span-5 h-72 bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+              <div className="h-6 w-40 rounded skeleton-shimmer" />
+              <div className="h-44 w-full rounded-xl skeleton-shimmer" />
+            </div>
+          </div>
+        </main>
         <Footer />
       </div>
     );
@@ -123,7 +204,12 @@ export default function ContractorProfilePage() {
       <Header onOpenQuoteModal={() => setQuoteModalOpen(true)} />
 
       {/* Main Content Area */}
-      <main className="flex-1 pb-16">
+      <motion.main
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+        className="flex-1 pb-16"
+      >
         {/* Hero Section Container */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 pb-6">
           <ProfileHero
@@ -174,7 +260,7 @@ export default function ContractorProfilePage() {
             onOpenQuoteModal={() => setQuoteModalOpen(true)}
           />
         </div>
-      </main>
+      </motion.main>
 
       {/* Global Footer */}
       <Footer />

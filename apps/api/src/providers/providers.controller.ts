@@ -56,7 +56,7 @@ export class ProvidersController {
 
   /**
    * GET /api/providers/:slug/reviews
-   * Paginated verified customer reviews (50 per page default, 100% R2 media, zero static/third-party URLs)
+   * Paginated verified customer reviews (10 per page default, 100% R2 media, zero static/third-party URLs)
    */
   @Get(':slug/reviews')
   @Header('Cache-Control', PUBLIC_CACHE_HEADER)
@@ -71,7 +71,7 @@ export class ProvidersController {
   ) {
     const result = await this.providersService.getPaginatedReviews(slug, {
       page: page ? Number(page) : 1,
-      limit: limit ? Number(limit) : 50,
+      limit: limit ? Number(limit) : 10,
       platform,
       withPhotos: withPhotos === 'true' || withPhotos === '1',
       sortBy,

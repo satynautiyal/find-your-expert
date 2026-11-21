@@ -1142,6 +1142,35 @@ export class ProvidersService implements OnApplicationBootstrap {
       scrapedByProvider.set(sr.providerProfileId, arr);
     }
 
+    // Cross-seed raw-reviews cache during profile hydration so opening ReviewsModal hits 0 DB queries
+    if (includeScrapedReviews) {
+      for (const p of rawProviders) {
+        const provRows = (scrapedByProvider.get(p.id) || []).filter((r: any) =>
+          this.isCleanReviewComment(r.comment)
+        );
+        const provPhotoEntries: Array<[string, string[]]> = [];
+        for (const r of provRows) {
+          const keys = rawPhotoKeysMap.get(r.id);
+          if (keys && keys.length > 0) {
+            provPhotoEntries.push([r.id, keys]);
+          }
+        }
+        const stats = this.computeReviewStats(provRows, rawPhotoKeysMap);
+        this.cache.set(
+          `providers:raw-reviews:${p.slug}`,
+          {
+            cleanRows: provRows,
+            photoEntries: provPhotoEntries,
+            stats,
+          },
+          {
+            ttlMs: 15 * 60 * 1000,
+            swrMs: 45 * 60 * 1000,
+          }
+        );
+      }
+    }
+
     return Promise.all(
       rawProviders.map((p) =>
         this.formatProvider({
@@ -1529,9 +1558,9 @@ export class ProvidersService implements OnApplicationBootstrap {
   }
 
   /**
-   * Fast server-side paginated reviews endpoint (default 50 reviews per page).
+   * Fast server-side paginated reviews endpoint (default 10 reviews per page, max 50).
    * - Filters, searches, and sorts across up to 2,000 real DB reviews per contractor.
-   * - Signs R2 presigned URLs ONLY for the requested 50-review slice.
+   * - Signs R2 presigned URLs ONLY for the requested page slice & caches signed pages in memory.
    * - Enforces 100% zero static data and 100% zero third-party URLs.
    */
   async getPaginatedReviews(
@@ -1546,39 +1575,132 @@ export class ProvidersService implements OnApplicationBootstrap {
     }
   ): Promise<PaginatedProviderReviewsResult> {
     const page = Math.max(1, Number(options?.page) || 1);
-    const limit = Math.min(100, Math.max(1, Number(options?.limit) || 50));
+    const limit = Math.min(50, Math.max(1, Number(options?.limit) || 10));
     const platform = (options?.platform || 'ALL').trim().toUpperCase();
     const withPhotos = Boolean(options?.withPhotos);
     const sortBy = (options?.sortBy || 'RELEVANT').trim().toUpperCase();
     const search = (options?.search || '').trim().toLowerCase();
 
-    const rawDataset = await this.cache.getOrSet(
-      `providers:raw-reviews:${slug}`,
+    const pageCacheKey = `providers:reviews-page:${slug}:${page}:${limit}:${platform}:${
+      withPhotos ? 1 : 0
+    }:${sortBy}:${search}`;
+
+    return this.cache.getOrSet(
+      pageCacheKey,
       async () => {
-        const profile = await this.prisma.providerProfile.findUnique({
-          where: { slug },
-          select: { id: true },
-        });
-        if (!profile) {
-          throw new NotFoundException(`Provider with slug "${slug}" not found`);
+        const rawDataset = await this.cache.getOrSet(
+          `providers:raw-reviews:${slug}`,
+          async () => {
+            const profile = await this.prisma.providerProfile.findUnique({
+              where: { slug },
+              select: { id: true },
+            });
+            if (!profile) {
+              throw new NotFoundException(`Provider with slug "${slug}" not found`);
+            }
+
+            const [rows, photoMap] = await Promise.all([
+              this.prisma.scrapedReview.findMany({
+                where: { providerProfileId: profile.id },
+                select: {
+                  id: true,
+                  authorName: true,
+                  authorAvatarUrl: true,
+                  rating: true,
+                  comment: true,
+                  reviewDate: true,
+                  platform: true,
+                  createdAt: true,
+                  updatedAt: true,
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 2000,
+              }),
+              this.loadRawReviewPhotoKeysMap([profile.id]),
+            ]);
+
+            const cleanRows = rows.filter((r: any) => this.isCleanReviewComment(r.comment));
+            const stats = this.computeReviewStats(cleanRows, photoMap);
+
+            return {
+              cleanRows,
+              photoEntries: Array.from(photoMap.entries()),
+              stats,
+            };
+          },
+          {
+            ttlMs: 15 * 60 * 1000,
+            swrMs: 45 * 60 * 1000,
+          }
+        );
+
+        const rawPhotoKeysMap = new Map<string, string[]>(rawDataset.photoEntries);
+        let filtered = rawDataset.cleanRows.map((row: any, origIdx: number) => ({
+          row,
+          origIdx,
+          hasPhotos: (rawPhotoKeysMap.get(row.id)?.length || 0) > 0 ? 1 : 0,
+        }));
+
+        if (platform && platform !== 'ALL') {
+          filtered = filtered.filter((x: any) => String(x.row.platform).toUpperCase() === platform);
         }
 
-        const [rows, photoMap] = await Promise.all([
-          this.prisma.scrapedReview.findMany({
-            where: { providerProfileId: profile.id },
-            orderBy: { createdAt: 'desc' },
-            take: 2000,
-          }),
-          this.loadRawReviewPhotoKeysMap([profile.id]),
-        ]);
+        if (withPhotos) {
+          filtered = filtered.filter((x: any) => x.hasPhotos === 1);
+        }
 
-        const cleanRows = rows.filter((r) => this.isCleanReviewComment(r.comment));
-        const stats = this.computeReviewStats(cleanRows, photoMap);
+        if (search) {
+          filtered = filtered.filter(
+            (x: any) =>
+              x.row.comment.toLowerCase().includes(search) ||
+              x.row.authorName.toLowerCase().includes(search)
+          );
+        }
+
+        if (sortBy === 'RELEVANT') {
+          filtered.sort((a: any, b: any) =>
+            b.hasPhotos !== a.hasPhotos ? b.hasPhotos - a.hasPhotos : a.origIdx - b.origIdx
+          );
+        } else if (sortBy === 'RECENT') {
+          filtered.sort((a: any, b: any) => {
+            const bMs = this.aiReviewSummaryService.parseReviewRecencyMs(
+              b.row.reviewDate,
+              b.row.updatedAt || b.row.createdAt
+            );
+            const aMs = this.aiReviewSummaryService.parseReviewRecencyMs(
+              a.row.reviewDate,
+              a.row.updatedAt || a.row.createdAt
+            );
+            return bMs !== aMs ? bMs - aMs : a.origIdx - b.origIdx;
+          });
+        } else if (sortBy === 'HIGHEST') {
+          filtered.sort((a: any, b: any) =>
+            b.row.rating !== a.row.rating ? b.row.rating - a.row.rating : a.origIdx - b.origIdx
+          );
+        } else if (sortBy === 'LOWEST') {
+          filtered.sort((a: any, b: any) =>
+            a.row.rating !== b.row.rating ? a.row.rating - b.row.rating : a.origIdx - b.origIdx
+          );
+        }
+
+        const totalMatching = filtered.length;
+        const totalPages = Math.max(1, Math.ceil(totalMatching / limit));
+        const safePage = Math.min(page, totalPages);
+        const offset = (safePage - 1) * limit;
+        const pageSlice = filtered.slice(offset, offset + limit).map((x: any) => x.row);
+
+        const signedItems = await this.signReviewSlice(pageSlice, rawPhotoKeysMap);
 
         return {
-          cleanRows,
-          photoEntries: Array.from(photoMap.entries()),
-          stats,
+          items: signedItems,
+          pagination: {
+            page: safePage,
+            limit,
+            totalMatching,
+            totalPages,
+            hasMore: safePage < totalPages,
+          },
+          stats: rawDataset.stats,
         };
       },
       {
@@ -1586,64 +1708,6 @@ export class ProvidersService implements OnApplicationBootstrap {
         swrMs: ProvidersService.LIST_CACHE_SWR_MS,
       }
     );
-
-    const rawPhotoKeysMap = new Map<string, string[]>(rawDataset.photoEntries);
-    let filtered = rawDataset.cleanRows.map((row, origIdx) => ({
-      row,
-      origIdx,
-      hasPhotos: (rawPhotoKeysMap.get(row.id)?.length || 0) > 0 ? 1 : 0,
-    }));
-
-    if (platform && platform !== 'ALL') {
-      filtered = filtered.filter((x) => String(x.row.platform).toUpperCase() === platform);
-    }
-
-    if (withPhotos) {
-      filtered = filtered.filter((x) => x.hasPhotos === 1);
-    }
-
-    if (search) {
-      filtered = filtered.filter(
-        (x) =>
-          x.row.comment.toLowerCase().includes(search) ||
-          x.row.authorName.toLowerCase().includes(search)
-      );
-    }
-
-    if (sortBy === 'RELEVANT') {
-      filtered.sort((a, b) =>
-        b.hasPhotos !== a.hasPhotos ? b.hasPhotos - a.hasPhotos : a.origIdx - b.origIdx
-      );
-    } else if (sortBy === 'HIGHEST') {
-      filtered.sort((a, b) =>
-        b.row.rating !== a.row.rating ? b.row.rating - a.row.rating : a.origIdx - b.origIdx
-      );
-    } else if (sortBy === 'LOWEST') {
-      filtered.sort((a, b) =>
-        a.row.rating !== b.row.rating ? a.row.rating - b.row.rating : a.origIdx - b.origIdx
-      );
-    }
-    // sortBy === 'RECENT' preserves chronological `createdAt desc` order (`origIdx`)
-
-    const totalMatching = filtered.length;
-    const totalPages = Math.max(1, Math.ceil(totalMatching / limit));
-    const safePage = Math.min(page, totalPages);
-    const offset = (safePage - 1) * limit;
-    const pageSlice = filtered.slice(offset, offset + limit).map((x) => x.row);
-
-    const signedItems = await this.signReviewSlice(pageSlice, rawPhotoKeysMap);
-
-    return {
-      items: signedItems,
-      pagination: {
-        page: safePage,
-        limit,
-        totalMatching,
-        totalPages,
-        hasMore: safePage < totalPages,
-      },
-      stats: rawDataset.stats,
-    };
   }
 
   /**

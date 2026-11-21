@@ -1,5 +1,6 @@
 'use client';
 
+import { motion, AnimatePresence } from 'motion/react';
 import { X, ArrowRight } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
 import { EButton } from '@/components/EComponents';
@@ -17,10 +18,16 @@ export default function CompareDrawer({
   onClear,
   onOpenCompareModal,
 }: CompareDrawerProps) {
-  if (comparedProviders.length === 0) return null;
-
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 max-w-2xl w-[94%] bg-gray-950 text-white rounded-2xl shadow-2xl p-3 sm:p-4 border border-gray-800 animate-in slide-in-from-bottom duration-200 flex items-center justify-between gap-3 sm:gap-4">
+    <AnimatePresence>
+      {comparedProviders.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 32, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 28, scale: 0.97 }}
+          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 max-w-2xl w-[94%] bg-gray-950 text-white rounded-2xl shadow-2xl p-3 sm:p-4 border border-gray-800 flex items-center justify-between gap-3 sm:gap-4"
+        >
       <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
         <div className="flex -space-x-2 shrink-0">
           {comparedProviders.map((p) => (
@@ -67,6 +74,8 @@ export default function CompareDrawer({
           <span className="hidden sm:inline">&nbsp;Side-by-Side</span>
         </EButton>
       </div>
-    </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

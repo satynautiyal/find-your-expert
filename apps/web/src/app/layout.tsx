@@ -1,12 +1,27 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
-import { Plus_Jakarta_Sans } from 'next/font/google';
+import { Plus_Jakarta_Sans, Outfit, Caveat } from 'next/font/google';
+import NextTopLoader from 'nextjs-toploader';
 import './globals.css';
 
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700', '800'],
   variable: '--font-sans',
+  display: 'swap',
+});
+
+const outfitFont = Outfit({
+  subsets: ['latin'],
+  weight: ['500', '600', '700', '800'],
+  variable: '--font-outfit',
+  display: 'swap',
+});
+
+const caveatFont = Caveat({
+  subsets: ['latin'],
+  weight: ['600', '700'],
+  variable: '--font-caveat',
   display: 'swap',
 });
 
@@ -61,7 +76,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={plusJakarta.variable}>
+    <html
+      lang="en"
+      className={`${plusJakarta.variable} ${outfitFont.variable} ${caveatFont.variable}`}
+    >
       <head>
         {/* Google Tag Manager */}
         <Script
@@ -77,6 +95,17 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         />
       </head>
       <body className={`${plusJakarta.className} antialiased min-h-screen bg-[#F9FAFB] text-gray-950 selection:bg-primary selection:text-white`}>
+        <NextTopLoader
+          color="#DA5F2F"
+          initialPosition={0.12}
+          crawlSpeed={180}
+          height={2.5}
+          crawl={true}
+          showSpinner={false}
+          easing="ease"
+          speed={220}
+          shadow="0 0 10px rgba(218, 95, 47, 0.45)"
+        />
         {/* Google Tag Manager (noscript) */}
         <noscript>
           <iframe

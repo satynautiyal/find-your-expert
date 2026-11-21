@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { motion } from 'motion/react';
 import {
   Star,
   ChevronRight,
@@ -821,23 +822,32 @@ export default function ProfileServicesAndReviews({
                     setFilterPlatform(opt.key);
                     setOnlyWithPhotos(false);
                   }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                  className={`relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
                     active
-                      ? 'bg-[#0B3B2C] text-white border-[#0B3B2C] shadow-sm'
+                      ? 'text-white border-[#0B3B2C]'
                       : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                   }`}
                 >
-                  {opt.key !== 'ALL' && renderPlatformIcon(opt.key)}
-                  <span>{opt.label}</span>
-                  {opt.count > 0 && (
-                    <span
-                      className={`text-[11px] tabular-nums ${
-                        active ? 'text-white/80' : 'text-gray-400'
-                      }`}
-                    >
-                      ({opt.count})
-                    </span>
+                  {active && (
+                    <motion.span
+                      layoutId="review-platform-filter-pill"
+                      transition={{ type: 'spring', stiffness: 440, damping: 35 }}
+                      className="absolute inset-0 rounded-[11px] bg-[#0B3B2C] shadow-sm"
+                    />
                   )}
+                  <span className="relative z-10 inline-flex items-center gap-1.5">
+                    {opt.key !== 'ALL' && renderPlatformIcon(opt.key)}
+                    <span>{opt.label}</span>
+                    {opt.count > 0 && (
+                      <span
+                        className={`text-[11px] tabular-nums ${
+                          active ? 'text-white/80' : 'text-gray-400'
+                        }`}
+                      >
+                        ({opt.count})
+                      </span>
+                    )}
+                  </span>
                 </button>
               );
             })}
@@ -873,24 +883,30 @@ export default function ProfileServicesAndReviews({
               {[1, 2, 3].map((sk) => (
                 <div
                   key={sk}
-                  className="p-4 rounded-2xl border border-gray-200/80 bg-[#F8FAFC]/60 space-y-3 animate-pulse"
+                  className="p-4 rounded-2xl border border-gray-200/80 bg-white space-y-3"
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-full bg-gray-200" />
+                    <div className="w-9 h-9 rounded-full skeleton-shimmer" />
                     <div className="space-y-1.5">
-                      <div className="w-28 h-3 bg-gray-200 rounded" />
-                      <div className="w-16 h-2.5 bg-gray-100 rounded" />
+                      <div className="w-28 h-3 rounded skeleton-shimmer" />
+                      <div className="w-16 h-2.5 rounded skeleton-shimmer" />
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <div className="w-full h-3 bg-gray-100 rounded" />
-                    <div className="w-5/6 h-3 bg-gray-100 rounded" />
+                    <div className="w-full h-3 rounded skeleton-shimmer" />
+                    <div className="w-5/6 h-3 rounded skeleton-shimmer" />
                   </div>
                 </div>
               ))}
             </div>
           ) : filteredReviews.length > 0 ? (
-            <div className="space-y-5">
+            <motion.div
+              key={`${filterPlatform}-${onlyWithPhotos ? 'photos' : 'all'}`}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="space-y-5"
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
                 {filteredReviews.slice(0, 6).map((rev, idx) => (
                   <CustomerReviewCard
@@ -931,7 +947,7 @@ export default function ProfileServicesAndReviews({
                   <ChevronRight className="w-4 h-4 text-[#EA580C]" />
                 </button>
               </div>
-            </div>
+            </motion.div>
           ) : selectedPlatformSummary ? (
             <div className="p-5 rounded-2xl border border-gray-200/90 bg-[#F8FAFC] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="space-y-1">

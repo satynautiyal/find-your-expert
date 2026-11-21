@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { motion } from 'motion/react';
 import {
   Header,
   Footer,
@@ -501,20 +502,20 @@ function ContractorsDirectoryContent() {
               </div>
             </div>
           ) : isLoading ? (
-            /* Skeleton Loaders */
+            /* Smooth Shimmer Skeleton Loaders */
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
                 <div
                   key={i}
-                  className="bg-white rounded-2xl border border-gray-200 p-6 animate-pulse space-y-4"
+                  className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4 shadow-2xs"
                 >
                   <div className="flex flex-col md:flex-row gap-5">
-                    <div className="w-full md:w-60 h-44 bg-gray-200 rounded-xl shrink-0" />
+                    <div className="w-full md:w-60 h-44 rounded-xl shrink-0 skeleton-shimmer" />
                     <div className="flex-1 space-y-3">
-                      <div className="h-6 bg-gray-200 rounded w-1/3" />
-                      <div className="h-4 bg-gray-100 rounded w-1/2" />
-                      <div className="h-4 bg-gray-100 rounded w-2/3" />
-                      <div className="h-12 bg-gray-100 rounded w-full mt-4" />
+                      <div className="h-6 rounded w-1/3 skeleton-shimmer" />
+                      <div className="h-4 rounded w-1/2 skeleton-shimmer" />
+                      <div className="h-4 rounded w-2/3 skeleton-shimmer" />
+                      <div className="h-12 rounded-xl w-full mt-4 skeleton-shimmer" />
                     </div>
                   </div>
                 </div>
@@ -565,16 +566,26 @@ function ContractorsDirectoryContent() {
           ) : (
             /* Live Verified Providers Cards */
             filteredProviders.map((roofer, index) => (
-              <ProviderCard
+              <motion.div
                 key={roofer.id}
-                provider={roofer}
-                rank={index + 1}
-                isCompared={comparedIds.includes(roofer.id)}
-                onToggleCompare={handleToggleCompare}
-                onOpenQuoteModal={handleOpenQuote}
-                onOpenCostGuide={() => setCostGuideOpen(true)}
-                onOpenReviewsModal={handleOpenReviewsModal}
-              />
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.22,
+                  delay: Math.min(index * 0.035, 0.2),
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              >
+                <ProviderCard
+                  provider={roofer}
+                  rank={index + 1}
+                  isCompared={comparedIds.includes(roofer.id)}
+                  onToggleCompare={handleToggleCompare}
+                  onOpenQuoteModal={handleOpenQuote}
+                  onOpenCostGuide={() => setCostGuideOpen(true)}
+                  onOpenReviewsModal={handleOpenReviewsModal}
+                />
+              </motion.div>
             ))
           )}
         </div>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -20,8 +21,13 @@ export default function PhotoLightboxModal({
   initialIndex = 0,
   providerName = 'Contractor',
 }: PhotoLightboxModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const hasMultiple = photos.length > 1;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [emblaMainRef, emblaMainApi] = useEmblaCarousel({
     loop: hasMultiple,
@@ -79,15 +85,21 @@ export default function PhotoLightboxModal({
     };
   }, [isOpen, onClose, emblaMainApi]);
 
-  if (!isOpen || photos.length === 0 || typeof document === 'undefined') return null;
+  if (!mounted || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${providerName} photo gallery`}
-      className="fixed inset-0 !m-0 z-[100] bg-black/95 backdrop-blur-sm flex flex-col justify-between p-4 sm:p-6"
-    >
+    <AnimatePresence>
+      {isOpen && photos.length > 0 && (
+        <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${providerName} photo gallery`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="fixed inset-0 !m-0 z-[100] bg-black/95 backdrop-blur-sm flex flex-col justify-between p-4 sm:p-6"
+        >
       {/* Top Bar */}
       <div className="flex items-center justify-between text-white/90 z-10 pb-4 border-b border-white/10">
         <div>
@@ -205,7 +217,9 @@ export default function PhotoLightboxModal({
           </div>
         </div>
       )}
-    </div>,
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body
   );
 }
