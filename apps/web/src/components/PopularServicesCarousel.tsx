@@ -6,6 +6,7 @@ import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { EButton } from '@/components/EComponents';
 import SafeImage from '@/components/common/SafeImage';
 import type { CategoryItem } from '@/lib/api';
+import { getServiceUrl } from '@/lib/seo-urls';
 
 export interface PopularServicesCarouselProps {
   categories: CategoryItem[];
@@ -20,7 +21,7 @@ export default function PopularServicesCarousel({
   loading = false,
   title = 'Find Contractors by Project Type',
   subtitle = 'POPULAR HOME SERVICES',
-  viewAllHref = '/contractors',
+  viewAllHref = '/services',
 }: PopularServicesCarouselProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const animFrameRef = useRef<number | null>(null);
@@ -340,7 +341,7 @@ export default function PopularServicesCarousel({
               categories.map((service) => (
                 <Link
                   key={service.id || service.slug || service.name}
-                  href={`/contractors?service=${encodeURIComponent(service.name)}`}
+                  href={getServiceUrl(service.slug || service.name)}
                   onClickCapture={handleItemClick}
                   data-carousel-item
                   className="flex flex-col items-center group shrink-0 !w-20 xs:!w-24 sm:!w-28 text-center select-none transition-transform duration-200 hover:-translate-y-0.5 focus:outline-none"

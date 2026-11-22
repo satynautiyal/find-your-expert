@@ -231,8 +231,29 @@
   max-width: 100%;
   height: auto;
   border-radius: 0.75rem;
-  margin: 1.5rem auto;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
   display: block;
+}
+
+.ProseMirror img:not([data-align]),
+.prose img:not([data-align]),
+.ProseMirror img[data-align="center"],
+.prose img[data-align="center"] {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.ProseMirror img[data-align="left"],
+.prose img[data-align="left"] {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.ProseMirror img[data-align="right"],
+.prose img[data-align="right"] {
+  margin-left: auto;
+  margin-right: 0;
 }
 
 /* Table Styling for CMS Editor, Live Preview & Published Blog Posts */

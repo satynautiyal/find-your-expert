@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { Phone, ArrowRight } from 'lucide-react';
 import type { RooferProvider } from '@/data/mockRoofers';
 
@@ -58,6 +59,19 @@ export default function ProfileBottomCta({
               <span>Call {provider.displayPhone || provider.phone}</span>
             </a>
           </div>
+        </div>
+
+        {/* Sheet 1 Row 17: Link `/for-businesses/update-listing` from company profiles */}
+        <div className="mt-6 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11px] text-emerald-100/70">
+          <span>
+            Represent {provider.name} or notice outdated profile information?
+          </span>
+          <Link
+            href="/for-businesses/update-listing"
+            className="font-bold text-emerald-200 hover:text-white underline underline-offset-2 transition-colors"
+          >
+            Update Your Listing &rarr;
+          </Link>
         </div>
       </div>
     </section>

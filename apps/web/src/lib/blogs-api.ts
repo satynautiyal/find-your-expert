@@ -15,15 +15,21 @@ interface ApiResponse<T> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// IN-FLIGHT DEDUPLICATION + SHORT-TTL CLIENT CACHE (PUBLIC BLOG READS ONLY)
+// IN-FLIGHT DEDUPLICATION + BOUNDED TTL CACHE (DRY CLIENT + SSR)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const BLOG_CLIENT_CACHE_TTL_MS = 60_000;
-const BLOG_SSR_CACHE_TTL_MS = 15_000;
+const BLOG_CLIENT_CACHE_TTL_MS = 90_000;
+const BLOG_SSR_CACHE_TTL_MS = 30_000;
+const ADMIN_CLIENT_CACHE_TTL_MS = 20_000;
+
 const blogMemoryCache = new Map<string, { data: unknown; expiresAt: number }>();
 const blogInFlight = new Map<string, Promise<unknown>>();
 
-function cachedBlogRequest<T>(cacheKey: string, fetcher: () => Promise<T>): Promise<T> {
+function cachedBlogRequest<T>(
+  cacheKey: string,
+  fetcher: () => Promise<T>,
+  customTtlMs?: number
+): Promise<T> {
   const now = Date.now();
   const cached = blogMemoryCache.get(cacheKey);
   if (cached && now < cached.expiresAt) {
@@ -35,10 +41,15 @@ function cachedBlogRequest<T>(cacheKey: string, fetcher: () => Promise<T>): Prom
     return existing as Promise<T>;
   }
 
-  const ttl = typeof window !== 'undefined' ? BLOG_CLIENT_CACHE_TTL_MS : BLOG_SSR_CACHE_TTL_MS;
+  const ttl =
+    customTtlMs ??
+    (typeof window !== 'undefined'
+      ? BLOG_CLIENT_CACHE_TTL_MS
+      : BLOG_SSR_CACHE_TTL_MS);
+
   const promise = fetcher()
     .then((res) => {
-      if (blogMemoryCache.size >= 150 && !blogMemoryCache.has(cacheKey)) {
+      if (blogMemoryCache.size >= 200 && !blogMemoryCache.has(cacheKey)) {
         const oldest = blogMemoryCache.keys().next().value;
         if (oldest !== undefined) blogMemoryCache.delete(oldest);
       }
@@ -58,8 +69,10 @@ export function invalidateBlogsCache(): void {
 }
 
 /**
- * Robust URL builder for API requests (works in client, SSR, with full or relative URLs).
- * Normalizes localhost:4000 -> 127.0.0.1:4000 in development to avoid Windows IPv6 ::1 fallback delays.
+ * Unified API URL builder:
+ * - In browser: uses same-origin `/api/...` Next.js rewrite in development (eliminates
+ *   cross-origin `localhost` vs `127.0.0.1` mismatches & CORS `OPTIONS` preflights).
+ * - On server (SSR): connects directly to `localhost:4000/api/...` (or production API).
  */
 function buildApiUrl(
   endpoint: string,
@@ -68,18 +81,20 @@ function buildApiUrl(
   const cleanEndpoint = endpoint.replace(/^\/+/, '');
   let fullUrl: string;
 
-  const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (envUrl && (envUrl.startsWith('http://') || envUrl.startsWith('https://'))) {
-    const normalizedEnv = envUrl
-      .replace(/\/+$/, '')
-      .replace('://localhost:4000', '://127.0.0.1:4000');
-    fullUrl = `${normalizedEnv}/${cleanEndpoint}`;
-  } else if (process.env.NODE_ENV === 'production') {
-    fullUrl = `https://api.prosvetted.com/api/${cleanEndpoint}`;
-  } else if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
     fullUrl = `${window.location.origin}/api/${cleanEndpoint}`;
   } else {
-    fullUrl = `http://127.0.0.1:4000/api/${cleanEndpoint}`;
+    const envUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (envUrl && (envUrl.startsWith('http://') || envUrl.startsWith('https://'))) {
+      const normalizedEnv = envUrl
+        .replace(/\/+$/, '')
+        .replace('://127.0.0.1:4000', '://localhost:4000');
+      fullUrl = `${normalizedEnv}/${cleanEndpoint}`;
+    } else if (process.env.NODE_ENV === 'production') {
+      fullUrl = `https://api.prosvetted.com/api/${cleanEndpoint}`;
+    } else {
+      fullUrl = `http://localhost:4000/api/${cleanEndpoint}`;
+    }
   }
 
   const url = new URL(fullUrl);
@@ -95,8 +110,46 @@ function buildApiUrl(
 }
 
 /**
- * Fetch published blogs for the public /blog listing page
+ * DRY JSON fetch wrapper with Next.js ISR support for public SSR reads
+ * and zero unnecessary CORS-preflight headers on GET requests.
  */
+async function fetchBlogApiJson<T>(
+  url: string,
+  options: { revalidateSeconds?: number; init?: RequestInit } = {}
+): Promise<T> {
+  const isServer = typeof window === 'undefined';
+  const fetchInit: RequestInit = {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    ...options.init,
+  };
+
+  if (isServer && options.revalidateSeconds !== undefined) {
+    fetchInit.next = { revalidate: options.revalidateSeconds };
+  } else if (!options.init?.cache && options.revalidateSeconds === undefined) {
+    fetchInit.cache = 'no-store';
+  }
+
+  const response = await fetch(url, fetchInit);
+  if (!response.ok) {
+    const errBody = await response.json().catch(() => null);
+    const msg = Array.isArray(errBody?.message)
+      ? errBody.message.join(', ')
+      : errBody?.message || errBody?.error;
+    throw new Error(msg || `Blog API error (HTTP ${response.status})`);
+  }
+
+  const json: ApiResponse<T> = await response.json();
+  if (!json.success) {
+    throw new Error(json.error || json.message || 'Invalid blogs API response');
+  }
+  return json.data;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PUBLIC READ ENDPOINTS
+// ═══════════════════════════════════════════════════════════════════════════
+
 export async function fetchBlogs(
   params: GetBlogsQueryInput = {}
 ): Promise<PaginatedBlogsResponse> {
@@ -106,120 +159,60 @@ export async function fetchBlogs(
     status: 'PUBLISHED',
   };
 
-  if (params.search && params.search.trim()) {
-    queryParams.search = params.search.trim();
-  }
+  if (params.search?.trim()) queryParams.search = params.search.trim();
   if (params.category && params.category !== 'All') {
     queryParams.category = params.category;
   }
-  if (params.tag) {
-    queryParams.tag = params.tag;
-  }
-  if (params.sortBy) {
-    queryParams.sortBy = params.sortBy;
-  }
-  if (params.sortOrder) {
-    queryParams.sortOrder = params.sortOrder;
-  }
+  if (params.tag) queryParams.tag = params.tag;
+  if (params.sortBy) queryParams.sortBy = params.sortBy;
+  if (params.sortOrder) queryParams.sortOrder = params.sortOrder;
 
   const url = buildApiUrl('blogs', queryParams);
-
-  return cachedBlogRequest(`blogs:list:${url}`, async () => {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch blogs: ${response.status}`);
-    }
-
-    const json: ApiResponse<PaginatedBlogsResponse> = await response.json();
-    if (!json.success || !json.data) {
-      throw new Error(json.error || 'Invalid blogs API response');
-    }
-
-    return json.data;
-  });
+  return cachedBlogRequest(`blogs:list:${url}`, () =>
+    fetchBlogApiJson<PaginatedBlogsResponse>(url, { revalidateSeconds: 60 })
+  );
 }
 
-/**
- * Fetch top featured post for the hero banner
- */
 export async function fetchFeaturedBlog(): Promise<BlogPost | null> {
   return cachedBlogRequest('blogs:featured', async () => {
     try {
       const url = buildApiUrl('blogs/featured');
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
-      });
-
-      if (!response.ok) return null;
-      const json: ApiResponse<BlogPost> = await response.json();
-      return json.success ? json.data : null;
+      return await fetchBlogApiJson<BlogPost | null>(url, { revalidateSeconds: 60 });
     } catch {
       return null;
     }
   });
 }
 
-/**
- * Fetch blog categories with counts
- */
 export async function fetchBlogCategories(): Promise<BlogCategoryCount[]> {
   return cachedBlogRequest('blogs:categories', async () => {
     try {
       const url = buildApiUrl('blogs/categories');
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        cache: 'no-store',
+      const data = await fetchBlogApiJson<BlogCategoryCount[]>(url, {
+        revalidateSeconds: 120,
       });
-
-      if (!response.ok) return [];
-      const json: ApiResponse<BlogCategoryCount[]> = await response.json();
-      return json.success && Array.isArray(json.data) ? json.data : [];
+      return Array.isArray(data) ? data : [];
     } catch {
       return [];
     }
   });
 }
 
-/**
- * Fetch a single blog post by slug + related articles
- */
 export async function fetchBlogBySlug(
   slug: string
 ): Promise<{ blog: BlogPost; relatedPosts: BlogPost[] }> {
   const url = buildApiUrl(`blogs/${encodeURIComponent(slug)}`);
-
-  return cachedBlogRequest(`blogs:slug:${slug}`, async () => {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      throw new Error(`Blog post "${slug}" not found (HTTP ${response.status})`);
-    }
-
-    const json: ApiResponse<{ blog: BlogPost; relatedPosts: BlogPost[] }> =
-      await response.json();
-    if (!json.success || !json.data) {
-      throw new Error(json.error || 'Failed to load blog post');
-    }
-
-    return json.data;
-  });
+  return cachedBlogRequest(`blogs:slug:${slug}`, () =>
+    fetchBlogApiJson<{ blog: BlogPost; relatedPosts: BlogPost[] }>(url, {
+      revalidateSeconds: 60,
+    })
+  );
 }
 
-/**
- * Admin: Fetch all blogs (Drafts + Published)
- */
+// ═══════════════════════════════════════════════════════════════════════════
+// ADMIN CMS ENDPOINTS
+// ═══════════════════════════════════════════════════════════════════════════
+
 export async function fetchAdminBlogs(
   params: GetBlogsQueryInput = {}
 ): Promise<PaginatedBlogsResponse> {
@@ -230,132 +223,93 @@ export async function fetchAdminBlogs(
     sortOrder: 'desc',
   };
 
-  if (params.search && params.search.trim()) queryParams.search = params.search.trim();
+  if (params.search?.trim()) queryParams.search = params.search.trim();
   if (params.status) queryParams.status = params.status;
-  if (params.category && params.category !== 'All') queryParams.category = params.category;
+  if (params.category && params.category !== 'All') {
+    queryParams.category = params.category;
+  }
 
   const url = buildApiUrl('blogs/admin/all', queryParams);
-
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-    cache: 'no-store',
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to load admin blogs: ${response.status}`);
-  }
-
-  const json: ApiResponse<PaginatedBlogsResponse> = await response.json();
-  return json.data;
+  return cachedBlogRequest(
+    `blogs:admin:list:${url}`,
+    () => fetchBlogApiJson<PaginatedBlogsResponse>(url),
+    ADMIN_CLIENT_CACHE_TTL_MS
+  );
 }
 
-/**
- * Admin: Fetch single post by ID for editor
- */
 export async function fetchAdminBlogById(id: string): Promise<BlogPost> {
   const url = buildApiUrl(`blogs/admin/post/${encodeURIComponent(id)}`);
-
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-    cache: 'no-store',
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to load post ${id}: ${response.status}`);
-  }
-
-  const json: ApiResponse<BlogPost> = await response.json();
-  return json.data;
+  return fetchBlogApiJson<BlogPost>(url);
 }
 
-/**
- * Admin: Create a new blog post
- */
-export async function createAdminBlog(payload: CreateBlogPostInput): Promise<BlogPost> {
+export async function createAdminBlog(
+  payload: CreateBlogPostInput
+): Promise<BlogPost> {
   const url = buildApiUrl('blogs/admin');
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  const data = await fetchBlogApiJson<BlogPost>(url, {
+    init: {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    },
   });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `Failed to create blog: HTTP ${response.status}`);
-  }
-
-  const json: ApiResponse<BlogPost> = await response.json();
   invalidateBlogsCache();
-  return json.data;
+  return data;
 }
 
-/**
- * Admin: Update an existing blog post
- */
 export async function updateAdminBlog(
   id: string,
   payload: UpdateBlogPostInput
 ): Promise<BlogPost> {
   const url = buildApiUrl(`blogs/admin/${encodeURIComponent(id)}`);
-
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  const data = await fetchBlogApiJson<BlogPost>(url, {
+    init: {
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    },
   });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `Failed to update blog: HTTP ${response.status}`);
-  }
-
-  const json: ApiResponse<BlogPost> = await response.json();
   invalidateBlogsCache();
-  return json.data;
+  return data;
 }
 
-/**
- * Admin: Delete a blog post
- */
 export async function deleteAdminBlog(id: string): Promise<boolean> {
   const url = buildApiUrl(`blogs/admin/${encodeURIComponent(id)}`);
-
-  const response = await fetch(url, {
-    method: 'DELETE',
+  await fetchBlogApiJson<unknown>(url, {
+    init: { method: 'DELETE' },
   });
-
-  if (!response.ok) {
-    throw new Error(`Failed to delete blog: HTTP ${response.status}`);
-  }
-
   invalidateBlogsCache();
   return true;
 }
 
 /**
- * Upload an image to Cloudflare R2 (via the API) and return a stable URL.
- *
- * The API streams the file to R2 server-side, so no bucket CORS config is needed.
- * The returned URL (`/api/storage/file?key=...`) never expires — it redirects to a
- * fresh presigned R2 URL on each request, so it's safe to store inside blog content.
+ * Uploads an image to Cloudflare R2 via `/api/storage/upload` and returns an
+ * immediately displayable URL (backend automatically persists clean storage keys on save).
  */
-export async function uploadImageToStorage(file: File, folder = 'blog-images'): Promise<string> {
+export async function uploadImageToStorage(
+  file: File,
+  folder = 'blog-images'
+): Promise<string> {
   const MAX_BYTES = 10 * 1024 * 1024;
   if (!file.type.startsWith('image/')) {
     throw new Error('Only image files can be uploaded');
   }
   if (file.size > MAX_BYTES) {
-    throw new Error(`Image is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max is 10 MB.`);
+    throw new Error(
+      `Image is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max is 10 MB.`
+    );
   }
 
   const form = new FormData();
   form.append('file', file);
   form.append('folder', folder);
 
-  // NOTE: don't set Content-Type manually — the browser adds the multipart boundary
   const response = await fetch(buildApiUrl('storage/upload'), {
     method: 'POST',
     body: form,
@@ -363,7 +317,9 @@ export async function uploadImageToStorage(file: File, folder = 'blog-images'): 
 
   const json = await response.json().catch(() => null);
   if (!response.ok || !json?.success || !json?.data?.url) {
-    const msg = Array.isArray(json?.message) ? json.message.join(', ') : json?.message;
+    const msg = Array.isArray(json?.message)
+      ? json.message.join(', ')
+      : json?.message;
     throw new Error(msg || `Image upload failed (HTTP ${response.status})`);
   }
 

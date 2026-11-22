@@ -163,6 +163,14 @@ export class ProvidersService implements OnApplicationBootstrap {
   ) { }
 
   /**
+   * Flush all cached `providers:*` keys so external script updates appear immediately.
+   */
+  public flushProvidersCache(): { cleared: boolean } {
+    this.cache.invalidatePrefix('providers:');
+    return { cleared: true };
+  }
+
+  /**
    * Ensure `scraped_reviews.photo_urls` JSON column exists in MariaDB/MySQL (idempotent).
    */
   private async ensureReviewPhotosColumn(): Promise<void> {
@@ -1247,7 +1255,12 @@ export class ProvidersService implements OnApplicationBootstrap {
     }
 
     if (borough && borough !== 'All') {
-      where.borough = { equals: borough };
+      const trimmedBorough = borough.trim();
+      if (/^(the\s+)?bronx$/i.test(trimmedBorough)) {
+        where.borough = { in: ['Bronx', 'The Bronx'] };
+      } else {
+        where.borough = { equals: trimmedBorough };
+      }
     }
 
     // Filter by high-level category if specified

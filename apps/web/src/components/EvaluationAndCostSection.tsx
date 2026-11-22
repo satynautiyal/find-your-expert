@@ -120,15 +120,12 @@ export default function EvaluationAndCostSection({
             </p>
           </div>
 
-          <EButton
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={onOpenCostGuide}
-            className="text-xs font-semibold text-[#111827] border-gray-300 hover:border-gray-400 self-start sm:self-end shrink-0 w-full sm:w-auto justify-center"
+          <Link
+            href="/how-we-research"
+            className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white hover:bg-gray-50 hover:border-gray-400 px-3.5 py-2 text-xs font-semibold text-[#111827] self-start sm:self-end shrink-0 w-full sm:w-auto transition-colors"
           >
             <span>Learn About Our Methodology</span>
-          </EButton>
+          </Link>
         </div>
 
         {/* 4 Methodology Cards Grid */}

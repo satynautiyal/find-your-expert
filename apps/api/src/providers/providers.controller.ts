@@ -99,6 +99,15 @@ export class ProvidersController {
     };
   }
 
+  @Post('cache/flush')
+  async flushCache() {
+    return {
+      success: true,
+      data: this.providersService.flushProvidersCache(),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   @Post('houzz-session/open')
   async openHouzzVisibleSession(@Body('url') url?: string) {
     const target =

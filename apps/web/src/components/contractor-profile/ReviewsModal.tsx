@@ -28,6 +28,7 @@ import {
   FacebookLogo,
 } from './PlatformLogos';
 import AiReviewSummaryCard from './AiReviewSummaryCard';
+import DropdownSelect from '@/components/common/DropdownSelect';
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -572,20 +573,21 @@ export default function ReviewsModal({
           </span>
 
           {totalMatching > 10 && (
-            <select
+            <DropdownSelect
               value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value) || DEFAULT_PAGE_SIZE);
+              onChange={(val) => {
+                setPageSize(Number(val) || DEFAULT_PAGE_SIZE);
                 setPage(1);
                 scrollFeedsToTop();
               }}
-              aria-label="Reviews per page"
-              className="py-1 px-2 rounded-lg border border-gray-200 bg-gray-50 hover:bg-white text-[11px] font-bold text-gray-700 cursor-pointer focus:outline-none focus:border-primary"
-            >
-              <option value={10}>10 / page</option>
-              <option value={20}>20 / page</option>
-              <option value={50}>50 / page</option>
-            </select>
+              options={[
+                { label: '10 / page', value: 10 },
+                { label: '20 / page', value: 20 },
+                { label: '50 / page', value: 50 },
+              ]}
+              ariaLabel="Reviews per page"
+              triggerClassName="py-1 px-2.5 text-[11px] font-bold"
+            />
           )}
         </div>
 
@@ -1052,22 +1054,24 @@ export default function ReviewsModal({
                 )}
               </div>
 
-              <select
+              <DropdownSelect
                 value={sortBy}
-                onChange={(e) => {
+                onChange={(val) => {
                   setSortBy(
-                    e.target.value as 'RELEVANT' | 'RECENT' | 'HIGHEST' | 'LOWEST'
+                    val as 'RELEVANT' | 'RECENT' | 'HIGHEST' | 'LOWEST'
                   );
                   setPage(1);
                 }}
-                aria-label="Sort reviews"
-                className="py-1.5 px-2.5 rounded-lg border border-gray-200 bg-gray-50/70 focus:bg-white focus:border-primary focus:outline-none text-xs font-semibold text-gray-700 shrink-0 cursor-pointer"
-              >
-                <option value="RELEVANT">Relevant</option>
-                <option value="RECENT">Recent</option>
-                <option value="HIGHEST">Highest ★</option>
-                <option value="LOWEST">Lowest ★</option>
-              </select>
+                options={[
+                  { label: 'Relevant', value: 'RELEVANT' },
+                  { label: 'Recent', value: 'RECENT' },
+                  { label: 'Highest ★', value: 'HIGHEST' },
+                  { label: 'Lowest ★', value: 'LOWEST' },
+                ]}
+                ariaLabel="Sort reviews"
+                align="right"
+                triggerClassName="py-1.5 px-2.5 shrink-0"
+              />
             </div>
           </div>
 
@@ -1279,21 +1283,24 @@ export default function ReviewsModal({
 
               <div className="flex items-center gap-2 shrink-0">
                 <SlidersHorizontal className="w-3.5 h-3.5 text-gray-400" />
-                <select
+                <DropdownSelect
                   value={sortBy}
-                  onChange={(e) => {
+                  onChange={(val) => {
                     setSortBy(
-                      e.target.value as 'RELEVANT' | 'RECENT' | 'HIGHEST' | 'LOWEST'
+                      val as 'RELEVANT' | 'RECENT' | 'HIGHEST' | 'LOWEST'
                     );
                     setPage(1);
                   }}
-                  className="py-2 px-3 rounded-xl border border-gray-200 bg-gray-50/70 focus:bg-white focus:border-primary focus:outline-none text-xs font-semibold text-gray-700 cursor-pointer"
-                >
-                  <option value="RELEVANT">Most Relevant</option>
-                  <option value="RECENT">Most Recent</option>
-                  <option value="HIGHEST">Highest Rated</option>
-                  <option value="LOWEST">Lowest Rated</option>
-                </select>
+                  options={[
+                    { label: 'Most Relevant', value: 'RELEVANT' },
+                    { label: 'Most Recent', value: 'RECENT' },
+                    { label: 'Highest Rated', value: 'HIGHEST' },
+                    { label: 'Lowest Rated', value: 'LOWEST' },
+                  ]}
+                  ariaLabel="Sort reviews"
+                  align="right"
+                  triggerClassName="py-2 px-3"
+                />
               </div>
             </div>
 

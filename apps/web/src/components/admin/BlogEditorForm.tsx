@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Editor } from '@tiptap/react';
+import type { Editor } from '@tiptap/react';
 import {
   ArrowLeft,
   Save,
@@ -50,7 +50,9 @@ import {
 } from '@/lib/blogs-api';
 import { getMediaUrl } from '@/lib/media-url';
 import SafeImage from '@/components/common/SafeImage';
+import DropdownSelect from '@/components/common/DropdownSelect';
 import TiptapEditor from './TiptapEditor';
+import FeaturedImageCard from './FeaturedImageCard';
 
 interface BlogEditorFormProps {
   initialData?: BlogPost;
@@ -117,8 +119,8 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
 
   // Editor reference for top bar actions
   const [editorInstance, setEditorInstance] = useState<Editor | null>(null);
-  const coverInputRef = useRef<HTMLInputElement>(null);
   const ogInputRef = useRef<HTMLInputElement>(null);
+  const blockImageInputRef = useRef<HTMLInputElement>(null);
   const docInfoRef = useRef<HTMLDivElement>(null);
   const inserterRef = useRef<HTMLDivElement>(null);
 
@@ -255,21 +257,24 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
     };
   }, [focusKeyword, plainText, activeMetaTitle, activeMetaDescription, slug, content, coverImageUrl, coverImageAlt]);
 
-  // Handle Cover Image Upload
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  // Handle Cover Image File Upload (shared DRY handler for Canvas + Post Sidebar + SEO Tab)
+  const handleCoverFileUpload = async (file: File) => {
     try {
       setIsUploadingCover(true);
       setErrorMsg('');
       const url = await uploadImageToStorage(file, 'blog-covers');
       setCoverImageUrl(url);
+      if (!coverImageAlt) {
+        const cleanAlt = file.name
+          .replace(/\.[^.]+$/, '')
+          .replace(/[-_]+/g, ' ')
+          .trim();
+        setCoverImageAlt(cleanAlt || title);
+      }
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to upload featured image');
     } finally {
       setIsUploadingCover(false);
-      if (coverInputRef.current) coverInputRef.current.value = '';
     }
   };
 
@@ -320,14 +325,14 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
 
     const effectiveStatus = targetStatus || status;
 
-    // Empty optional fields are sent as undefined so the API applies its own defaults
+    // In edit mode, send empty string `""` when cleared so backend explicitly resets cover/OG image
     const payload: CreateBlogPostInput | UpdateBlogPostInput = {
       title: title.trim(),
       slug: slug || undefined,
       excerpt: excerpt || undefined,
       content,
-      coverImageUrl: coverImageUrl || undefined,
-      coverImageAlt: coverImageAlt || undefined,
+      coverImageUrl: isEditMode ? coverImageUrl.trim() : coverImageUrl.trim() || undefined,
+      coverImageAlt: isEditMode ? coverImageAlt.trim() : coverImageAlt.trim() || undefined,
       authorName: authorName.trim() || undefined,
       authorRole: authorRole.trim() || undefined,
       category: customCategory.trim() || category || undefined,
@@ -342,7 +347,7 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
       metaDescription: metaDescription || undefined,
       focusKeyword: focusKeyword || undefined,
       canonicalUrl: canonicalUrl || undefined,
-      ogImageUrl: ogImageUrl || undefined,
+      ogImageUrl: isEditMode ? ogImageUrl.trim() : ogImageUrl.trim() || undefined,
     };
 
     try {
@@ -378,10 +383,10 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col font-sans selection:bg-[#fed7aa] selection:text-gray-900">
+    <div className="h-screen overflow-hidden bg-white flex flex-col font-sans selection:bg-[#fed7aa] selection:text-gray-900">
       
       {/* WordPress Gutenberg Top Navigation Bar */}
-      <header className="sticky top-0 z-40 h-14 bg-white border-b border-gray-200 px-3 sm:px-4 flex items-center justify-between select-none">
+      <header className="shrink-0 z-40 h-14 bg-white border-b border-gray-200 px-3 sm:px-4 flex items-center justify-between select-none">
         
         {/* Left Section: Back, Inserter (+), Undo, Redo, Info */}
         <div className="flex items-center gap-1.5 sm:gap-2">
@@ -506,6 +511,18 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                   <button
                     type="button"
                     onClick={() => {
+                      setIsInserterOpen(false);
+                      blockImageInputRef.current?.click();
+                    }}
+                    className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 text-left text-xs font-semibold text-gray-800 col-span-2 cursor-pointer"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-[#007cba]" />
+                    <span>Image (Upload to R2)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
                       editorInstance?.chain().focus().insertContent(
                         '<blockquote><p><strong>💡 Pro Tip:</strong> </p></blockquote><p></p>'
                       ).run();
@@ -519,6 +536,26 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                 </div>
               </div>
             )}
+            {/* Quick Block Image Upload Input */}
+            <input
+              ref={blockImageInputRef}
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file || !editorInstance) return;
+                try {
+                  const url = await uploadImageToStorage(file, 'blog-inline-images');
+                  const alt = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
+                  editorInstance.chain().focus().setImage({ src: url, alt }).run();
+                } catch (err: any) {
+                  setErrorMsg(err.message || 'Failed to upload inline image');
+                } finally {
+                  if (blockImageInputRef.current) blockImageInputRef.current.value = '';
+                }
+              }}
+              className="hidden"
+            />
           </div>
 
           <div className="h-4 w-px bg-gray-200 mx-1 hidden sm:block" />
@@ -685,13 +722,30 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
         </div>
       </header>
 
-      {/* Main Workspace: Left Gutenberg Canvas + Right Collapsible Inspector */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Workspace: Left Independent Scrollable Canvas + Right Pinned Inspector */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
         
-        {/* Left/Center Clean Document Canvas */}
-        <main className="flex-1 overflow-y-auto bg-white px-4 sm:px-12 py-10 flex justify-center">
-          <div className="w-full max-w-3xl space-y-4">
+        {/* Left/Center Clean Document Canvas (Scrolls independently so toolbars & sidebar stay pinned!) */}
+        <main className="flex-1 overflow-y-auto bg-white px-4 sm:px-12 pt-6 pb-20 flex justify-center items-start">
+          <div className="w-full max-w-3xl space-y-5">
             
+            {/* Always-Visible Featured Cover Image Banner at Top of Canvas */}
+            <FeaturedImageCard
+              variant="canvas"
+              imageUrl={coverImageUrl}
+              imageAlt={coverImageAlt}
+              category={customCategory || category}
+              title={title}
+              isUploading={isUploadingCover}
+              onUploadFile={handleCoverFileUpload}
+              onChangeUrl={setCoverImageUrl}
+              onChangeAlt={setCoverImageAlt}
+              onRemove={() => {
+                setCoverImageUrl('');
+                setCoverImageAlt('');
+              }}
+            />
+
             {/* Seamless Gutenberg Title Input */}
             <input
               type="text"
@@ -711,9 +765,9 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
           </div>
         </main>
 
-        {/* Right Collapsible Inspector Sidebar (WordPress Gutenberg Style - Slideover on Mobile) */}
+        {/* Right Collapsible Inspector Sidebar (Pinned full-height on desktop, slideover on mobile) */}
         {isSidebarOpen && (
-          <aside className="fixed sm:sticky inset-y-0 right-0 top-14 z-50 w-full sm:w-96 border-l border-gray-200 bg-white flex flex-col flex-shrink-0 h-[calc(100vh-56px)] overflow-hidden select-none animate-in slide-in-from-right-10 duration-150 shadow-2xl sm:shadow-none">
+          <aside className="fixed sm:static inset-y-0 right-0 top-14 sm:top-0 z-50 sm:z-auto w-full sm:w-96 border-l border-gray-200 bg-white flex flex-col flex-shrink-0 h-[calc(100vh-56px)] sm:h-full overflow-hidden select-none animate-in slide-in-from-right-10 duration-150 shadow-2xl sm:shadow-none">
             
             {/* Sidebar Tabs: Post | SEO Score | Block */}
             <div className="flex items-center justify-between border-b border-gray-200 px-3 pt-2 bg-gray-50/80">
@@ -771,7 +825,46 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
               {/* TAB 1: POST SETTINGS */}
               {sidebarTab === 'post' && (
                 <>
-                  {/* 1. Status & Visibility */}
+                  {/* 1. Featured Image (Moved to #1 top position so it is never buried below the fold!) */}
+                  <div className="p-4 space-y-3 bg-slate-50/40">
+                    <button
+                      type="button"
+                      onClick={() => toggleSection('featuredImage')}
+                      className="w-full flex items-center justify-between text-xs font-bold text-gray-900 cursor-pointer"
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-[#007cba]" />
+                        <span>Featured image</span>
+                      </span>
+                      {openSections.featuredImage ? (
+                        <ChevronDown className="w-4 h-4 text-gray-400" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
+
+                    {openSections.featuredImage && (
+                      <div className="pt-1">
+                        <FeaturedImageCard
+                          variant="sidebar"
+                          imageUrl={coverImageUrl}
+                          imageAlt={coverImageAlt}
+                          category={customCategory || category}
+                          title={title}
+                          isUploading={isUploadingCover}
+                          onUploadFile={handleCoverFileUpload}
+                          onChangeUrl={setCoverImageUrl}
+                          onChangeAlt={setCoverImageAlt}
+                          onRemove={() => {
+                            setCoverImageUrl('');
+                            setCoverImageAlt('');
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. Status & Visibility */}
                   <div className="p-4 space-y-3">
                     <button
                       type="button"
@@ -786,15 +879,19 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                       <div className="space-y-3 pt-2 text-xs">
                         <div className="flex items-center justify-between text-gray-600">
                           <span>Status</span>
-                          <select
+                          <DropdownSelect
                             value={status}
-                            onChange={(e) => setStatus(e.target.value as any)}
-                            className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg font-semibold text-gray-800 outline-none text-base sm:text-xs"
-                          >
-                            <option value="DRAFT">Draft</option>
-                            <option value="PUBLISHED">Published</option>
-                            <option value="ARCHIVED">Archived</option>
-                          </select>
+                            onChange={(val) =>
+                              setStatus(val as 'DRAFT' | 'PUBLISHED' | 'ARCHIVED')
+                            }
+                            options={[
+                              { label: 'Draft', value: 'DRAFT' },
+                              { label: 'Published', value: 'PUBLISHED' },
+                              { label: 'Archived', value: 'ARCHIVED' },
+                            ]}
+                            ariaLabel="Post status"
+                            align="right"
+                          />
                         </div>
 
                         <div className="flex items-center gap-2 pt-1">
@@ -948,89 +1045,6 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                             </span>
                           ))}
                         </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 5. Featured Image */}
-                  <div className="p-4 space-y-3">
-                    <button
-                      type="button"
-                      onClick={() => toggleSection('featuredImage')}
-                      className="w-full flex items-center justify-between text-xs font-bold text-gray-900 cursor-pointer"
-                    >
-                      <span>Featured image</span>
-                      {openSections.featuredImage ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                    </button>
-
-                    {openSections.featuredImage && (
-                      <div className="space-y-2.5 pt-1 text-xs">
-                        {coverImageUrl ? (
-                          <div className="relative group rounded-lg overflow-hidden border border-gray-200">
-                            <SafeImage
-                              src={coverImageUrl}
-                              alt={coverImageAlt || 'Featured'}
-                              fallbackCategory={category}
-                              fallbackTitle={title}
-                              fallbackIcon="image"
-                              className="w-full h-32 object-cover"
-                            />
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => coverInputRef.current?.click()}
-                                className="px-2.5 py-1 bg-white text-gray-900 rounded text-xs font-bold shadow-xs cursor-pointer"
-                              >
-                                Replace
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setCoverImageUrl('')}
-                                className="p-1 bg-rose-600 text-white rounded cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div
-                            onClick={() => coverInputRef.current?.click()}
-                            className="border-2 border-dashed border-gray-200 hover:border-[#007cba] rounded-lg p-5 text-center cursor-pointer transition-colors"
-                          >
-                            <ImageIcon className="w-6 h-6 text-gray-400 mx-auto mb-1.5" />
-                            <span className="text-xs font-semibold text-[#007cba] block">
-                              Set featured image
-                            </span>
-                            <span className="text-[10px] text-gray-400">
-                              Upload JPG, PNG or WebP
-                            </span>
-                          </div>
-                        )}
-
-                        <input
-                          ref={coverInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handleCoverUpload}
-                          className="hidden"
-                        />
-
-                        {isUploadingCover && (
-                          <div className="text-[11px] text-[#007cba] font-semibold flex items-center gap-1">
-                            <Upload className="w-3 h-3 animate-bounce" />
-                            <span>Uploading to Cloudflare R2...</span>
-                          </div>
-                        )}
-
-                        {coverImageUrl && (
-                          <input
-                            type="text"
-                            value={coverImageAlt}
-                            onChange={(e) => setCoverImageAlt(e.target.value)}
-                            placeholder="Alt text (alternative description)"
-                            className="w-full px-3 py-2 text-base sm:text-xs text-gray-800 border border-gray-200 rounded-lg outline-none focus:border-[#007cba]"
-                          />
-                        )}
                       </div>
                     )}
                   </div>
@@ -1257,6 +1271,31 @@ export default function BlogEditorForm({ initialData, isEditMode = false }: Blog
                         </span>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Featured Image & Alt Text right inside SEO Tab too! */}
+                  <div className="space-y-2.5 pt-3 border-t border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-900 inline-flex items-center gap-1.5">
+                        <ImageIcon className="w-3.5 h-3.5 text-[#007cba]" />
+                        <span>Featured Image & SEO Alt Text</span>
+                      </span>
+                    </div>
+                    <FeaturedImageCard
+                      variant="sidebar"
+                      imageUrl={coverImageUrl}
+                      imageAlt={coverImageAlt}
+                      category={customCategory || category}
+                      title={title}
+                      isUploading={isUploadingCover}
+                      onUploadFile={handleCoverFileUpload}
+                      onChangeUrl={setCoverImageUrl}
+                      onChangeAlt={setCoverImageAlt}
+                      onRemove={() => {
+                        setCoverImageUrl('');
+                        setCoverImageAlt('');
+                      }}
+                    />
                   </div>
 
                   {/* Meta Title & Description Inputs */}

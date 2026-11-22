@@ -1911,7 +1911,7 @@ export class ProjectsScraperService {
 
           const combinedPathLabel = `${pathname} ${label}`;
           if (
-            /\b(about|about-us|contact|privacy|terms|login|cart|faq|faqs|blog|news|article|author|tag|category|testimonial|reviews?|careers?|jobs?|team|staff|financing|warranty|areas?-we-serve|service-areas?|quote|estimate|free-estimate|sitemap)\b/i.test(
+            /\b(about|about-us|company|our-company|mobile-navigation|navigation|nav|contact|privacy|terms|login|cart|faq|faqs|blog|news|article|author|tag|category|testimonial|reviews?|careers?|jobs?|team|staff|financing|warranty|areas?-we-serve|service-areas?|quote|estimate|free-estimate|sitemap)\b/i.test(
               combinedPathLabel
             )
           ) {
@@ -2107,7 +2107,7 @@ export class ProjectsScraperService {
 
       const globalSeenImageKeys = new Set<string>();
       const isGenericNonProjectHeading = (t: string) =>
-        /^(home|welcome|index|about|about us|contact|contact us|services|our services|faq|faqs|reviews|testimonials|gallery|photo gallery|portfolio|our work|projects|recent projects)$/i.test(
+        /^(home|welcome|index|about|about us|company|our company|mobile navigation|navigation|menu|contact|contact us|services|our services|faq|faqs|reviews|testimonials|gallery|photo gallery|portfolio|our work|projects|recent projects)$/i.test(
           (t || '').trim()
         );
 
@@ -2234,7 +2234,7 @@ export class ProjectsScraperService {
               }
 
               if (
-                /\b(about|about-us|contact|contact-us|privacy|terms|login|cart|faq|faqs|blog|news|author|tag|category|testimonial|reviews?|careers?|jobs?|team|staff|press|services|our-services|financing|warranty|quote|estimate|free-estimate|book|consultation|inquiry)\b/i.test(
+                /\b(about|about-us|company|our-company|mobile-navigation|navigation|contact|contact-us|privacy|terms|login|cart|faq|faqs|blog|news|author|tag|category|testimonial|reviews?|careers?|jobs?|team|staff|press|services|our-services|financing|warranty|quote|estimate|free-estimate|book|consultation|inquiry)\b/i.test(
                   p
                 )
               ) {

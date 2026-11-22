@@ -13,12 +13,13 @@ export interface CompareModalProps {
 }
 
 function getVettedScore(provider: RooferProvider): number {
+  if (!provider.compositeRating || provider.compositeRating <= 0) return 0;
   return Math.min(
     99,
     Math.max(
-      88,
+      70,
       Math.round(
-        (provider.compositeRating || 4.8) * 18 +
+        provider.compositeRating * 18 +
           (provider.isLicensed ? 3 : 0) +
           (provider.isInsured ? 3 : 0)
       )

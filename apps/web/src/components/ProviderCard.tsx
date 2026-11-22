@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { getCompanyUrl } from '@/lib/seo-urls';
 import {
   Heart,
   ChevronDown,
@@ -70,20 +71,23 @@ export default function ProviderCard({
     }
   };
 
-  // Unified Vetted Score calculation matching ProfileHero (88 - 99 range)
+  // Unified Vetted Score calculation matching ProfileHero (strictly from real DB rating & credentials)
   const ratingValue = provider.compositeRating || 0;
   const yearsValue = provider.yearsInBusiness || 0;
-  const vettedScore = Math.min(
-    99,
-    Math.max(
-      88,
-      Math.round(
-        (provider.compositeRating || 4.8) * 18 +
-          (provider.isLicensed ? 3 : 0) +
-          (provider.isInsured ? 3 : 0)
-      )
-    )
-  );
+  const vettedScore =
+    ratingValue > 0
+      ? Math.min(
+          99,
+          Math.max(
+            70,
+            Math.round(
+              ratingValue * 18 +
+                (provider.isLicensed ? 3 : 0) +
+                (provider.isInsured ? 3 : 0)
+            )
+          )
+        )
+      : 0;
 
   const establishedYear =
     provider.sinceYear && provider.sinceYear > 0
@@ -268,7 +272,7 @@ export default function ProviderCard({
             <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-stretch flex-1 min-w-0 w-full sm:w-auto">
               {/* Col 1: Project Photo (stretches evenly on desktop so zero awkward gap below image) */}
               <Link
-                href={`/contractors/${provider.slug}`}
+                href={getCompanyUrl(provider.slug)}
                 className={`relative w-full sm:w-44 md:w-48 lg:w-48 xl:w-52 h-44 xs:h-48 sm:h-auto sm:min-h-[152px] rounded-xl overflow-hidden shrink-0 group border border-gray-200 shadow-sm flex items-center justify-center ${
                   isShowingProjectPhoto ? 'bg-gray-100' : 'bg-white p-3'
                 }`}
@@ -333,7 +337,7 @@ export default function ProviderCard({
                 <div className="flex items-center gap-3.5 sm:gap-4">
                   {isShowingProjectPhoto && (
                     <Link
-                      href={`/contractors/${provider.slug}`}
+                      href={getCompanyUrl(provider.slug)}
                       className="shrink-0"
                       aria-label={`${provider.name} profile`}
                     >
@@ -348,7 +352,7 @@ export default function ProviderCard({
 
                   <div className="min-w-0 flex-1 space-y-1">
                     <Link
-                      href={`/contractors/${provider.slug}`}
+                      href={getCompanyUrl(provider.slug)}
                       className="block text-base sm:text-lg font-extrabold text-[#111827] hover:text-[#DA5F2F] transition-colors leading-snug truncate"
                     >
                       {provider.name}
@@ -486,7 +490,7 @@ export default function ProviderCard({
                     Get a Quote
                   </EButton>
 
-                  <Link href={`/contractors/${provider.slug}`} className="w-full">
+                  <Link href={getCompanyUrl(provider.slug)} className="w-full">
                     <EButton
                       variant="secondary"
                       size="md"
@@ -559,7 +563,7 @@ export default function ProviderCard({
                       About {provider.name}
                     </h3>
                     <Link
-                      href={`/contractors/${provider.slug}`}
+                      href={getCompanyUrl(provider.slug)}
                       className="inline-flex items-center gap-1 text-xs font-semibold text-[#DA5F2F] hover:underline shrink-0"
                     >
                       <span>Read more</span>

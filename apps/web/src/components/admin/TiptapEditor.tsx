@@ -1,7 +1,11 @@
 'use client';
 
-import { useEditor, EditorContent, Editor } from '@tiptap/react';
-import type { ChainedCommands } from '@tiptap/react';
+import {
+  useEditor,
+  EditorContent,
+  ReactNodeViewRenderer,
+  type Editor,
+} from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -9,11 +13,7 @@ import { TableKit } from '@tiptap/extension-table';
 import {
   Bold,
   Italic,
-  Underline as UnderlineIcon,
   Strikethrough,
-  Heading2,
-  Heading3,
-  Heading4,
   List,
   ListOrdered,
   Quote,
@@ -22,23 +22,66 @@ import {
   Unlink,
   Image as ImageIcon,
   Upload,
-  Undo,
-  Redo,
   Sparkles,
   Code,
   RemoveFormatting,
-  Plus,
   ChevronDown,
-  AlignLeft,
-  FileText,
-  HelpCircle,
   Table2,
   Trash2,
 } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { uploadImageToStorage } from '@/lib/blogs-api';
+import EditableImageNodeView, {
+  type ImageAlignOption,
+} from './EditableImageNodeView';
 
-interface TiptapEditorProps {
+type ChainedCommands = ReturnType<Editor['chain']>;
+
+/**
+ * Extended Tiptap Image Node:
+ * 1. Persists `width` (`50%`, `75%`, `100%`) and `align` (`left`, `center`, `right`) in clean HTML.
+ * 2. Renders `EditableImageNodeView` directly on every image inside the editor so Replace, URL,
+ *    Resize, Align, Alt Text, and Remove controls are always visible right on the image itself.
+ */
+const ConfigurableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: '100%',
+        parseHTML: (el) =>
+          el.getAttribute('data-width') || el.style.width || '100%',
+        renderHTML: (attrs) => {
+          const w = attrs.width || '100%';
+          return { 'data-width': w };
+        },
+      },
+      align: {
+        default: 'center',
+        parseHTML: (el) => el.getAttribute('data-align') || 'center',
+        renderHTML: (attrs) => {
+          const align: ImageAlignOption = attrs.align || 'center';
+          const width = attrs.width || '100%';
+          const marginStyle =
+            align === 'left'
+              ? 'margin-left: 0; margin-right: auto;'
+              : align === 'right'
+                ? 'margin-left: auto; margin-right: 0;'
+                : 'margin-left: auto; margin-right: auto;';
+          return {
+            'data-align': align,
+            style: `width: ${width}; max-width: 100%; height: auto; display: block; ${marginStyle}`,
+          };
+        },
+      },
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(EditableImageNodeView);
+  },
+});
+
+export interface TiptapEditorProps {
   content: string;
   onChange: (html: string) => void;
   placeholder?: string;
@@ -54,32 +97,50 @@ export default function TiptapEditor({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [, setSelectionTick] = useState(0);
   const [isBlockMenuOpen, setIsBlockMenuOpen] = useState(false);
-  const [isInserterOpen, setIsInserterOpen] = useState(false);
+
   const inlineImageInputRef = useRef<HTMLInputElement>(null);
   const blockMenuRef = useRef<HTMLDivElement>(null);
-  const inserterRef = useRef<HTMLDivElement>(null);
+  const editorInstanceRef = useRef<Editor | null>(null);
 
-  // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (blockMenuRef.current && !blockMenuRef.current.contains(e.target as Node)) {
         setIsBlockMenuOpen(false);
-      }
-      if (inserterRef.current && !inserterRef.current.contains(e.target as Node)) {
-        setIsInserterOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const uploadAndInsertFile = useCallback(
+    async (file: File, activeEditor: Editor) => {
+      try {
+        setIsUploadingImage(true);
+        const publicUrl = await uploadImageToStorage(file, 'blog-inline-images');
+        const defaultAlt = file.name
+          .replace(/\.[^.]+$/, '')
+          .replace(/[-_]+/g, ' ')
+          .trim();
+
+        activeEditor
+          .chain()
+          .focus()
+          .setImage({ src: publicUrl, alt: defaultAlt })
+          .run();
+      } catch (err: any) {
+        alert(`Image upload failed: ${err.message}`);
+      } finally {
+        setIsUploadingImage(false);
+      }
+    },
+    []
+  );
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
       StarterKit.configure({
-        heading: {
-          levels: [2, 3, 4],
-        },
+        heading: { levels: [2, 3, 4] },
         link: {
           openOnClick: false,
           HTMLAttributes: {
@@ -87,14 +148,12 @@ export default function TiptapEditor({
           },
         },
       }),
-      Image.configure({
+      ConfigurableImage.configure({
         HTMLAttributes: {
-          class: 'rounded-xl max-w-full my-6 border border-gray-200 shadow-sm mx-auto',
+          class: 'rounded-xl my-6 border border-gray-200 shadow-sm',
         },
       }),
-      Placeholder.configure({
-        placeholder,
-      }),
+      Placeholder.configure({ placeholder }),
       TableKit.configure({
         table: { resizable: true },
       }),
@@ -105,23 +164,51 @@ export default function TiptapEditor({
         class:
           'tiptap-content focus:outline-none min-h-[520px] py-4 text-base sm:text-lg leading-relaxed text-gray-800',
       },
+      // Intercept pasted screenshots/images so they upload to R2 instead of bloating DB with Base64
+      handlePaste: (_view, event) => {
+        const items = event.clipboardData?.items;
+        const liveEditor = editorInstanceRef.current;
+        if (!items || !liveEditor) return false;
+        for (const item of Array.from(items)) {
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) {
+              event.preventDefault();
+              void uploadAndInsertFile(file, liveEditor);
+              return true;
+            }
+          }
+        }
+        return false;
+      },
+      // Intercept dragged & dropped image files cleanly
+      handleDrop: (_view, event, _slice, moved) => {
+        if (moved) return false;
+        const liveEditor = editorInstanceRef.current;
+        const file = event.dataTransfer?.files?.[0];
+        if (file && file.type.startsWith('image/') && liveEditor) {
+          event.preventDefault();
+          void uploadAndInsertFile(file, liveEditor);
+          return true;
+        }
+        return false;
+      },
     },
     onTransaction: () => {
       setSelectionTick((tick) => tick + 1);
     },
-    onUpdate: ({ editor }) => {
-      onChange(editor.getHTML());
+    onUpdate: ({ editor: ed }) => {
+      onChange(ed.getHTML());
     },
   });
 
-  // Expose editor instance
   useEffect(() => {
+    editorInstanceRef.current = editor;
     if (editor && onEditorReady) {
       onEditorReady(editor);
     }
   }, [editor, onEditorReady]);
 
-  // Sync external content changes if editor is not focused
   useEffect(() => {
     if (editor && content !== editor.getHTML() && !editor.isFocused) {
       editor.commands.setContent(content || '', { emitUpdate: false });
@@ -136,10 +223,8 @@ export default function TiptapEditor({
     );
   }
 
-  // Helper for applying block formatting
   const applyBlockFormat = (apply: (chain: ChainedCommands) => ChainedCommands) => {
     setIsBlockMenuOpen(false);
-    setIsInserterOpen(false);
     const { from, to, empty, $from, $to } = editor.state.selection;
     let chain = editor.chain().focus();
 
@@ -153,10 +238,12 @@ export default function TiptapEditor({
     apply(chain).run();
   };
 
-  // Helper for Link
   const setLink = () => {
     const previousUrl = editor.getAttributes('link').href;
-    const url = window.prompt('Enter link URL (e.g. https://example.com):', previousUrl || 'https://');
+    const url = window.prompt(
+      'Enter link URL (e.g. https://example.com):',
+      previousUrl || 'https://'
+    );
 
     if (url === null) return;
 
@@ -168,27 +255,16 @@ export default function TiptapEditor({
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   };
 
-  // Helper for Image upload to Cloudflare R2
-  const handleInlineImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInlineImageUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    try {
-      setIsUploadingImage(true);
-      const publicUrl = await uploadImageToStorage(file, 'blog-inline-images');
-      const altText = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
-      editor.chain().focus().setImage({ src: publicUrl, alt: altText }).run();
-    } catch (err: any) {
-      alert(`Image upload failed: ${err.message}`);
-    } finally {
-      setIsUploadingImage(false);
-      if (inlineImageInputRef.current) inlineImageInputRef.current.value = '';
-    }
+    await uploadAndInsertFile(file, editor);
+    if (inlineImageInputRef.current) inlineImageInputRef.current.value = '';
   };
 
-  // Insert Pro Tip Callout Box
   const insertCallout = () => {
-    setIsInserterOpen(false);
     editor
       .chain()
       .focus()
@@ -198,15 +274,19 @@ export default function TiptapEditor({
       .run();
   };
 
-  // Insert a 3x3 Table
   const handleInsertOrConvertTable = () => {
     setIsBlockMenuOpen(false);
-    setIsInserterOpen(false);
-    editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+    editor
+      .chain()
+      .focus()
+      .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+      .run();
   };
 
-  // Determine current active block label
+  const isImageSelected = editor.isActive('image');
+
   const getCurrentBlockLabel = () => {
+    if (isImageSelected) return 'Image';
     if (editor.isActive('table')) return 'Table';
     if (editor.isActive('heading', { level: 2 })) return 'Heading 2';
     if (editor.isActive('heading', { level: 3 })) return 'Heading 3';
@@ -220,27 +300,34 @@ export default function TiptapEditor({
 
   return (
     <div className="relative">
-      {/* WordPress Gutenberg Floating Block Toolbar */}
-      <div className="sticky top-14 z-20 bg-white/95 backdrop-blur-xs border border-gray-200/80 shadow-sm rounded-lg px-2 py-1.5 mb-6 flex flex-wrap items-center gap-1 text-gray-700 select-none">
-        
+      {/* Main Sticky Formatting Toolbar (Pinned to top of scrollable <main> pane!) */}
+      <div className="sticky top-2 z-20 bg-white/95 backdrop-blur-xs border border-gray-300/95 shadow-[0_8px_24px_-4px_rgba(15,23,42,0.12)] rounded-xl px-2.5 py-1.5 mb-4 flex flex-wrap items-center gap-1 text-gray-700 select-none">
         {/* Block Type Switcher Dropdown */}
         <div className="relative" ref={blockMenuRef}>
           <button
             type="button"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setIsBlockMenuOpen(!isBlockMenuOpen)}
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-gray-800 bg-gray-100 hover:bg-gray-200 rounded transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-gray-800 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors cursor-pointer"
             title="Transform Block"
           >
             <span className="w-4 h-4 flex items-center justify-center font-bold text-gray-600">
-              {editor.isActive('heading') ? 'H' : editor.isActive('bulletList') || editor.isActive('orderedList') ? '≡' : editor.isActive('blockquote') ? '❝' : '¶'}
+              {isImageSelected
+                ? '🖼'
+                : editor.isActive('heading')
+                  ? 'H'
+                  : editor.isActive('bulletList') || editor.isActive('orderedList')
+                    ? '≡'
+                    : editor.isActive('blockquote')
+                      ? '❝'
+                      : '¶'}
             </span>
             <span>{getCurrentBlockLabel()}</span>
             <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
           </button>
 
           {isBlockMenuOpen && (
-            <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-xl py-1 z-30 animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute left-0 top-full mt-1.5 w-48 bg-white border border-gray-300/95 rounded-xl shadow-[0_14px_38px_-4px_rgba(15,23,42,0.20),0_6px_14px_-2px_rgba(15,23,42,0.10)] py-1.5 z-30 max-h-72 overflow-y-auto overscroll-contain animate-in fade-in zoom-in-95 duration-100">
               <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
                 Transform to:
               </div>
@@ -249,51 +336,38 @@ export default function TiptapEditor({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyBlockFormat((c) => c.setParagraph())}
                 className={`w-full px-3 py-1.5 text-xs text-left flex items-center gap-2 hover:bg-gray-50 cursor-pointer ${
-                  editor.isActive('paragraph') && !editor.isActive('heading') ? 'font-bold text-[#007cba] bg-blue-50/50' : 'text-gray-700'
+                  editor.isActive('paragraph') && !editor.isActive('heading')
+                    ? 'font-bold text-[#007cba] bg-blue-50/50'
+                    : 'text-gray-700'
                 }`}
               >
                 <span className="font-serif font-bold text-sm w-4">¶</span>
                 <span>Paragraph</span>
               </button>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => applyBlockFormat((c) => c.toggleHeading({ level: 2 }))}
-                className={`w-full px-3 py-1.5 text-xs text-left flex items-center gap-2 hover:bg-gray-50 cursor-pointer ${
-                  editor.isActive('heading', { level: 2 }) ? 'font-bold text-[#007cba] bg-blue-50/50' : 'text-gray-700'
-                }`}
-              >
-                <span className="font-bold text-xs w-4">H2</span>
-                <span>Heading 2</span>
-              </button>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => applyBlockFormat((c) => c.toggleHeading({ level: 3 }))}
-                className={`w-full px-3 py-1.5 text-xs text-left flex items-center gap-2 hover:bg-gray-50 cursor-pointer ${
-                  editor.isActive('heading', { level: 3 }) ? 'font-bold text-[#007cba] bg-blue-50/50' : 'text-gray-700'
-                }`}
-              >
-                <span className="font-bold text-xs w-4">H3</span>
-                <span>Heading 3</span>
-              </button>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => applyBlockFormat((c) => c.toggleHeading({ level: 4 }))}
-                className={`w-full px-3 py-1.5 text-xs text-left flex items-center gap-2 hover:bg-gray-50 cursor-pointer ${
-                  editor.isActive('heading', { level: 4 }) ? 'font-bold text-[#007cba] bg-blue-50/50' : 'text-gray-700'
-                }`}
-              >
-                <span className="font-bold text-xs w-4">H4</span>
-                <span>Heading 4</span>
-              </button>
+              {([2, 3, 4] as const).map((lvl) => (
+                <button
+                  key={lvl}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => applyBlockFormat((c) => c.toggleHeading({ level: lvl }))}
+                  className={`w-full px-3 py-1.5 text-xs text-left flex items-center gap-2 hover:bg-gray-50 cursor-pointer ${
+                    editor.isActive('heading', { level: lvl })
+                      ? 'font-bold text-[#007cba] bg-blue-50/50'
+                      : 'text-gray-700'
+                  }`}
+                >
+                  <span className="font-bold text-xs w-4">H{lvl}</span>
+                  <span>Heading {lvl}</span>
+                </button>
+              ))}
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyBlockFormat((c) => c.toggleBulletList())}
                 className={`w-full px-3 py-1.5 text-xs text-left flex items-center gap-2 hover:bg-gray-50 cursor-pointer ${
-                  editor.isActive('bulletList') ? 'font-bold text-[#007cba] bg-blue-50/50' : 'text-gray-700'
+                  editor.isActive('bulletList')
+                    ? 'font-bold text-[#007cba] bg-blue-50/50'
+                    : 'text-gray-700'
                 }`}
               >
                 <List className="w-3.5 h-3.5" />
@@ -304,7 +378,9 @@ export default function TiptapEditor({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyBlockFormat((c) => c.toggleOrderedList())}
                 className={`w-full px-3 py-1.5 text-xs text-left flex items-center gap-2 hover:bg-gray-50 cursor-pointer ${
-                  editor.isActive('orderedList') ? 'font-bold text-[#007cba] bg-blue-50/50' : 'text-gray-700'
+                  editor.isActive('orderedList')
+                    ? 'font-bold text-[#007cba] bg-blue-50/50'
+                    : 'text-gray-700'
                 }`}
               >
                 <ListOrdered className="w-3.5 h-3.5" />
@@ -315,7 +391,9 @@ export default function TiptapEditor({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => applyBlockFormat((c) => c.toggleBlockquote())}
                 className={`w-full px-3 py-1.5 text-xs text-left flex items-center gap-2 hover:bg-gray-50 cursor-pointer ${
-                  editor.isActive('blockquote') ? 'font-bold text-[#007cba] bg-blue-50/50' : 'text-gray-700'
+                  editor.isActive('blockquote')
+                    ? 'font-bold text-[#007cba] bg-blue-50/50'
+                    : 'text-gray-700'
                 }`}
               >
                 <Quote className="w-3.5 h-3.5" />
@@ -326,7 +404,9 @@ export default function TiptapEditor({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={handleInsertOrConvertTable}
                 className={`w-full px-3 py-1.5 text-xs text-left flex items-center gap-2 hover:bg-gray-50 cursor-pointer ${
-                  editor.isActive('table') ? 'font-bold text-[#007cba] bg-blue-50/50' : 'text-gray-700'
+                  editor.isActive('table')
+                    ? 'font-bold text-[#007cba] bg-blue-50/50'
+                    : 'text-gray-700'
                 }`}
               >
                 <Table2 className="w-3.5 h-3.5" />
@@ -338,13 +418,15 @@ export default function TiptapEditor({
 
         <div className="h-4 w-px bg-gray-200 mx-1" />
 
-        {/* Inline Formatting: Bold, Italic, Link, Strike, Code */}
+        {/* Inline Formatting */}
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => editor.chain().focus().toggleBold().run()}
           className={`p-1.5 rounded transition-colors cursor-pointer ${
-            editor.isActive('bold') ? 'bg-[#007cba] text-white shadow-xs' : 'hover:bg-gray-100 text-gray-700'
+            editor.isActive('bold')
+              ? 'bg-[#007cba] text-white shadow-xs'
+              : 'hover:bg-gray-100 text-gray-700'
           }`}
           title="Bold (Ctrl+B)"
         >
@@ -356,7 +438,9 @@ export default function TiptapEditor({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => editor.chain().focus().toggleItalic().run()}
           className={`p-1.5 rounded transition-colors cursor-pointer ${
-            editor.isActive('italic') ? 'bg-[#007cba] text-white shadow-xs' : 'hover:bg-gray-100 text-gray-700'
+            editor.isActive('italic')
+              ? 'bg-[#007cba] text-white shadow-xs'
+              : 'hover:bg-gray-100 text-gray-700'
           }`}
           title="Italic (Ctrl+I)"
         >
@@ -368,7 +452,9 @@ export default function TiptapEditor({
           onMouseDown={(e) => e.preventDefault()}
           onClick={setLink}
           className={`p-1.5 rounded transition-colors cursor-pointer ${
-            editor.isActive('link') ? 'bg-[#007cba] text-white shadow-xs' : 'hover:bg-gray-100 text-gray-700'
+            editor.isActive('link')
+              ? 'bg-[#007cba] text-white shadow-xs'
+              : 'hover:bg-gray-100 text-gray-700'
           }`}
           title="Link (Ctrl+K)"
         >
@@ -391,7 +477,9 @@ export default function TiptapEditor({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => editor.chain().focus().toggleStrike().run()}
           className={`p-1.5 rounded transition-colors cursor-pointer ${
-            editor.isActive('strike') ? 'bg-[#007cba] text-white shadow-xs' : 'hover:bg-gray-100 text-gray-700'
+            editor.isActive('strike')
+              ? 'bg-[#007cba] text-white shadow-xs'
+              : 'hover:bg-gray-100 text-gray-700'
           }`}
           title="Strikethrough"
         >
@@ -403,7 +491,9 @@ export default function TiptapEditor({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => editor.chain().focus().toggleCode().run()}
           className={`p-1.5 rounded transition-colors cursor-pointer ${
-            editor.isActive('code') ? 'bg-[#007cba] text-white shadow-xs' : 'hover:bg-gray-100 text-gray-700'
+            editor.isActive('code')
+              ? 'bg-[#007cba] text-white shadow-xs'
+              : 'hover:bg-gray-100 text-gray-700'
           }`}
           title="Inline Code"
         >
@@ -412,17 +502,17 @@ export default function TiptapEditor({
 
         <div className="h-4 w-px bg-gray-200 mx-1" />
 
-        {/* Quick Inserter: Image, Table, Pro Tip, Divider */}
+        {/* Prominent Add / Upload Inline Image Button */}
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => inlineImageInputRef.current?.click()}
           disabled={isUploadingImage}
-          className="p-1.5 hover:bg-gray-100 rounded text-gray-700 flex items-center gap-1 text-xs font-semibold cursor-pointer"
-          title="Insert Image (Cloudflare R2)"
+          className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-[#007cba] border border-blue-200/80 flex items-center gap-1.5 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+          title="Upload & Insert Image at Cursor (Cloudflare R2)"
         >
-          <ImageIcon className="w-4 h-4 text-[#007cba]" />
-          <span className="hidden sm:inline">Image</span>
+          <ImageIcon className="w-3.5 h-3.5" />
+          <span>{isUploadingImage ? 'Uploading...' : '+ Image'}</span>
         </button>
         <input
           ref={inlineImageInputRef}
@@ -436,12 +526,12 @@ export default function TiptapEditor({
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={handleInsertOrConvertTable}
-          className={`p-1.5 rounded flex items-center gap-1 text-xs font-semibold transition-colors cursor-pointer ${
+          className={`px-2 py-1 rounded-lg flex items-center gap-1 text-xs font-semibold transition-colors cursor-pointer ${
             editor.isActive('table')
               ? 'bg-blue-50 text-[#007cba] border border-blue-200'
               : 'hover:bg-gray-100 text-gray-700'
           }`}
-          title="Insert Table (or convert selected lines to Table)"
+          title="Insert Table"
         >
           <Table2 className="w-4 h-4 text-[#007cba]" />
           <span className="hidden sm:inline">Table</span>
@@ -451,7 +541,7 @@ export default function TiptapEditor({
           type="button"
           onMouseDown={(e) => e.preventDefault()}
           onClick={insertCallout}
-          className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/60 rounded text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+          className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/60 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
           title="Insert Pro Tip Box"
         >
           <Sparkles className="w-3.5 h-3.5 text-amber-600" />
@@ -468,7 +558,6 @@ export default function TiptapEditor({
           <Minus className="w-4 h-4" />
         </button>
 
-        {/* Clear formatting */}
         <button
           type="button"
           onMouseDown={(e) => e.preventDefault()}
@@ -480,9 +569,9 @@ export default function TiptapEditor({
         </button>
       </div>
 
-      {/* Contextual Table Controls Bar (visible when cursor is inside a table) */}
+      {/* Contextual Table Controls Bar (Pinned right below main toolbar) */}
       {editor.isActive('table') && (
-        <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 mb-4 flex flex-wrap items-center gap-1.5 text-xs text-slate-700 select-none animate-in fade-in">
+        <div className="sticky top-[54px] z-20 bg-slate-50/95 backdrop-blur-xs border border-slate-200 rounded-xl px-3 py-1.5 mb-4 flex flex-wrap items-center gap-1.5 text-xs text-slate-700 shadow-sm select-none animate-in fade-in">
           <span className="font-bold text-[#007cba] flex items-center gap-1 mr-1">
             <Table2 className="w-3.5 h-3.5" />
             <span>Table:</span>
@@ -493,7 +582,6 @@ export default function TiptapEditor({
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().addRowBefore().run()}
             className="px-2 py-1 bg-white hover:bg-gray-100 border border-gray-200 rounded font-medium cursor-pointer"
-            title="Insert Row Above"
           >
             + Row Above
           </button>
@@ -502,7 +590,6 @@ export default function TiptapEditor({
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().addRowAfter().run()}
             className="px-2 py-1 bg-white hover:bg-gray-100 border border-gray-200 rounded font-medium cursor-pointer"
-            title="Insert Row Below"
           >
             + Row Below
           </button>
@@ -511,7 +598,6 @@ export default function TiptapEditor({
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().deleteRow().run()}
             className="px-2 py-1 bg-white hover:bg-rose-50 hover:text-rose-700 border border-gray-200 rounded font-medium cursor-pointer"
-            title="Delete Current Row"
           >
             − Row
           </button>
@@ -523,7 +609,6 @@ export default function TiptapEditor({
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().addColumnBefore().run()}
             className="px-2 py-1 bg-white hover:bg-gray-100 border border-gray-200 rounded font-medium cursor-pointer"
-            title="Insert Column Left"
           >
             + Col Left
           </button>
@@ -532,7 +617,6 @@ export default function TiptapEditor({
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().addColumnAfter().run()}
             className="px-2 py-1 bg-white hover:bg-gray-100 border border-gray-200 rounded font-medium cursor-pointer"
-            title="Insert Column Right"
           >
             + Col Right
           </button>
@@ -541,7 +625,6 @@ export default function TiptapEditor({
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().deleteColumn().run()}
             className="px-2 py-1 bg-white hover:bg-rose-50 hover:text-rose-700 border border-gray-200 rounded font-medium cursor-pointer"
-            title="Delete Current Column"
           >
             − Col
           </button>
@@ -553,7 +636,6 @@ export default function TiptapEditor({
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().toggleHeaderRow().run()}
             className="px-2 py-1 bg-white hover:bg-gray-100 border border-gray-200 rounded font-medium cursor-pointer"
-            title="Toggle Header Row"
           >
             Header Row
           </button>
@@ -563,7 +645,6 @@ export default function TiptapEditor({
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => editor.chain().focus().deleteTable().run()}
             className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded font-semibold flex items-center gap-1 ml-auto cursor-pointer"
-            title="Delete Entire Table"
           >
             <Trash2 className="w-3 h-3" />
             <span>Delete Table</span>

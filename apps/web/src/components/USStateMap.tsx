@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { getStateUrl } from '@/lib/seo-urls';
 
 interface StatePin {
   id: string;
@@ -200,20 +201,15 @@ export default function USStateMap() {
       {FEATURED_PINS.map((pin) => (
         <Link
           key={pin.id}
-          href={pin.isLive ? `/contractors?state=${encodeURIComponent(pin.name)}` : '#'}
-          onClick={(e) => {
-            if (!pin.isLive) {
-              e.preventDefault();
-            }
-          }}
+          href={getStateUrl('custom-cabinets', pin.name)}
           onMouseEnter={() => setHoveredState(pin)}
           onMouseLeave={() => setHoveredState(null)}
           style={{
             left: `${pin.xPercent}%`,
             top: `${pin.yPercent}%`,
           }}
-          className={`absolute -translate-x-1/2 -translate-y-[85%] group z-10 flex flex-col items-center ${
-            pin.isLive ? 'cursor-pointer z-20' : 'cursor-default opacity-80 hover:opacity-100'
+          className={`absolute -translate-x-1/2 -translate-y-[85%] group z-10 flex flex-col items-center cursor-pointer ${
+            pin.isLive ? 'z-20' : 'opacity-85 hover:opacity-100'
           }`}
         >
           {/* Tooltip Card */}

@@ -12,6 +12,7 @@ import {
 import type { RooferProvider } from '@/data/mockRoofers';
 import { fetchProviderFilters, submitQuoteRequest } from '@/lib/api';
 import { EButton, EInput } from '@/components/EComponents';
+import DropdownSelect from './DropdownSelect';
 
 export interface QuoteModalProps {
   isOpen: boolean;
@@ -197,17 +198,13 @@ export default function QuoteModal({
                     <label className="block font-bold text-gray-700 uppercase tracking-wider text-[10px] mb-1">
                       Service Needed
                     </label>
-                    <select
+                    <DropdownSelect
                       value={formData.serviceType}
-                      onChange={(e) => setFormData({ ...formData, serviceType: e.target.value })}
-                      className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-gray-900"
-                    >
-                      {serviceOptions.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(val) => setFormData({ ...formData, serviceType: val })}
+                      options={serviceOptions.map((s) => ({ label: s, value: s }))}
+                      ariaLabel="Service Needed"
+                      triggerClassName="w-full py-2 font-medium"
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -215,17 +212,13 @@ export default function QuoteModal({
                       <label className="block font-bold text-gray-700 uppercase tracking-wider text-[10px] mb-1">
                         Borough / Area
                       </label>
-                      <select
+                      <DropdownSelect
                         value={formData.borough}
-                        onChange={(e) => setFormData({ ...formData, borough: e.target.value })}
-                        className="w-full px-3 py-2 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary font-medium text-gray-900"
-                      >
-                        {boroughOptions.map((b) => (
-                          <option key={b} value={b}>
-                            {b}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(val) => setFormData({ ...formData, borough: val })}
+                        options={boroughOptions.map((b) => ({ label: b, value: b }))}
+                        ariaLabel="Borough / Area"
+                        triggerClassName="w-full py-2 font-medium"
+                      />
                     </div>
 
                     <div>

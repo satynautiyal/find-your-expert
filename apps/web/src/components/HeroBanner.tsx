@@ -14,6 +14,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { EButton } from '@/components/EComponents';
+import type { BreadcrumbItem } from '@/lib/seo-urls';
 
 export interface HeroBannerProps {
   searchQuery: string;
@@ -33,6 +34,10 @@ export interface HeroBannerProps {
     avgRating: number;
     totalReviews: number;
   };
+  breadcrumbs?: BreadcrumbItem[];
+  headlineOverride?: string;
+  locationLabelOverride?: string;
+  isComingSoon?: boolean;
 }
 
 export default function HeroBanner({
@@ -46,6 +51,10 @@ export default function HeroBanner({
   companiesCount,
   dynamicServices,
   stats,
+  breadcrumbs,
+  headlineOverride,
+  locationLabelOverride,
+  isComingSoon = false,
 }: HeroBannerProps) {
   const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
 
@@ -60,16 +69,25 @@ export default function HeroBanner({
     currentService.toLowerCase().includes('closet') ||
     currentService.toLowerCase().includes('millwork');
 
+  const isRoofing = currentService.toLowerCase().includes('roof');
+
   // Popular search suggestions directly from DB sub-services
   const popularServices = (dynamicServices || []).filter(
     (s) => s && s !== 'All Services' && s !== 'All'
   );
 
-  // Strictly New York, NY / NYC Boroughs
+  // Location label (uses explicit geo route override when provided, else NYC default)
   const currentLocation =
-    selectedBorough && selectedBorough !== 'All' && selectedBorough !== 'New York City'
+    locationLabelOverride ||
+    (selectedBorough && selectedBorough !== 'All' && selectedBorough !== 'New York City'
       ? `${selectedBorough}, NY`
-      : 'New York, NY';
+      : 'New York, NY');
+
+  const ctaButtonText = isCabinets
+    ? 'Find Cabinet Makers'
+    : isRoofing
+      ? 'Find Roofers'
+      : `Find ${currentService} Pros`;
 
   const handleTagClick = (serviceName: string) => {
     onSelectService(serviceName);
@@ -98,7 +116,7 @@ export default function HeroBanner({
       {/* ========================================================= */}
       {/* 1A. MOBILE HERO VIEW (< lg) - Same industry-standard split pattern as Home page */}
       {/* ========================================================= */}
-      <section className="lg:hidden relative bg-[#FAFBF9] overflow-hidden">
+      <section className="lg:hidden relative bg-[#FAFBF9] overflow-visible">
         {/* 1. Top Copy Container on Clean Solid #FAFBF9 Background (100% readable, zero image clutter behind text) */}
         <div className="pt-3.5 pb-2 px-4 relative z-10 bg-[#FAFBF9]">
           {/* Breadcrumb + Kicker Row */}
@@ -107,33 +125,59 @@ export default function HeroBanner({
               aria-label="Breadcrumb"
               className="flex items-center gap-1 text-[11px] text-gray-500 font-medium overflow-x-auto no-scrollbar py-0.5"
             >
-              <Link href="/" className="hover:text-primary transition-colors shrink-0">
-                Home
-              </Link>
-              <span className="text-gray-300 shrink-0">/</span>
-              <span className="text-gray-700 shrink-0">
-                {currentLocation.split(',')[0]}
-              </span>
-              <span className="text-gray-300 shrink-0">/</span>
-              <span className="text-[#0F3E35] font-bold truncate shrink-0">
-                {currentService}
-              </span>
+              {breadcrumbs && breadcrumbs.length > 0 ? (
+                breadcrumbs.map((crumb, idx) => {
+                  const isLast = idx === breadcrumbs.length - 1;
+                  return (
+                    <span key={crumb.href} className="inline-flex items-center gap-1 shrink-0">
+                      {idx > 0 && <span className="text-gray-300">/</span>}
+                      {isLast ? (
+                        <span className="text-[#0F3E35] font-bold truncate">{crumb.label}</span>
+                      ) : (
+                        <Link href={crumb.href} className="hover:text-primary transition-colors">
+                          {crumb.label}
+                        </Link>
+                      )}
+                    </span>
+                  );
+                })
+              ) : (
+                <>
+                  <Link href="/" className="hover:text-primary transition-colors shrink-0">
+                    Home
+                  </Link>
+                  <span className="text-gray-300 shrink-0">/</span>
+                  <span className="text-gray-700 shrink-0">
+                    {currentLocation.split(',')[0]}
+                  </span>
+                  <span className="text-gray-300 shrink-0">/</span>
+                  <span className="text-[#0F3E35] font-bold truncate shrink-0">
+                    {currentService}
+                  </span>
+                </>
+              )}
             </nav>
 
             <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#EAF3EF] border border-[#D1E5DB] shrink-0">
               <CheckCircle2 className="w-3 h-3 text-[#0F3E35]" />
               <span className="text-[10.5px] font-semibold text-[#0F3E35] tracking-tight">
-                Verified NYC
+                {isComingSoon ? 'Expanding Soon' : 'ProsVetted'}
               </span>
             </div>
           </div>
 
-          {/* 3-Line Headline matching Landing Page */}
-          <h1 className="text-[28px] min-[370px]:text-[32px] font-black text-[#111827] tracking-tight leading-[1.08]">
-            <span className="block">Find the Best</span>
-            <span className="block text-[#FF5B26]">{currentService}</span>
-            <span className="block">in {currentLocation}</span>
-          </h1>
+          {/* Primary Single Semantic H1 (Mobile-First + Sheet 3 Exact H1 Support) */}
+          {headlineOverride ? (
+            <h1 className="text-[26px] min-[370px]:text-[30px] font-black text-[#111827] tracking-tight leading-[1.12]">
+              {headlineOverride}
+            </h1>
+          ) : (
+            <h1 className="text-[28px] min-[370px]:text-[32px] font-black text-[#111827] tracking-tight leading-[1.08]">
+              <span className="block">Find the Best</span>
+              <span className="block text-[#FF5B26]">{currentService}</span>
+              <span className="block">in {currentLocation}</span>
+            </h1>
+          )}
 
           {/* Subtitle */}
           <p className="mt-2.5 text-[13.5px] font-normal text-[#374151] leading-[1.48] max-w-[355px]">
@@ -141,36 +185,29 @@ export default function HeroBanner({
             {currentLocation.split(',')[0]} based on verified credentials, real customer reviews, project photos and ratings.
           </p>
 
-          {/* Ratings & Verified Pros Row */}
-          <div className="flex items-center gap-2 mt-3">
-            <div className="flex -space-x-1.5 shrink-0">
-              <img
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=64&q=80"
-                alt="Customer"
-                className="w-6 h-6 rounded-full border-2 border-white object-cover shadow-sm"
-              />
-              <img
-                src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=64&q=80"
-                alt="Customer"
-                className="w-6 h-6 rounded-full border-2 border-white object-cover shadow-sm"
-              />
-              <img
-                src="https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=64&q=80"
-                alt="Customer"
-                className="w-6 h-6 rounded-full border-2 border-white object-cover shadow-sm"
-              />
+          {/* Ratings & Verified Pros Row (100% live DB stats — zero stock Unsplash avatars or fake numbers) */}
+          {(displayRating || activeProsCount > 0) && (
+            <div className="flex items-center gap-2 mt-3">
+              {displayRating && (
+                <>
+                  <div className="flex text-amber-500 text-[11px] tracking-tight shrink-0">
+                    {'★'.repeat(5)}
+                  </div>
+                  <span className="text-xs font-extrabold text-[#111827] shrink-0">
+                    {displayRating}
+                  </span>
+                </>
+              )}
+              {displayRating && activeProsCount > 0 && (
+                <span className="text-gray-300 shrink-0">|</span>
+              )}
+              {activeProsCount > 0 && (
+                <span className="text-[11.5px] font-semibold text-[#374151] shrink-0">
+                  {activeProsCount} Verified NYC Pros
+                </span>
+              )}
             </div>
-            <div className="flex text-amber-500 text-[11px] tracking-tight shrink-0">
-              {'★'.repeat(5)}
-            </div>
-            <span className="text-xs font-extrabold text-[#111827] shrink-0">
-              {displayRating}
-            </span>
-            <span className="text-gray-300 shrink-0">|</span>
-            <span className="text-[11.5px] font-semibold text-[#374151] shrink-0">
-              {activeProsCount}+ Verified NYC Pros
-            </span>
-          </div>
+          )}
         </div>
 
         {/* 2. Dedicated Project Image Showcase + Overlapping Floating Search Card */}
@@ -200,7 +237,7 @@ export default function HeroBanner({
 
           {/* Floating White Search Card overlapping the lower portion of the project image */}
           <div className="relative z-10 px-4 -mt-20 pb-4">
-            <div className="bg-white rounded-2xl p-3.5 shadow-[0_14px_34px_rgba(0,0,0,0.12)] border border-gray-100">
+            <div className="bg-white rounded-2xl p-3.5 border border-gray-300/90 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.12),0_4px_10px_-2px_rgba(15,23,42,0.06)]">
               <form onSubmit={handleSubmit} className="flex flex-col gap-2">
                 {/* Field 1: Search Service */}
                 <div className="relative flex items-center justify-between border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white focus-within:border-[#0F3E35] focus-within:ring-1 focus-within:ring-[#0F3E35] transition-all">
@@ -224,28 +261,30 @@ export default function HeroBanner({
                     <ChevronDown className="w-4 h-4" />
                   </button>
 
-                  {serviceDropdownOpen && (
+                  {serviceDropdownOpen && popularServices.length > 0 && (
                     <div
-                      className="absolute top-12 left-0 right-0 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+                      className="absolute top-12 left-0 right-0 bg-white rounded-2xl border border-gray-300/95 shadow-[0_14px_38px_-4px_rgba(15,23,42,0.20),0_6px_14px_-2px_rgba(15,23,42,0.10)] z-50 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-1 duration-150"
                       onMouseLeave={() => setServiceDropdownOpen(false)}
                     >
-                      <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                      <div className="px-3.5 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 bg-white shrink-0">
                         Popular {currentService} Services
                       </div>
-                      {popularServices.map((service) => (
-                        <button
-                          key={service}
-                          type="button"
-                          onClick={() => {
-                            onSearchChange(service);
-                            onSelectService(service);
-                            setServiceDropdownOpen(false);
-                          }}
-                          className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-[#EBF3F1] hover:text-[#0F3E35] transition-colors cursor-pointer"
-                        >
-                          {service}
-                        </button>
-                      ))}
+                      <div className="max-h-56 overflow-y-auto overscroll-contain py-1">
+                        {popularServices.map((service) => (
+                          <button
+                            key={service}
+                            type="button"
+                            onClick={() => {
+                              onSearchChange(service);
+                              onSelectService(service);
+                              setServiceDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-3.5 py-2 text-xs text-gray-700 hover:bg-[#EBF3F1] hover:text-[#0F3E35] transition-colors cursor-pointer"
+                          >
+                            {service}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -269,7 +308,7 @@ export default function HeroBanner({
                   type="submit"
                   className="w-full mt-1 bg-[#0F3E35] hover:bg-[#0B3B2C] active:scale-[0.99] text-white font-bold text-[14px] py-3 rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <span>Find {isCabinets ? 'Cabinet Makers' : 'Roofers'}</span>
+                  <span>{ctaButtonText}</span>
                   <ArrowRight className="w-4 h-4 stroke-[2.5]" />
                 </button>
               </form>
@@ -300,7 +339,7 @@ export default function HeroBanner({
       {/* ========================================================= */}
       {/* 1B. DESKTOP HERO VIEW (lg+) - 100% UNTOUCHED ORIGINAL DESKTOP */}
       {/* ========================================================= */}
-      <section className="hidden lg:flex relative min-h-[500px] items-center overflow-hidden">
+      <section className="hidden lg:flex relative min-h-[500px] items-center overflow-visible">
         {/* Background House/Interior Image on Right with Seamless Left Fade */}
         <div className="absolute right-0 top-0 bottom-0 w-[60%] xl:w-[58%] h-full pointer-events-none select-none z-0 overflow-hidden">
           <img
@@ -330,31 +369,57 @@ export default function HeroBanner({
         {/* Hero Content Container */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-12 relative z-10">
           <div className="max-w-xl xl:max-w-2xl">
-            {/* Breadcrumb targeting New York */}
-            <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-gray-500 mb-3.5 font-normal py-0.5">
-              <Link href="/" className="hover:text-primary transition-colors shrink-0">
-                Home
-              </Link>
-              <span className="text-gray-400 shrink-0">&gt;</span>
-              <span className="hover:text-primary transition-colors cursor-pointer shrink-0">
-                New York
-              </span>
-              <span className="text-gray-400 shrink-0">&gt;</span>
-              <span className="text-gray-900 font-semibold truncate shrink-0">
-                {currentLocation.split(',')[0]}
-              </span>
-              <span className="text-gray-400 shrink-0">&gt;</span>
-              <span className="text-primary font-bold truncate shrink-0">
-                {currentService}
-              </span>
+            {/* Breadcrumb Trail */}
+            <nav aria-label="Breadcrumb" className="flex items-center flex-wrap gap-1.5 text-xs text-gray-500 mb-3.5 font-normal py-0.5">
+              {breadcrumbs && breadcrumbs.length > 0 ? (
+                breadcrumbs.map((crumb, idx) => {
+                  const isLast = idx === breadcrumbs.length - 1;
+                  return (
+                    <span key={crumb.href} className="inline-flex items-center gap-1.5 shrink-0">
+                      {idx > 0 && <span className="text-gray-400">&gt;</span>}
+                      {isLast ? (
+                        <span className="text-primary font-bold truncate">{crumb.label}</span>
+                      ) : (
+                        <Link href={crumb.href} className="hover:text-primary transition-colors">
+                          {crumb.label}
+                        </Link>
+                      )}
+                    </span>
+                  );
+                })
+              ) : (
+                <>
+                  <Link href="/" className="hover:text-primary transition-colors shrink-0">
+                    Home
+                  </Link>
+                  <span className="text-gray-400 shrink-0">&gt;</span>
+                  <span className="hover:text-primary transition-colors cursor-pointer shrink-0">
+                    New York
+                  </span>
+                  <span className="text-gray-400 shrink-0">&gt;</span>
+                  <span className="text-gray-900 font-semibold truncate shrink-0">
+                    {currentLocation.split(',')[0]}
+                  </span>
+                  <span className="text-gray-400 shrink-0">&gt;</span>
+                  <span className="text-primary font-bold truncate shrink-0">
+                    {currentService}
+                  </span>
+                </>
+              )}
             </nav>
 
-            {/* Desktop Headline */}
-            <h1 className="text-[50px] xl:text-[54px] font-bold text-[#111827] tracking-[-0.03em] leading-[1.02]">
-              {currentService}
-              <br />
-              in {currentLocation}
-            </h1>
+            {/* Desktop Visual Headline (uses div so DOM keeps strictly 1 semantic H1 tag) */}
+            {headlineOverride ? (
+              <div className="text-[42px] xl:text-[48px] font-bold text-[#111827] tracking-[-0.03em] leading-[1.06]">
+                {headlineOverride}
+              </div>
+            ) : (
+              <div className="text-[50px] xl:text-[54px] font-bold text-[#111827] tracking-[-0.03em] leading-[1.02]">
+                {currentService}
+                <br />
+                in {currentLocation}
+              </div>
+            )}
 
             {/* Subtitle */}
             <p className="mt-4 text-[15.5px] text-[#374151] max-w-[560px] leading-[1.5] font-normal">
@@ -367,7 +432,7 @@ export default function HeroBanner({
             {/* Dual Search Input Bar */}
             <form
               onSubmit={handleSubmit}
-              className="bg-white backdrop-blur-md rounded-2xl shadow-[0_4px_25px_rgba(0,0,0,0.06)] border border-gray-200/90 p-2 flex flex-row items-center gap-2 transition-shadow hover:shadow-[0_16px_40px_rgba(15,62,53,0.15)]"
+              className="bg-white rounded-2xl border border-gray-300/95 hover:border-[#0B3B2C]/45 focus-within:border-[#0B3B2C]/55 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.12),0_4px_10px_-2px_rgba(15,23,42,0.06)] hover:shadow-[0_14px_36px_-4px_rgba(15,23,42,0.18),0_6px_14px_-2px_rgba(15,23,42,0.09)] focus-within:shadow-[0_14px_36px_-4px_rgba(15,23,42,0.18),0_6px_14px_-2px_rgba(15,23,42,0.09)] p-2 flex flex-row items-center gap-2 transition-all duration-200"
             >
               {/* Search Need Input */}
               <div className="relative flex items-center gap-2.5 px-3 py-1 flex-1">
@@ -390,34 +455,36 @@ export default function HeroBanner({
                 </button>
 
                 {/* Dropdown Suggestions */}
-                {serviceDropdownOpen && (
+                {serviceDropdownOpen && popularServices.length > 0 && (
                   <div
-                    className="absolute top-12 left-0 right-0 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150"
+                    className="absolute top-12 left-0 right-0 bg-white rounded-2xl border border-gray-300/95 shadow-[0_14px_38px_-4px_rgba(15,23,42,0.20),0_6px_14px_-2px_rgba(15,23,42,0.10)] z-50 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-1 duration-150"
                     onMouseLeave={() => setServiceDropdownOpen(false)}
                   >
-                    <div className="px-3 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    <div className="px-3.5 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 bg-white shrink-0">
                       Popular {currentService} Services
                     </div>
-                    {popularServices.map((service) => (
-                      <button
-                        key={service}
-                        type="button"
-                        onClick={() => {
-                          onSearchChange(service);
-                          onSelectService(service);
-                          setServiceDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-[#EBF3F1] hover:text-[#0F3E35] transition-colors cursor-pointer"
-                      >
-                        {service}
-                      </button>
-                    ))}
+                    <div className="max-h-56 overflow-y-auto overscroll-contain py-1">
+                      {popularServices.map((service) => (
+                        <button
+                          key={service}
+                          type="button"
+                          onClick={() => {
+                            onSearchChange(service);
+                            onSelectService(service);
+                            setServiceDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-3.5 py-2 text-xs text-gray-700 hover:bg-[#EBF3F1] hover:text-[#0F3E35] transition-colors cursor-pointer"
+                        >
+                          {service}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
 
               {/* Vertical Divider for desktop */}
-              <div className="w-px h-8 bg-gray-200 shrink-0" />
+              <div className="w-px h-8 bg-gray-300/80 shrink-0" />
 
               {/* Location Input */}
               <div className="flex items-center gap-2.5 px-3 py-1 w-48">
@@ -438,7 +505,7 @@ export default function HeroBanner({
                 size="xl"
                 className="shrink-0 w-auto justify-center"
               >
-                Find {isCabinets ? 'Cabinet Makers' : 'Roofers'}
+                {ctaButtonText}
               </EButton>
             </form>
 

@@ -22,6 +22,11 @@ import { GoogleLogo, YelpLogo, HomeAdvisorLogo, HouzzLogo } from './PlatformLogo
 import PhotoLightboxModal from './PhotoLightboxModal';
 import ProfilePhotoCarousel from './ProfilePhotoCarousel';
 import BrandLogoBadge from '@/components/common/BrandLogoBadge';
+import {
+  getServiceUrl,
+  getStateUrl,
+  resolveGeoFromInputs,
+} from '@/lib/seo-urls';
 
 interface ProfileHeroProps {
   provider: RooferProvider;
@@ -57,6 +62,17 @@ export default function ProfileHero({
       : provider.city || 'Manhattan';
   const stateName = provider.state === 'NY' || !provider.state ? 'New York' : provider.state;
   const stateShort = provider.state || 'NY';
+
+  const serviceHref = getServiceUrl(trade);
+  const stateHref = getStateUrl(trade, stateName);
+  const resolvedProviderGeo = resolveGeoFromInputs({
+    borough: provider.borough,
+    city: provider.city,
+    state: stateName,
+  });
+  const cityOrBoroughHref = resolvedProviderGeo
+    ? `${serviceHref}/${resolvedProviderGeo.slug}`
+    : stateHref;
 
   // Real R2 brand logo & R2 project photos from DB (never confuse project photo with brand logo)
   const rawLogoCandidate =
@@ -110,20 +126,23 @@ export default function ProfileHero({
       ? new Date().getFullYear() - provider.yearsInBusiness
       : 0;
 
-  // Dynamic Vetted Score (88 - 99 range based on rating & credentials)
-  const trustScore = Math.min(
-    99,
-    Math.max(
-      88,
-      Math.round(
-        (provider.compositeRating || 4.8) * 18 +
-          (provider.isLicensed ? 3 : 0) +
-          (provider.isInsured ? 3 : 0)
-      )
-    )
-  );
-
   const compositeRating = provider.compositeRating || 0;
+
+  // Dynamic Vetted Score strictly from real DB rating & credentials (zero hardcoded 4.8 fallback)
+  const trustScore =
+    compositeRating > 0
+      ? Math.min(
+          99,
+          Math.max(
+            70,
+            Math.round(
+              compositeRating * 18 +
+                (provider.isLicensed ? 3 : 0) +
+                (provider.isInsured ? 3 : 0)
+            )
+          )
+        )
+      : 0;
 
   // Normalized active platform ratings list
   const platformRows = [
@@ -188,7 +207,7 @@ export default function ProfileHero({
             <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
 
             <Link
-              href={`/contractors?category=${encodeURIComponent(trade)}`}
+              href={serviceHref}
               className="hover:text-primary transition-colors"
             >
               {trade}
@@ -196,15 +215,27 @@ export default function ProfileHero({
             <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
 
             <Link
-              href={`/contractors?state=${encodeURIComponent(stateName)}`}
+              href={stateHref}
               className="hover:text-primary transition-colors"
             >
               {stateName}
             </Link>
             <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
 
+            {resolvedProviderGeo?.kind === 'borough' && (
+              <>
+                <Link
+                  href={`${serviceHref}/new-york-city-ny`}
+                  className="hover:text-primary transition-colors"
+                >
+                  New York City
+                </Link>
+                <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              </>
+            )}
+
             <Link
-              href={`/contractors?borough=${encodeURIComponent(boroughOrCity)}`}
+              href={cityOrBoroughHref}
               className="hover:text-primary transition-colors"
             >
               {boroughOrCity}

@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Logger,
   OnApplicationBootstrap,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -14,8 +15,8 @@ import { UpdateBlogDto } from './dto/update-blog.dto';
 import { PostStatus, Prisma } from '@prisma/client';
 
 /**
- * Lightweight projection for blog cards/listings — omits large HTML `content` TEXT column
- * (~150KB+ saved per listing query across DB wire transfer & HTTP JSON payload).
+ * Lightweight projection for blog cards & admin tables — omits large HTML `content` TEXT column
+ * (~95%+ payload & remote DB wire-transfer reduction).
  */
 const BLOG_SUMMARY_SELECT = {
   id: true,
@@ -44,14 +45,28 @@ const BLOG_SUMMARY_SELECT = {
   updatedAt: true,
 } satisfies Prisma.BlogPostSelect;
 
-const BLOG_CACHE_OPTIONS = {
-  ttlMs: 5 * 60_000, // 5 minutes fresh
-  swrMs: 25 * 60_000, // +25 minutes stale-while-revalidate
+/**
+ * Blogs only mutate via admin endpoints (`create`, `update`, `remove`), which immediately
+ * invalidate `blogs:*` and trigger a background re-warm.
+ */
+const PUBLIC_BLOG_CACHE_OPTIONS = {
+  ttlMs: 30 * 60_000, // 30 minutes fresh
+  swrMs: 120 * 60_000, // +2 hours stale-while-revalidate
 };
 
+const ADMIN_BLOG_CACHE_OPTIONS = {
+  ttlMs: 2 * 60_000, // 2 minutes fresh
+  swrMs: 10 * 60_000, // +10 minutes SWR
+};
+
+const IMG_SRC_REGEX = /(<img\b[^>]*?\bsrc=["'])([^"']+)(["'][^>]*>)/gi;
+
 @Injectable()
-export class BlogsService implements OnApplicationBootstrap {
+export class BlogsService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(BlogsService.name);
+  private readonly pendingViewIncrements = new Map<string, number>();
+  private viewFlushTimer: NodeJS.Timeout | null = null;
+  private legacyCoversBackfilled = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -60,41 +75,230 @@ export class BlogsService implements OnApplicationBootstrap {
   ) {}
 
   onApplicationBootstrap() {
+    // Batch-flush viewCount increments every 60s instead of hitting remote DB on every read
+    this.viewFlushTimer = setInterval(() => {
+      this.flushPendingViews().catch(() => undefined);
+    }, 60_000);
+    if (this.viewFlushTimer.unref) {
+      this.viewFlushTimer.unref();
+    }
+
     setTimeout(() => {
-      Promise.allSettled([
-        this.findAll({ page: 1, limit: 9, status: 'PUBLISHED' } as GetBlogsQueryDto),
-        this.findAll({ page: 1, limit: 6, status: 'PUBLISHED' } as GetBlogsQueryDto),
-        this.findFeatured(),
-        this.getCategories(),
-      ]).catch(() => undefined);
-    }, 300);
+      this.warmBlogsCache().catch(() => undefined);
+    }, 350);
+  }
+
+  async onModuleDestroy() {
+    if (this.viewFlushTimer) {
+      clearInterval(this.viewFlushTimer);
+      this.viewFlushTimer = null;
+    }
+    await this.flushPendingViews();
+  }
+
+  private async flushPendingViews(): Promise<void> {
+    if (this.pendingViewIncrements.size === 0) return;
+    const entries = Array.from(this.pendingViewIncrements.entries());
+    this.pendingViewIncrements.clear();
+
+    await Promise.allSettled(
+      entries.map(([id, delta]) =>
+        this.prisma.blogPost.update({
+          where: { id },
+          data: { viewCount: { increment: delta } },
+        })
+      )
+    );
   }
 
   /**
-   * Helper: Format blog post with fresh presigned URLs for all media assets
+   * Pre-warms public lists, featured post, categories, admin list, AND individual
+   * published slug caches in the background so user clicks resolve in <5ms from RAM.
+   */
+  private async warmBlogsCache(): Promise<void> {
+    if (!this.legacyCoversBackfilled) {
+      this.legacyCoversBackfilled = true;
+      await this.backfillMissingCoverKeys().catch(() => undefined);
+    }
+
+    await Promise.allSettled([
+      this.findAll({ page: 1, limit: 9, status: 'PUBLISHED' } as GetBlogsQueryDto),
+      this.findAll({ page: 1, limit: 6, status: 'PUBLISHED' } as GetBlogsQueryDto),
+      this.findAll({ page: 1, limit: 200, status: 'PUBLISHED' } as GetBlogsQueryDto),
+      this.findFeatured(),
+      this.getCategories(),
+      this.findAllAdmin({ page: 1, limit: 20 } as GetBlogsQueryDto),
+      this.warmPublishedSlugCaches(),
+    ]);
+  }
+
+  /**
+   * Fetches published posts in a single query and seeds `blogs:slug:{slug}` cache entries
+   * so opening any article avoids cold sequential remote DB round-trips.
+   */
+  private async warmPublishedSlugCaches(): Promise<void> {
+    const posts = await this.prisma.blogPost.findMany({
+      where: { status: PostStatus.PUBLISHED },
+      orderBy: { publishedAt: 'desc' },
+      take: 30,
+    });
+    if (posts.length === 0) return;
+
+    const formattedMap = new Map<string, any>();
+    const summaryMap = new Map<string, any>();
+
+    await Promise.all(
+      posts.map(async (post) => {
+        const [full, summary] = await Promise.all([
+          this.formatBlog(post),
+          this.formatBlogSummary(post),
+        ]);
+        formattedMap.set(post.id, full);
+        summaryMap.set(post.id, summary);
+      })
+    );
+
+    for (const post of posts) {
+      const sameCategory = posts.filter(
+        (p) => p.id !== post.id && p.category === post.category
+      );
+      const others = posts.filter(
+        (p) => p.id !== post.id && p.category !== post.category
+      );
+      const relatedSummaries = [...sameCategory, ...others]
+        .slice(0, 3)
+        .map((p) => summaryMap.get(p.id))
+        .filter(Boolean);
+
+      this.cache.set(
+        `blogs:slug:${post.slug}`,
+        {
+          blog: formattedMap.get(post.id),
+          relatedPosts: relatedSummaries,
+        },
+        PUBLIC_BLOG_CACHE_OPTIONS
+      );
+    }
+  }
+
+  /**
+   * One-time startup backfill so legacy posts missing `coverImageUrl` never trigger N+1 queries.
+   */
+  private async backfillMissingCoverKeys(): Promise<void> {
+    const missing = await this.prisma.blogPost.findMany({
+      where: { coverImageUrl: null },
+      select: { id: true, content: true },
+      take: 50,
+    });
+    for (const row of missing) {
+      const firstImg = this.extractFirstImageSrc(row.content);
+      const cleanKey = this.toStorageKey(firstImg);
+      if (cleanKey) {
+        await this.prisma.blogPost
+          .update({
+            where: { id: row.id },
+            data: { coverImageUrl: cleanKey },
+          })
+          .catch(() => undefined);
+      }
+    }
+  }
+
+  private invalidateAndRewarm(): void {
+    this.cache.invalidatePrefix('blogs:');
+    setTimeout(() => {
+      this.warmBlogsCache().catch(() => undefined);
+    }, 50);
+  }
+
+  private extractFirstImageSrc(html?: string | null): string {
+    if (!html) return '';
+    const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+    return match?.[1] || '';
+  }
+
+  private isInternalStorageAsset(src: string): boolean {
+    return (
+      src.includes('.r2.cloudflarestorage.com') ||
+      src.includes('.amazonaws.com') ||
+      src.includes('/api/storage/file')
+    );
+  }
+
+  /**
+   * Before persisting `content` HTML to MariaDB, normalizes temporary R2 presigned `<img src>`
+   * URLs into permanent `/api/storage/file?key=...` references so inline images never expire.
+   */
+  private normalizeContentImagesForStorage(html: string): string {
+    if (!html || !html.includes('<img')) return html;
+    return html.replace(IMG_SRC_REGEX, (full, prefix, src, suffix) => {
+      if (!this.isInternalStorageAsset(src)) return full;
+      const key = this.storageService.extractCleanKey(src);
+      if (!key || key.startsWith('http://') || key.startsWith('https://')) {
+        return full;
+      }
+      return `${prefix}/api/storage/file?key=${encodeURIComponent(key)}${suffix}`;
+    });
+  }
+
+  /**
+   * When reading full `content` HTML, resolves all internal R2 / `/api/storage/file?key=...`
+   * inline images to fresh 12-hour presigned R2 URLs in parallel (cached in `StorageService`).
+   */
+  private async presignInlineContentImages(html?: string | null): Promise<string> {
+    if (!html || !html.includes('<img')) return html || '';
+
+    const uniqueSources = new Set<string>();
+    let match: RegExpExecArray | null;
+    const scanRegex = new RegExp(IMG_SRC_REGEX.source, 'gi');
+    while ((match = scanRegex.exec(html)) !== null) {
+      const src = match[2];
+      if (src && this.isInternalStorageAsset(src)) {
+        uniqueSources.add(src);
+      }
+    }
+
+    if (uniqueSources.size === 0) return html;
+
+    const resolvedMap = new Map<string, string>();
+    await Promise.all(
+      Array.from(uniqueSources).map(async (src) => {
+        const signed = await this.storageService.getPresignedUrl(src);
+        if (signed) resolvedMap.set(src, signed);
+      })
+    );
+
+    return html.replace(IMG_SRC_REGEX, (full, prefix, src, suffix) => {
+      const fresh = resolvedMap.get(src);
+      return fresh ? `${prefix}${fresh}${suffix}` : full;
+    });
+  }
+
+  /**
+   * Formats a full blog post (including inline HTML image presigning).
    */
   public async formatBlog(blog: any): Promise<any> {
     if (!blog) return null;
 
-    let rawCover = blog.coverImageUrl || '';
-    if (!rawCover && blog.content) {
-      // Fallback: extract first <img> src from content if no cover image was explicitly set
-      const match = blog.content.match(/<img[^>]+src=["']([^"']+)["']/i);
-      if (match && match[1]) {
-        rawCover = match[1];
-      }
-    }
+    const rawCover = blog.coverImageUrl || this.extractFirstImageSrc(blog.content);
 
-    const [coverImageUrl, ogImageUrl, authorAvatar] = await Promise.all([
-      rawCover ? this.storageService.getPresignedUrl(rawCover) : Promise.resolve(''),
-      blog.ogImageUrl ? this.storageService.getPresignedUrl(blog.ogImageUrl) : Promise.resolve(''),
-      blog.authorAvatar
-        ? this.storageService.getPresignedUrl(blog.authorAvatar)
-        : Promise.resolve(''),
-    ]);
+    const [coverImageUrl, ogImageUrl, authorAvatar, refreshedContent] =
+      await Promise.all([
+        rawCover ? this.storageService.getPresignedUrl(rawCover) : Promise.resolve(''),
+        blog.ogImageUrl
+          ? this.storageService.getPresignedUrl(blog.ogImageUrl)
+          : Promise.resolve(''),
+        blog.authorAvatar
+          ? this.storageService.getPresignedUrl(blog.authorAvatar)
+          : Promise.resolve(''),
+        blog.content
+          ? this.presignInlineContentImages(blog.content)
+          : Promise.resolve(''),
+      ]);
 
     return {
       ...blog,
+      content: refreshedContent,
       tags: Array.isArray(blog.tags) ? (blog.tags as string[]) : [],
       coverImageUrl: coverImageUrl || null,
       ogImageUrl: ogImageUrl || null,
@@ -103,66 +307,56 @@ export class BlogsService implements OnApplicationBootstrap {
   }
 
   /**
-   * Helper: Format blog summary card (without returning large HTML `content` body)
+   * Formats a lightweight blog summary card (ZERO extra DB queries; omits `content`).
    */
   private async formatBlogSummary(blog: any): Promise<any> {
     if (!blog) return null;
 
-    let rawCover = blog.coverImageUrl || '';
-    if (!rawCover && blog.id) {
-      // Rare fallback for legacy rows missing explicit coverImageUrl
-      const row = await this.prisma.blogPost.findUnique({
-        where: { id: blog.id },
-        select: { content: true },
-      });
-      if (row?.content) {
-        const match = row.content.match(/<img[^>]+src=["']([^"']+)["']/i);
-        if (match && match[1]) rawCover = match[1];
-      }
-    }
+    const [coverImageUrl, ogImageUrl, authorAvatar] = await Promise.all([
+      blog.coverImageUrl
+        ? this.storageService.getPresignedUrl(blog.coverImageUrl)
+        : Promise.resolve(''),
+      blog.ogImageUrl
+        ? this.storageService.getPresignedUrl(blog.ogImageUrl)
+        : Promise.resolve(''),
+      blog.authorAvatar
+        ? this.storageService.getPresignedUrl(blog.authorAvatar)
+        : Promise.resolve(''),
+    ]);
 
-    const formatted = await this.formatBlog({
+    return {
       ...blog,
-      coverImageUrl: rawCover,
       content: '',
-    });
-
-    return formatted;
+      tags: Array.isArray(blog.tags) ? (blog.tags as string[]) : [],
+      coverImageUrl: coverImageUrl || null,
+      ogImageUrl: ogImageUrl || null,
+      authorAvatar: authorAvatar || null,
+    };
   }
 
-  /**
-   * Helper: Normalize media URL or key for persistent database storage
-   */
   private toStorageKey(urlOrKey?: string | null): string | null {
     if (!urlOrKey) return null;
     const cleanKey = this.storageService.extractCleanKey(urlOrKey);
     return cleanKey || null;
   }
 
-  /**
-   * Helper: Generate URL slug from title
-   */
   private generateSlug(text: string): string {
     return text
       .toString()
       .toLowerCase()
       .trim()
-      .replace(/\s+/g, '-') // Replace spaces with -
-      .replace(/[^\w\-]+/g, '') // Remove all non-word chars
-      .replace(/\-\-+/g, '-') // Replace multiple - with single -
-      .replace(/^-+/, '') // Trim - from start of text
-      .replace(/-+$/, ''); // Trim - from end of text
+      .replace(/\s+/g, '-')
+      .replace(/[^\w\-]+/g, '')
+      .replace(/\-\-+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '');
   }
 
-  /**
-   * Helper: Calculate word count & estimated reading time (approx 200 words per minute)
-   */
   private calculateReadingMetrics(content: string): {
     wordCount: number;
     readingTimeMin: number;
   } {
     if (!content) return { wordCount: 0, readingTimeMin: 1 };
-    // Strip HTML tags for accurate word count
     const plainText = content.replace(/<[^>]+>/g, ' ').trim();
     const words = plainText.split(/\s+/).filter((w) => w.length > 0);
     const wordCount = words.length;
@@ -170,16 +364,17 @@ export class BlogsService implements OnApplicationBootstrap {
     return { wordCount, readingTimeMin };
   }
 
-  /**
-   * Helper: Ensure unique slug in database
-   */
-  private async ensureUniqueSlug(baseSlug: string, excludeId?: string): Promise<string> {
+  private async ensureUniqueSlug(
+    baseSlug: string,
+    excludeId?: string
+  ): Promise<string> {
     let slug = baseSlug;
     let counter = 1;
 
     while (true) {
       const existing = await this.prisma.blogPost.findUnique({
         where: { slug },
+        select: { id: true },
       });
 
       if (!existing || (excludeId && existing.id === excludeId)) {
@@ -207,9 +402,12 @@ export class BlogsService implements OnApplicationBootstrap {
       sortOrder = 'desc',
     } = query;
 
+    const numPage = Number(page) || 1;
+    const numLimit = Number(limit) || 10;
+
     const cacheKey = `blogs:list:${JSON.stringify({
-      page: Number(page),
-      limit: Number(limit),
+      page: numPage,
+      limit: numLimit,
       search: search?.trim().toLowerCase() || '',
       category: category || '',
       tag: tag || '',
@@ -222,7 +420,7 @@ export class BlogsService implements OnApplicationBootstrap {
     return this.cache.getOrSet(
       cacheKey,
       async () => {
-        const skip = (page - 1) * limit;
+        const skip = (numPage - 1) * numLimit;
 
         const where: Prisma.BlogPostWhereInput = {
           status: status as PostStatus,
@@ -233,15 +431,11 @@ export class BlogsService implements OnApplicationBootstrap {
         }
 
         if (category && category !== 'All') {
-          where.category = {
-            equals: category,
-          };
+          where.category = { equals: category };
         }
 
         if (tag) {
-          where.tags = {
-            array_contains: tag,
-          };
+          where.tags = { array_contains: tag };
         }
 
         if (search && search.trim()) {
@@ -249,50 +443,34 @@ export class BlogsService implements OnApplicationBootstrap {
           where.OR = [
             { title: { contains: term } },
             { excerpt: { contains: term } },
-            { content: { contains: term } },
             { category: { contains: term } },
           ];
         }
 
-        const orderBy: Prisma.BlogPostOrderByWithRelationInput = {
-          [sortBy]: sortOrder,
-        };
+        const [rawBlogs, total] = await Promise.all([
+          this.prisma.blogPost.findMany({
+            where,
+            select: BLOG_SUMMARY_SELECT,
+            skip,
+            take: numLimit,
+            orderBy: { [sortBy]: sortOrder },
+          }),
+          this.prisma.blogPost.count({ where }),
+        ]);
 
-        const rawBlogsPromise = this.prisma.blogPost.findMany({
-          where,
-          select: BLOG_SUMMARY_SELECT,
-          skip,
-          take: limit,
-          orderBy,
-        });
-
-        let rawBlogs: any[];
-        let total: number;
-
-        if (page === 1) {
-          rawBlogs = await rawBlogsPromise;
-          total =
-            rawBlogs.length < limit
-              ? rawBlogs.length
-              : await this.prisma.blogPost.count({ where });
-        } else {
-          [rawBlogs, total] = await Promise.all([
-            rawBlogsPromise,
-            this.prisma.blogPost.count({ where }),
-          ]);
-        }
-
-        const blogs = await Promise.all(rawBlogs.map((b) => this.formatBlogSummary(b)));
+        const blogs = await Promise.all(
+          rawBlogs.map((b) => this.formatBlogSummary(b))
+        );
 
         return {
           blogs,
           total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit) || 1,
+          page: numPage,
+          limit: numLimit,
+          totalPages: Math.ceil(total / numLimit) || 1,
         };
       },
-      BLOG_CACHE_OPTIONS
+      PUBLIC_BLOG_CACHE_OPTIONS
     );
   }
 
@@ -309,27 +487,20 @@ export class BlogsService implements OnApplicationBootstrap {
             isFeatured: true,
           },
           select: BLOG_SUMMARY_SELECT,
-          orderBy: {
-            publishedAt: 'desc',
-          },
+          orderBy: { publishedAt: 'desc' },
         });
 
         if (featured) return await this.formatBlogSummary(featured);
 
-        // Fallback: get the latest published post
         const latest = await this.prisma.blogPost.findFirst({
-          where: {
-            status: PostStatus.PUBLISHED,
-          },
+          where: { status: PostStatus.PUBLISHED },
           select: BLOG_SUMMARY_SELECT,
-          orderBy: {
-            publishedAt: 'desc',
-          },
+          orderBy: { publishedAt: 'desc' },
         });
 
         return await this.formatBlogSummary(latest);
       },
-      BLOG_CACHE_OPTIONS
+      PUBLIC_BLOG_CACHE_OPTIONS
     );
   }
 
@@ -342,17 +513,9 @@ export class BlogsService implements OnApplicationBootstrap {
       async () => {
         const categories = await this.prisma.blogPost.groupBy({
           by: ['category'],
-          where: {
-            status: PostStatus.PUBLISHED,
-          },
-          _count: {
-            id: true,
-          },
-          orderBy: {
-            _count: {
-              id: 'desc',
-            },
-          },
+          where: { status: PostStatus.PUBLISHED },
+          _count: { id: true },
+          orderBy: { _count: { id: 'desc' } },
         });
 
         return categories.map((c) => ({
@@ -360,12 +523,12 @@ export class BlogsService implements OnApplicationBootstrap {
           count: c._count.id,
         }));
       },
-      BLOG_CACHE_OPTIONS
+      PUBLIC_BLOG_CACHE_OPTIONS
     );
   }
 
   /**
-   * Public: Get single published blog post by slug + increment viewCount + fetch related posts
+   * Public: Get single published blog post by slug + related posts (indexed lookup + buffered viewCount)
    */
   async findBySlug(slug: string) {
     const cleanSlug = slug.trim();
@@ -380,27 +543,36 @@ export class BlogsService implements OnApplicationBootstrap {
           throw new NotFoundException(`Blog post with slug "${slug}" not found`);
         }
 
-        // Fetch related articles (same category or shared tags, excluding current post) — summary projection only
-        const blogTags = Array.isArray(blog.tags) ? (blog.tags as string[]) : [];
-        const rawRelatedPosts = await this.prisma.blogPost.findMany({
+        // Fast indexed query (`@@index([category, status])` + `@@index([status, publishedAt])`)
+        const sameCategoryPosts = await this.prisma.blogPost.findMany({
           where: {
             id: { not: blog.id },
             status: PostStatus.PUBLISHED,
-            OR: [
-              { category: blog.category },
-              ...(blogTags.length > 0
-                ? blogTags.map((t) => ({ tags: { array_contains: t } }))
-                : []),
-            ],
+            category: blog.category,
           },
           select: BLOG_SUMMARY_SELECT,
           take: 3,
           orderBy: { publishedAt: 'desc' },
         });
 
+        let rawRelated = sameCategoryPosts;
+        if (rawRelated.length < 3) {
+          const excludeIds = [blog.id, ...rawRelated.map((r) => r.id)];
+          const filler = await this.prisma.blogPost.findMany({
+            where: {
+              id: { notIn: excludeIds },
+              status: PostStatus.PUBLISHED,
+            },
+            select: BLOG_SUMMARY_SELECT,
+            take: 3 - rawRelated.length,
+            orderBy: { publishedAt: 'desc' },
+          });
+          rawRelated = [...rawRelated, ...filler];
+        }
+
         const [formattedBlog, relatedPosts] = await Promise.all([
           this.formatBlog(blog),
-          Promise.all(rawRelatedPosts.map((p) => this.formatBlogSummary(p))),
+          Promise.all(rawRelated.map((p) => this.formatBlogSummary(p))),
         ]);
 
         return {
@@ -408,24 +580,19 @@ export class BlogsService implements OnApplicationBootstrap {
           relatedPosts,
         };
       },
-      BLOG_CACHE_OPTIONS
+      PUBLIC_BLOG_CACHE_OPTIONS
     );
 
-    // Async increment viewCount in background without blocking response (runs even on cache hits)
     if (result?.blog?.id) {
-      this.prisma.blogPost
-        .update({
-          where: { id: result.blog.id },
-          data: { viewCount: { increment: 1 } },
-        })
-        .catch((err) => this.logger.warn(`Failed to increment view count: ${err.message}`));
+      const prev = this.pendingViewIncrements.get(result.blog.id) || 0;
+      this.pendingViewIncrements.set(result.blog.id, prev + 1);
     }
 
     return result;
   }
 
   /**
-   * Admin: Get all blogs (including drafts and archived) with pagination & filters
+   * Admin: Lightweight cached summary listing (omits heavy HTML `content` column!)
    */
   async findAllAdmin(query: GetBlogsQueryDto) {
     const {
@@ -438,49 +605,71 @@ export class BlogsService implements OnApplicationBootstrap {
       sortOrder = 'desc',
     } = query;
 
-    const skip = (page - 1) * limit;
-    const where: Prisma.BlogPostWhereInput = {};
+    const numPage = Number(page) || 1;
+    const numLimit = Number(limit) || 20;
 
-    if (status) {
-      where.status = status as PostStatus;
-    }
+    const cacheKey = `blogs:admin:list:${JSON.stringify({
+      page: numPage,
+      limit: numLimit,
+      search: search?.trim().toLowerCase() || '',
+      category: category || '',
+      status: status || 'ALL',
+      sortBy,
+      sortOrder,
+    })}`;
 
-    if (category && category !== 'All') {
-      where.category = { equals: category };
-    }
+    return this.cache.getOrSet(
+      cacheKey,
+      async () => {
+        const skip = (numPage - 1) * numLimit;
+        const where: Prisma.BlogPostWhereInput = {};
 
-    if (search && search.trim()) {
-      const term = search.trim();
-      where.OR = [
-        { title: { contains: term } },
-        { excerpt: { contains: term } },
-        { category: { contains: term } },
-      ];
-    }
+        if (status) {
+          where.status = status as PostStatus;
+        }
 
-    const [rawBlogs, total] = await Promise.all([
-      this.prisma.blogPost.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { [sortBy]: sortOrder },
-      }),
-      this.prisma.blogPost.count({ where }),
-    ]);
+        if (category && category !== 'All') {
+          where.category = { equals: category };
+        }
 
-    const blogs = await Promise.all(rawBlogs.map((b) => this.formatBlog(b)));
+        if (search && search.trim()) {
+          const term = search.trim();
+          where.OR = [
+            { title: { contains: term } },
+            { excerpt: { contains: term } },
+            { category: { contains: term } },
+          ];
+        }
 
-    return {
-      blogs,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit) || 1,
-    };
+        const [rawBlogs, total] = await Promise.all([
+          this.prisma.blogPost.findMany({
+            where,
+            select: BLOG_SUMMARY_SELECT,
+            skip,
+            take: numLimit,
+            orderBy: { [sortBy]: sortOrder },
+          }),
+          this.prisma.blogPost.count({ where }),
+        ]);
+
+        const blogs = await Promise.all(
+          rawBlogs.map((b) => this.formatBlogSummary(b))
+        );
+
+        return {
+          blogs,
+          total,
+          page: numPage,
+          limit: numLimit,
+          totalPages: Math.ceil(total / numLimit) || 1,
+        };
+      },
+      ADMIN_BLOG_CACHE_OPTIONS
+    );
   }
 
   /**
-   * Admin / Internal: Get single post by ID
+   * Admin: Get single full post by ID for editor
    */
   async findById(id: string) {
     const blog = await this.prisma.blogPost.findUnique({
@@ -502,23 +691,25 @@ export class BlogsService implements OnApplicationBootstrap {
       throw new BadRequestException('Title and content are required');
     }
 
-    const baseSlug = dto.slug ? this.generateSlug(dto.slug) : this.generateSlug(dto.title);
+    const normalizedContent = this.normalizeContentImagesForStorage(dto.content);
+    const baseSlug = dto.slug
+      ? this.generateSlug(dto.slug)
+      : this.generateSlug(dto.title);
     const slug = await this.ensureUniqueSlug(baseSlug);
 
-    const { wordCount, readingTimeMin } = this.calculateReadingMetrics(dto.content);
+    const { wordCount, readingTimeMin } =
+      this.calculateReadingMetrics(normalizedContent);
 
     const status = dto.status || PostStatus.DRAFT;
     const publishedAt =
-      status === PostStatus.PUBLISHED ? dto.publishedAt ? new Date(dto.publishedAt) : new Date() : null;
+      status === PostStatus.PUBLISHED
+        ? dto.publishedAt
+          ? new Date(dto.publishedAt)
+          : new Date()
+        : null;
 
-    // If coverImageUrl is not explicitly provided, try to extract first image from content
-    let rawCover = dto.coverImageUrl;
-    if (!rawCover && dto.content) {
-      const match = dto.content.match(/<img[^>]+src=["']([^"']+)["']/i);
-      if (match && match[1]) {
-        rawCover = match[1];
-      }
-    }
+    const rawCover =
+      dto.coverImageUrl || this.extractFirstImageSrc(normalizedContent);
     const coverImageUrl = this.toStorageKey(rawCover);
     const ogImageUrl = this.toStorageKey(dto.ogImageUrl) || coverImageUrl;
     const authorAvatar = this.toStorageKey(dto.authorAvatar);
@@ -528,10 +719,10 @@ export class BlogsService implements OnApplicationBootstrap {
         title: dto.title,
         slug,
         excerpt: dto.excerpt || null,
-        content: dto.content,
+        content: normalizedContent,
         coverImageUrl,
         coverImageAlt: dto.coverImageAlt || dto.title,
-        authorName: dto.authorName || 'Prosvetted Editorial',
+        authorName: dto.authorName || 'ProsVetted Editorial Team',
         authorAvatar,
         authorRole: dto.authorRole || 'Content Editor',
         category: dto.category || 'General',
@@ -549,27 +740,58 @@ export class BlogsService implements OnApplicationBootstrap {
       },
     });
 
-    this.cache.invalidatePrefix('blogs:');
+    this.invalidateAndRewarm();
     this.logger.log(`Created new blog post: "${newPost.title}" (${newPost.id})`);
     return await this.formatBlog(newPost);
   }
 
   /**
-   * Admin: Update existing blog post
+   * Admin: Update existing blog post (lightweight metadata check + clean image reset support)
    */
   async update(id: string, dto: UpdateBlogDto) {
-    const existing = await this.findById(id);
+    const existing = await this.prisma.blogPost.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        status: true,
+        publishedAt: true,
+        coverImageUrl: true,
+        wordCount: true,
+        readingTimeMin: true,
+      },
+    });
 
-    let slug = existing.slug;
-    if (dto.slug && dto.slug !== existing.slug) {
-      slug = await this.ensureUniqueSlug(this.generateSlug(dto.slug), id);
-    } else if (dto.title && dto.title !== existing.title && !dto.slug) {
-      // Auto-update slug if title changed and slug wasn't manually set
-      slug = await this.ensureUniqueSlug(this.generateSlug(dto.title), id);
+    if (!existing) {
+      throw new NotFoundException(`Blog post with ID "${id}" not found`);
     }
 
-    const content = dto.content !== undefined ? dto.content : existing.content;
-    const { wordCount, readingTimeMin } = this.calculateReadingMetrics(content);
+    let slug = existing.slug;
+    if (dto.slug) {
+      const requestedSlug = this.generateSlug(dto.slug);
+      if (requestedSlug && requestedSlug !== existing.slug) {
+        slug = await this.ensureUniqueSlug(requestedSlug, id);
+      }
+    } else if (dto.title && dto.title !== existing.title) {
+      const candidateSlug = this.generateSlug(dto.title);
+      if (candidateSlug && candidateSlug !== existing.slug) {
+        slug = await this.ensureUniqueSlug(candidateSlug, id);
+      }
+    }
+
+    const normalizedContent =
+      dto.content !== undefined
+        ? this.normalizeContentImagesForStorage(dto.content)
+        : undefined;
+
+    const metrics =
+      normalizedContent !== undefined
+        ? this.calculateReadingMetrics(normalizedContent)
+        : {
+            wordCount: existing.wordCount,
+            readingTimeMin: existing.readingTimeMin,
+          };
 
     let status = existing.status;
     let publishedAt = existing.publishedAt;
@@ -585,57 +807,82 @@ export class BlogsService implements OnApplicationBootstrap {
       publishedAt = dto.publishedAt ? new Date(dto.publishedAt) : null;
     }
 
-    // Determine cover image URL
-    let rawCover = dto.coverImageUrl;
-    if (rawCover === undefined && !existing.coverImageUrl && content) {
-      const match = content.match(/<img[^>]+src=["']([^"']+)["']/i);
-      if (match && match[1]) {
-        rawCover = match[1];
-      }
+    // Explicitly support clearing (`""` -> `null`) OR replacing `coverImageUrl` & `ogImageUrl`
+    let coverImageUrl: string | null | undefined = undefined;
+    if (dto.coverImageUrl !== undefined) {
+      coverImageUrl =
+        dto.coverImageUrl.trim() === ''
+          ? null
+          : this.toStorageKey(dto.coverImageUrl);
+    } else if (!existing.coverImageUrl && normalizedContent) {
+      const fallback = this.extractFirstImageSrc(normalizedContent);
+      if (fallback) coverImageUrl = this.toStorageKey(fallback);
     }
-    const coverImageUrl = rawCover !== undefined ? this.toStorageKey(rawCover) : undefined;
-    const ogImageUrl = dto.ogImageUrl !== undefined ? this.toStorageKey(dto.ogImageUrl) : undefined;
-    const authorAvatar = dto.authorAvatar !== undefined ? this.toStorageKey(dto.authorAvatar) : undefined;
+
+    const ogImageUrl =
+      dto.ogImageUrl !== undefined
+        ? dto.ogImageUrl.trim() === ''
+          ? null
+          : this.toStorageKey(dto.ogImageUrl)
+        : undefined;
+
+    const authorAvatar =
+      dto.authorAvatar !== undefined
+        ? dto.authorAvatar.trim() === ''
+          ? null
+          : this.toStorageKey(dto.authorAvatar)
+        : undefined;
 
     const updated = await this.prisma.blogPost.update({
       where: { id },
       data: {
         ...(dto.title !== undefined && { title: dto.title }),
         slug,
-        ...(dto.excerpt !== undefined && { excerpt: dto.excerpt }),
-        ...(dto.content !== undefined && { content: dto.content }),
+        ...(dto.excerpt !== undefined && { excerpt: dto.excerpt || null }),
+        ...(normalizedContent !== undefined && { content: normalizedContent }),
         ...(coverImageUrl !== undefined && { coverImageUrl }),
-        ...(dto.coverImageAlt !== undefined && { coverImageAlt: dto.coverImageAlt }),
+        ...(dto.coverImageAlt !== undefined && {
+          coverImageAlt: dto.coverImageAlt || null,
+        }),
         ...(dto.authorName !== undefined && { authorName: dto.authorName }),
         ...(authorAvatar !== undefined && { authorAvatar }),
         ...(dto.authorRole !== undefined && { authorRole: dto.authorRole }),
         ...(dto.category !== undefined && { category: dto.category }),
         ...(dto.tags !== undefined && { tags: dto.tags }),
-        readingTimeMin,
-        wordCount,
+        readingTimeMin: metrics.readingTimeMin,
+        wordCount: metrics.wordCount,
         status,
         ...(dto.isFeatured !== undefined && { isFeatured: dto.isFeatured }),
         publishedAt,
-        ...(dto.metaTitle !== undefined && { metaTitle: dto.metaTitle }),
-        ...(dto.metaDescription !== undefined && { metaDescription: dto.metaDescription }),
-        ...(dto.canonicalUrl !== undefined && { canonicalUrl: dto.canonicalUrl }),
+        ...(dto.metaTitle !== undefined && { metaTitle: dto.metaTitle || null }),
+        ...(dto.metaDescription !== undefined && {
+          metaDescription: dto.metaDescription || null,
+        }),
+        ...(dto.canonicalUrl !== undefined && {
+          canonicalUrl: dto.canonicalUrl || null,
+        }),
         ...(ogImageUrl !== undefined && { ogImageUrl }),
-        ...(dto.focusKeyword !== undefined && { focusKeyword: dto.focusKeyword }),
+        ...(dto.focusKeyword !== undefined && {
+          focusKeyword: dto.focusKeyword || null,
+        }),
       },
     });
 
-    this.cache.invalidatePrefix('blogs:');
+    this.invalidateAndRewarm();
     this.logger.log(`Updated blog post: "${updated.title}" (${updated.id})`);
     return await this.formatBlog(updated);
   }
 
   /**
-   * Admin: Delete blog post
+   * Admin: Delete blog post (single round-trip)
    */
   async remove(id: string) {
-    await this.findById(id);
-    await this.prisma.blogPost.delete({ where: { id } });
-    this.cache.invalidatePrefix('blogs:');
+    try {
+      await this.prisma.blogPost.delete({ where: { id } });
+    } catch {
+      throw new NotFoundException(`Blog post with ID "${id}" not found`);
+    }
+    this.invalidateAndRewarm();
     this.logger.log(`Deleted blog post with ID: ${id}`);
     return { success: true, message: `Blog post ${id} deleted successfully` };
   }

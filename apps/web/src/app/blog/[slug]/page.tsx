@@ -18,6 +18,7 @@ import Header from '@/components/common/Header';
 import Footer from '@/components/common/Footer';
 import SafeImage from '@/components/common/SafeImage';
 import { fetchBlogBySlug } from '@/lib/blogs-api';
+import { getAuthorUrl } from '@/lib/seo-urls';
 import type { BlogPost } from '@repo/types';
 
 interface PageProps {
@@ -197,7 +198,12 @@ export default async function BlogDetailPage({ params }: PageProps) {
             </div>
             <div>
               <div className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
-                <span>{blog.authorName || 'Prosvetted Editorial'}</span>
+                <Link
+                  href={getAuthorUrl(blog.authorName || 'prosvetted-editorial-team')}
+                  className="hover:text-primary hover:underline transition-colors"
+                >
+                  {blog.authorName || 'ProsVetted Editorial Team'}
+                </Link>
                 <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.2 rounded-full flex items-center gap-0.5">
                   <ShieldCheck className="w-3 h-3" />
                   Verified Author

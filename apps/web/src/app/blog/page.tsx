@@ -17,13 +17,16 @@ import { fetchBlogs, fetchFeaturedBlog, fetchBlogCategories } from '@/lib/blogs-
 import type { BlogPost } from '@repo/types';
 
 export const metadata: Metadata = {
-  title: 'Roofing Guides, Cost Breakdowns & Expert Advice | Prosvetted',
+  title: 'Home Improvement Guides, Cost Breakdowns & Expert Advice | ProsVetted',
   description:
-    'Comprehensive guides, cost calculators, and contractor hiring advice for New York City property owners. Learn from certified building experts.',
+    'Comprehensive remodeling guides, cost breakdowns, and contractor hiring advice from the ProsVetted research desk.',
+  alternates: {
+    canonical: 'https://prosvetted.com/blog',
+  },
   openGraph: {
-    title: 'Roofing Guides & Cost Breakdowns | ProsVetted',
+    title: 'Home Improvement Guides & Cost Breakdowns | ProsVetted',
     description:
-      'Expert advice and transparent pricing breakdown for roofing, gutters, and siding projects in NYC.',
+      'Expert advice and transparent pricing breakdowns for custom cabinetry, roofing, and residential remodeling projects.',
     url: 'https://prosvetted.com/blog',
     type: 'website',
     images: [

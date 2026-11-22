@@ -8,7 +8,12 @@ import {
   Footer,
   QuoteModal,
 } from '@/components/common';
-import { fetchCategories, CategoryItem } from '@/lib/api';
+import { fetchCategories, fetchProviders, CategoryItem } from '@/lib/api';
+import {
+  getStateUrl,
+  resolveGeoFromInputs,
+  resolveServiceFromInput,
+} from '@/lib/seo-urls';
 import { EButton } from '@/components/EComponents';
 import USStateMap from '@/components/USStateMap';
 import PopularServicesCarousel from '@/components/PopularServicesCarousel';
@@ -51,6 +56,7 @@ export default function Home() {
   // Search form state
   const [searchNeed, setSearchNeed] = useState('');
   const [searchZip, setSearchZip] = useState('');
+  const [heroDropdownOpen, setHeroDropdownOpen] = useState(false);
 
   // Quote modal state
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
@@ -61,9 +67,18 @@ export default function Home() {
   // Horizontal scroll refs
   const blogsScrollRef = useRef<HTMLDivElement>(null);
 
-  // Dynamic categories state loaded from backend API / database
+  // Dynamic categories & live directory stats loaded strictly from backend API / database
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [liveStats, setLiveStats] = useState<{
+    totalPros: number;
+    avgRating: string | null;
+    totalReviews: number;
+  }>({
+    totalPros: 0,
+    avgRating: null,
+    totalReviews: 0,
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -80,6 +95,27 @@ export default function Home() {
         if (isMounted) setLoadingCategories(false);
       });
 
+    fetchProviders({ limit: 50 })
+      .then((res) => {
+        if (!isMounted || !res) return;
+        const items = res.items || [];
+        const rated = items.filter((p) => (p.compositeRating || 0) > 0);
+        const avg =
+          rated.length > 0
+            ? (
+                rated.reduce((s, p) => s + (p.compositeRating || 0), 0) /
+                rated.length
+              ).toFixed(1)
+            : null;
+        const reviews = items.reduce((s, p) => s + (p.totalReviews || 0), 0);
+        setLiveStats({
+          totalPros: res.total || items.length,
+          avgRating: avg,
+          totalReviews: reviews,
+        });
+      })
+      .catch(() => {});
+
     return () => {
       isMounted = false;
     };
@@ -87,14 +123,50 @@ export default function Home() {
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const rawNeed = searchNeed.trim();
+    const rawLoc = searchZip.trim();
+
+    const matchedSvc = resolveServiceFromInput(rawNeed);
+    const matchedGeo = resolveGeoFromInputs({
+      borough: rawLoc,
+      city: rawLoc,
+      state: rawLoc,
+    });
+
+    // Direct clean URL jump when input resolves to a known service (+ optional geo)
+    if (matchedSvc) {
+      const subQuery =
+        rawNeed.toLowerCase() !== matchedSvc.name.toLowerCase() &&
+        rawNeed.toLowerCase() !== matchedSvc.dbCategoryName.toLowerCase()
+          ? `?subservice=${encodeURIComponent(rawNeed)}`
+          : '';
+      router.push(
+        matchedGeo
+          ? `/${matchedSvc.slug}/${matchedGeo.slug}${subQuery}`
+          : `/${matchedSvc.slug}${subQuery}`
+      );
+      return;
+    }
+
+    // Otherwise route to site search (`/search` — Sheet 1 Row 6)
     const params = new URLSearchParams();
-    if (searchNeed.trim()) params.set('search', searchNeed.trim());
-    if (searchZip.trim()) params.set('zip', searchZip.trim());
-    router.push(`/contractors?${params.toString()}`);
+    if (rawNeed) params.set('q', rawNeed);
+    if (rawLoc) params.set('location', rawLoc);
+    router.push(`/search${params.toString() ? `?${params.toString()}` : ''}`);
   };
 
   const handlePopularSearch = (service: string) => {
-    router.push(`/contractors?service=${encodeURIComponent(service)}`);
+    const matched = resolveServiceFromInput(service);
+    if (matched) {
+      const subQuery =
+        service.toLowerCase() !== matched.name.toLowerCase() &&
+        service.toLowerCase() !== matched.dbCategoryName.toLowerCase()
+          ? `?subservice=${encodeURIComponent(service)}`
+          : '';
+      router.push(`/${matched.slug}${subQuery}`);
+      return;
+    }
+    router.push(`/search?q=${encodeURIComponent(service)}`);
   };
 
   // Derive popular search chips directly from DB categories & subServices
@@ -122,9 +194,13 @@ export default function Home() {
     });
   };
 
-  // States Data - New York is currently active, others are coming soon
+  // States Data - New York is currently active (live DB count), others are coming soon
   const stateList = [
-    { name: 'New York', isLive: true, pros: '24+ Active Pros' },
+    {
+      name: 'New York',
+      isLive: true,
+      pros: liveStats.totalPros > 0 ? `${liveStats.totalPros} Active Pros` : 'Live Now',
+    },
     { name: 'California', isLive: false, pros: 'Coming Soon' },
     { name: 'Texas', isLive: false, pros: 'Coming Soon' },
     { name: 'Florida', isLive: false, pros: 'Coming Soon' },
@@ -216,7 +292,7 @@ export default function Home() {
         {/* 2. HERO SECTION */}
         {/* ========================================================= */}
         {/* MOBILE HERO VIEW (< lg) - Industry-standard split: Clean readable top copy + 100% clear kitchen showcase + overlapping search card */}
-        <section className="lg:hidden relative bg-[#FAFBF9] overflow-hidden">
+        <section className="lg:hidden relative bg-[#FAFBF9] overflow-visible">
           {/* 1. Top Copy Container on Clean Solid #FAFBF9 Background (100% readable, zero image clutter behind text) */}
           <div className="pt-4 pb-2 px-4 relative z-10 bg-[#FAFBF9]">
             {/* Kicker Pill Tag */}
@@ -239,32 +315,32 @@ export default function Home() {
               Compare verified contractors, read real customer reviews, project photos, pricing insights and credentials — all in one place.
             </p>
 
-            {/* Ratings Row */}
-            <div className="flex items-center gap-2 mt-3">
-              <div className="flex -space-x-1.5 shrink-0">
-                <img
-                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=64&q=80"
-                  alt="Customer"
-                  className="w-6 h-6 rounded-full border-2 border-white object-cover shadow-sm"
-                />
-                <img
-                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=64&q=80"
-                  alt="Customer"
-                  className="w-6 h-6 rounded-full border-2 border-white object-cover shadow-sm"
-                />
-                <img
-                  src="https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=64&q=80"
-                  alt="Customer"
-                  className="w-6 h-6 rounded-full border-2 border-white object-cover shadow-sm"
-                />
+            {/* Live Verified Ratings Row (100% real DB stats — zero fake numbers or stock avatars) */}
+            {(liveStats.avgRating || liveStats.totalPros > 0) && (
+              <div className="flex items-center gap-2 mt-3">
+                <div className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#EBF7F2] border border-[#D1E5DB] text-[#0F3E35] shrink-0">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                </div>
+                {liveStats.avgRating && (
+                  <>
+                    <div className="flex text-amber-500 text-[11px] tracking-tight shrink-0">
+                      {'★'.repeat(5)}
+                    </div>
+                    <span className="text-xs font-extrabold text-[#111827] shrink-0">
+                      {liveStats.avgRating}/5
+                    </span>
+                  </>
+                )}
+                {liveStats.totalReviews > 0 && (
+                  <>
+                    <span className="text-gray-300 shrink-0">|</span>
+                    <span className="text-[11.5px] font-semibold text-[#374151] shrink-0">
+                      {liveStats.totalReviews.toLocaleString()} Verified Reviews
+                    </span>
+                  </>
+                )}
               </div>
-              <div className="flex text-amber-500 text-[11px] tracking-tight shrink-0">
-                {'★'.repeat(5)}
-              </div>
-              <span className="text-xs font-extrabold text-[#111827] shrink-0">4.8/5</span>
-              <span className="text-gray-300 shrink-0">|</span>
-              <span className="text-[11.5px] font-semibold text-[#374151] shrink-0">18,500+ Homeowners</span>
-            </div>
+            )}
           </div>
 
           {/* 2. Dedicated Kitchen Image Showcase + Overlapping Floating Search Card */}
@@ -294,21 +370,55 @@ export default function Home() {
 
             {/* Floating White Search Card overlapping the lower portion of the kitchen image */}
             <div className="relative z-10 px-4 -mt-20 pb-4">
-              <div className="bg-white rounded-2xl p-3.5 shadow-[0_14px_34px_rgba(0,0,0,0.12)] border border-gray-200">
+              <div className="bg-white rounded-2xl p-3.5 border border-gray-300/90 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.12),0_4px_10px_-2px_rgba(15,23,42,0.06)]">
                 <form onSubmit={handleSearchSubmit} className="flex flex-col gap-2">
                   {/* Field 1: What do you need done? */}
-                  <div className="flex items-center justify-between border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white focus-within:border-[#0F3E35] focus-within:ring-1 focus-within:ring-[#0F3E35] transition-all">
+                  <div className="relative flex items-center justify-between border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white focus-within:border-[#0F3E35] focus-within:ring-1 focus-within:ring-[#0F3E35] transition-all">
                     <div className="flex items-center gap-2.5 flex-1 min-w-0">
                       <Search className="w-4 h-4 text-gray-400 shrink-0" />
                       <input
                         type="text"
                         value={searchNeed}
                         onChange={(e) => setSearchNeed(e.target.value)}
+                        onFocus={() => setHeroDropdownOpen(true)}
                         placeholder="What do you need done?"
                         className="w-full text-[13px] text-gray-900 placeholder-gray-400 bg-transparent focus:outline-none font-normal"
                       />
                     </div>
-                    <ChevronDown className="w-4 h-4 text-gray-400 shrink-0 ml-1 pointer-events-none" />
+                    <button
+                      type="button"
+                      onClick={() => setHeroDropdownOpen((prev) => !prev)}
+                      className="text-gray-400 hover:text-gray-600 shrink-0 ml-1 cursor-pointer"
+                      aria-label="Toggle service suggestions"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+
+                    {heroDropdownOpen && popularSearchItems.length > 0 && (
+                      <div
+                        className="absolute top-12 left-0 right-0 bg-white rounded-2xl border border-gray-300/95 shadow-[0_14px_38px_-4px_rgba(15,23,42,0.20),0_6px_14px_-2px_rgba(15,23,42,0.10)] z-50 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-1 duration-150"
+                        onMouseLeave={() => setHeroDropdownOpen(false)}
+                      >
+                        <div className="px-3.5 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 bg-white shrink-0">
+                          Popular Services
+                        </div>
+                        <div className="max-h-56 overflow-y-auto overscroll-contain py-1">
+                          {popularSearchItems.map((svc) => (
+                            <button
+                              key={svc}
+                              type="button"
+                              onClick={() => {
+                                setSearchNeed(svc);
+                                setHeroDropdownOpen(false);
+                              }}
+                              className="w-full text-left px-3.5 py-2 text-xs text-gray-700 hover:bg-[#EBF3F1] hover:text-[#0F3E35] transition-colors cursor-pointer"
+                            >
+                              {svc}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Field 2: Enter ZIP code */}
@@ -360,7 +470,7 @@ export default function Home() {
         </section>
 
         {/* DESKTOP HERO VIEW (lg+) - 100% UNTOUCHED ORIGINAL DESKTOP */}
-        <section className="hidden lg:flex relative bg-[#FAFBF9] min-h-[640px] items-center overflow-hidden border-b border-gray-100">
+        <section className="hidden lg:flex relative bg-[#FAFBF9] min-h-[640px] items-center overflow-visible border-b border-gray-100">
           {/* Background Kitchen Image on Right with Seamless Left Fade */}
           <div className="absolute right-0 top-0 bottom-0 w-[62%] h-full pointer-events-none select-none z-0 overflow-hidden">
             <img
@@ -398,49 +508,39 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Floating Customer Rating Card (Positioned directly next to the headline over the kitchen transition on desktop) */}
-              <div className="shrink-0 mt-4">
-                <div className="bg-white/95 backdrop-blur-md rounded-2xl p-5 shadow-[0_16px_36px_rgba(0,0,0,0.08)] border border-gray-100/90 w-[295px] animate-in fade-in duration-300">
-                  <div className="flex items-center justify-between gap-3">
-                    {/* 3 Overlapping customer avatars */}
-                    <div className="flex -space-x-2.5 shrink-0">
-                      <img
-                        src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80"
-                        alt="Customer"
-                        className="w-9 h-9 rounded-full border-2 border-white object-cover shadow-2xs"
-                      />
-                      <img
-                        src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80"
-                        alt="Customer"
-                        className="w-9 h-9 rounded-full border-2 border-white object-cover shadow-2xs"
-                      />
-                      <img
-                        src="https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=100&q=80"
-                        alt="Customer"
-                        className="w-9 h-9 rounded-full border-2 border-white object-cover shadow-2xs"
-                      />
-                    </div>
-
-                    {/* 5 Amber/Gold Stars + 4.8/5 + 18,500+ */}
-                    <div className="text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <div className="flex text-amber-500 text-xs tracking-tighter">
-                          {'★'.repeat(5)}
-                        </div>
-                        <span className="text-xs font-bold text-gray-900 tracking-tight">4.8/5</span>
+              {/* Floating Live Directory Metrics Card (100% real DB stats — zero fake numbers or stock avatars) */}
+              {liveStats.totalPros > 0 && (
+                <div className="shrink-0 mt-4">
+                  <div className="bg-white/95 backdrop-blur-md rounded-2xl p-5 shadow-[0_16px_36px_rgba(0,0,0,0.08)] border border-gray-100/90 w-[295px] animate-in fade-in duration-300">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="w-11 h-11 rounded-xl bg-[#EBF7F2] border border-[#D1E5DB] text-[#0F3E35] flex items-center justify-center shrink-0">
+                        <ShieldCheck className="w-5 h-5" />
                       </div>
-                      <p className="text-[11.5px] font-bold text-gray-900 leading-tight mt-0.5">
-                        18,500+ <span className="text-gray-500 font-medium">Homeowners</span>
-                      </p>
-                    </div>
-                  </div>
 
-                  {/* Caption */}
-                  <p className="text-[11.5px] font-semibold text-gray-700 leading-tight mt-2.5">
-                    found trusted contractors on Prosvetted
-                  </p>
+                      <div className="text-right">
+                        {liveStats.avgRating && (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <div className="flex text-amber-500 text-xs tracking-tighter">
+                              {'★'.repeat(5)}
+                            </div>
+                            <span className="text-xs font-bold text-gray-900 tracking-tight">
+                              {liveStats.avgRating}/5
+                            </span>
+                          </div>
+                        )}
+                        <p className="text-[11.5px] font-bold text-gray-900 leading-tight mt-0.5">
+                          {liveStats.totalReviews.toLocaleString()}{' '}
+                          <span className="text-gray-500 font-medium">Verified Reviews</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="text-[11.5px] font-semibold text-gray-700 leading-tight mt-2.5">
+                      analyzed across {liveStats.totalPros} vetted NYC companies
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Bottom Actions: Search Form & Quick Filters */}
@@ -448,22 +548,57 @@ export default function Home() {
               {/* Dual Search Input Bar */}
               <form
                 onSubmit={handleSearchSubmit}
-                className="bg-white backdrop-blur-md rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] border border-gray-200/90 p-2 flex flex-row items-center gap-2 max-w-[760px] transition-shadow hover:shadow-[0_16px_40px_rgba(15,62,53,0.15)]"
+                className="bg-white rounded-2xl border border-gray-300/95 hover:border-[#0B3B2C]/45 focus-within:border-[#0B3B2C]/55 shadow-[0_8px_28px_-4px_rgba(15,23,42,0.12),0_4px_10px_-2px_rgba(15,23,42,0.06)] hover:shadow-[0_14px_36px_-4px_rgba(15,23,42,0.18),0_6px_14px_-2px_rgba(15,23,42,0.09)] focus-within:shadow-[0_14px_36px_-4px_rgba(15,23,42,0.18),0_6px_14px_-2px_rgba(15,23,42,0.09)] p-2 flex flex-row items-center gap-2 max-w-[760px] transition-all duration-200"
               >
                 {/* Search Need Input */}
-                <div className="flex items-center gap-2.5 px-3 py-1 flex-1">
+                <div className="relative flex items-center gap-2.5 px-3 py-1 flex-1">
                   <Search className="w-4 h-4 text-gray-400 shrink-0" />
                   <input
                     type="text"
                     value={searchNeed}
                     onChange={(e) => setSearchNeed(e.target.value)}
+                    onFocus={() => setHeroDropdownOpen(true)}
                     placeholder="What do you need done?"
                     className="w-full text-sm text-gray-800 placeholder-gray-400 bg-transparent focus:outline-none font-normal"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setHeroDropdownOpen((prev) => !prev)}
+                    className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+                    aria-label="Toggle service suggestions"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+
+                  {heroDropdownOpen && popularSearchItems.length > 0 && (
+                    <div
+                      className="absolute top-12 left-0 right-0 bg-white rounded-2xl border border-gray-300/95 shadow-[0_14px_38px_-4px_rgba(15,23,42,0.20),0_6px_14px_-2px_rgba(15,23,42,0.10)] z-50 overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-1 duration-150"
+                      onMouseLeave={() => setHeroDropdownOpen(false)}
+                    >
+                      <div className="px-3.5 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 bg-white shrink-0">
+                        Popular Services
+                      </div>
+                      <div className="max-h-56 overflow-y-auto overscroll-contain py-1">
+                        {popularSearchItems.map((svc) => (
+                          <button
+                            key={svc}
+                            type="button"
+                            onClick={() => {
+                              setSearchNeed(svc);
+                              setHeroDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-3.5 py-2 text-xs text-gray-700 hover:bg-[#EBF3F1] hover:text-[#0F3E35] transition-colors cursor-pointer"
+                          >
+                            {svc}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Divider for desktop */}
-                <div className="w-px h-8 bg-gray-200 shrink-0" />
+                <div className="w-px h-8 bg-gray-300/80 shrink-0" />
 
                 {/* ZIP Code Input */}
                 <div className="flex items-center gap-2.5 px-3 py-1 w-44">
@@ -664,7 +799,7 @@ export default function Home() {
                 </p>
                 <div className="mt-6 sm:mt-7">
                   <EButton
-                    href="/contractors"
+                    href="/about"
                     variant="secondary"
                     size="xl"
                     iconRight={<ArrowRight className="w-4 h-4 stroke-[2.5]" />}
@@ -847,7 +982,7 @@ export default function Home() {
                     state.isLive ? (
                       <Link
                         key={state.name}
-                        href={`/contractors?state=${encodeURIComponent(state.name)}`}
+                        href={getStateUrl('custom-cabinets', state.name)}
                         className="relative flex items-center justify-between gap-1 px-2.5 py-2 sm:px-3.5 sm:py-2.5 bg-gradient-to-r from-emerald-50/90 via-white to-white border-2 border-[#0B3B2C] rounded-xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all group ring-2 ring-emerald-500/10"
                       >
                         <div className="flex items-center gap-1.5 min-w-0">
@@ -861,28 +996,29 @@ export default function Home() {
                         </span>
                       </Link>
                     ) : (
-                      <div
+                      <Link
                         key={state.name}
-                        title={`${state.name} is coming soon! We are currently serving New York.`}
-                        className="flex items-center justify-between gap-1 px-2.5 py-2 sm:px-3.5 sm:py-2.5 bg-gray-50/70 border border-gray-200/70 rounded-xl text-gray-400 select-none transition-colors"
+                        href={getStateUrl('custom-cabinets', state.name)}
+                        title={`${state.name} is coming soon! Click to get notified when we launch.`}
+                        className="flex items-center justify-between gap-1 px-2.5 py-2 sm:px-3.5 sm:py-2.5 bg-gray-50/70 hover:bg-gray-100/80 border border-gray-200/70 rounded-xl text-gray-500 transition-colors"
                       >
                         <div className="flex items-center gap-1.5 min-w-0">
                           <MapPin className="w-3.5 h-3.5 text-gray-300 shrink-0" />
-                          <span className="text-xs sm:text-[13px] font-medium text-gray-500 truncate">
+                          <span className="text-xs sm:text-[13px] font-medium text-gray-600 truncate">
                             {state.name}
                           </span>
                         </div>
                         <span className="text-[8.5px] sm:text-[9px] font-semibold text-amber-700 bg-amber-50/90 border border-amber-200/60 rounded px-1.5 py-0.5 tracking-tight shrink-0">
                           Soon
                         </span>
-                      </div>
+                      </Link>
                     )
                   )}
                 </div>
 
                 <div className="pt-5 sm:pt-6 flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3">
                   <EButton
-                    href="/contractors?state=New+York"
+                    href="/custom-cabinets/new-york-city-ny"
                     variant="secondary"
                     size="lg"
                     iconRight={<ArrowRight className="w-4 h-4 stroke-[2]" />}
@@ -1523,22 +1659,21 @@ export default function Home() {
                   </p>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                     <EButton
-                      type="button"
+                      href="/for-businesses/update-listing"
                       variant="primary"
                       size="xl"
-                      onClick={() => setQuoteModalOpen(true)}
                       iconRight={<ArrowRight className="w-4 h-4 stroke-[2.2]" />}
                       className="w-full sm:w-auto justify-center"
                     >
-                      Claim Your Free Profile
+                      Update Your Listing
                     </EButton>
                     <EButton
-                      href="/contractors"
+                      href="/for-businesses"
                       variant="secondary"
                       size="xl"
                       className="w-full sm:w-auto justify-center"
                     >
-                      Learn More
+                      For Businesses
                     </EButton>
                   </div>
                 </div>

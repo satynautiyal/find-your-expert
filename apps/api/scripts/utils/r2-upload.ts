@@ -86,8 +86,82 @@ function detectImageFormat(
   return null;
 }
 
+export function parseImageDimensions(
+  buffer: Buffer
+): { width: number; height: number } | null {
+  if (!buffer || buffer.length < 24) return null;
+
+  // PNG
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47
+  ) {
+    return {
+      width: buffer.readUInt32BE(16),
+      height: buffer.readUInt32BE(20),
+    };
+  }
+
+  // JPEG
+  if (buffer[0] === 0xff && buffer[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < buffer.length) {
+      if (buffer[i] !== 0xff) {
+        i++;
+        continue;
+      }
+      const marker = buffer[i + 1];
+      if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2) {
+        return {
+          height: buffer.readUInt16BE(i + 5),
+          width: buffer.readUInt16BE(i + 7),
+        };
+      }
+      if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) {
+        i += 2;
+      } else {
+        const segLen = buffer.readUInt16BE(i + 2);
+        if (segLen < 2) break;
+        i += 2 + segLen;
+      }
+    }
+    return null;
+  }
+
+  // WebP
+  if (
+    buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    const chunk = buffer.subarray(12, 16).toString('ascii');
+    if (chunk === 'VP8 ' && buffer.length >= 30) {
+      return {
+        width: buffer.readUInt16LE(26) & 0x3fff,
+        height: buffer.readUInt16LE(28) & 0x3fff,
+      };
+    }
+    if (chunk === 'VP8L' && buffer.length >= 25) {
+      const bits = buffer.readUInt32LE(21);
+      return {
+        width: (bits & 0x3fff) + 1,
+        height: ((bits >> 14) & 0x3fff) + 1,
+      };
+    }
+    if (chunk === 'VP8X' && buffer.length >= 30) {
+      return {
+        width: 1 + (buffer[24] | (buffer[25] << 8) | (buffer[26] << 16)),
+        height: 1 + (buffer[27] | (buffer[28] << 8) | (buffer[29] << 16)),
+      };
+    }
+  }
+
+  return null;
+}
+
 function buildFetchCandidates(rawUrl: string): string[] {
-  let url = rawUrl.trim();
+  let url = rawUrl.trim().replace(/&amp;/gi, '&');
   if (url.startsWith('//')) url = `https:${url}`;
 
   url = url
@@ -96,16 +170,27 @@ function buildFetchCandidates(rawUrl: string): string[] {
 
   const candidates: string[] = [];
 
+  // Upgrade Squarespace low-res / LQIP `?format=100w` / `300w` / `500w` -> `?format=1500w`
+  if (url.includes('squarespace-cdn.com') && /[?&]format=\d+w/i.test(url)) {
+    candidates.push(url.replace(/([?&]format=)\d+w/i, '$11500w'));
+  }
+
+  // Upgrade Google Maps / lh3.googleusercontent.com thumbnails to crisp 1200x900
+  if (url.includes('googleusercontent.com') && /=w\d+-h\d+/i.test(url)) {
+    candidates.push(url.replace(/=w\d+-h\d+[^&?]*/i, '=w1200-h900-k-no'));
+  }
+
   if (url.includes('st.hzcdn.com/simgs/') && /_(?:0|1|2|3|4)-(\d+)/.test(url)) {
     candidates.push(url.replace(/_(?:0|1|2|3|4)-(\d+)/, '_10-$1'));
   }
 
-  if (url.includes('st.hzcdn.com/fimgs/') && /-w(?:390|585)-h(?:260|390)-/.test(url)) {
-    candidates.push(url.replace(/-w(?:390|585)-h(?:260|390)-b0-p0--?-?\.jpg/i, '-w990-h660-b0-p0---.jpg'));
+  if (url.includes('st.hzcdn.com/fimgs/') && /-w(?:240|312|390|500|585)-h\d+-/.test(url)) {
+    candidates.push(
+      url.replace(/-w\d+-h\d+-b\d+-p\d+--?-?\.jpg/i, '-w990-h660-b0-p0---.jpg')
+    );
   }
 
-  candidates.push(url);
-
+  // Unwrap Next.js `/_next/image?url=...` BEFORE trying compressed/resized wrapper
   if (url.includes('/_next/image')) {
     try {
       const parsed = new URL(url);
@@ -119,18 +204,28 @@ function buildFetchCandidates(rawUrl: string): string[] {
     } catch {}
   }
 
+  candidates.push(url);
+
   return [...new Set(candidates)];
 }
 
+export interface IngestImageOptions {
+  minBytes?: number;
+  minWidth?: number;
+  minHeight?: number;
+}
+
 /**
- * Downloads an external image URL, validates its image bytes, uploads it to Cloudflare R2
- * (or local `public/uploads` when R2 is not configured), and returns the clean object key.
+ * Downloads an external image URL, validates its image bytes & optional minimum resolution,
+ * uploads it to Cloudflare R2 (or local `public/uploads` when R2 is not configured),
+ * and returns the clean object key.
  *
  * NEVER returns a raw external hotlink URL — returns `null` if download/validation fails.
  */
 export async function ingestImageToR2(
   remoteUrl: string | null | undefined,
-  keyBase: string
+  keyBase: string,
+  options?: IngestImageOptions
 ): Promise<string | null> {
   if (!remoteUrl) return null;
   const trimmed = remoteUrl.trim();
@@ -194,8 +289,18 @@ export async function ingestImageToR2(
       if (!res.ok) continue;
 
       const buffer = Buffer.from(await res.arrayBuffer());
+      if (options?.minBytes && buffer.length < options.minBytes) continue;
+
       const detected = detectImageFormat(buffer, res.headers.get('content-type'));
       if (!detected) continue;
+
+      if (options?.minWidth || options?.minHeight) {
+        const dims = parseImageDimensions(buffer);
+        if (dims) {
+          if (options.minWidth && dims.width < options.minWidth) continue;
+          if (options.minHeight && dims.height < options.minHeight) continue;
+        }
+      }
 
       const finalKey = `${strippedBase}.${detected.ext}`;
 
